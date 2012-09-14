@@ -1,0 +1,23 @@
+{
+    "name": "dv",
+    "version": "0.0.1",
+    "description": "Document Vision is a node.js library for processing and understanding scanned documents",
+    "keywords": ["graphics", "document", "vision", "image"],
+    "homepage": "https://github.com/schulzch/node-dv",
+    "bugs": "https://github.com/schulzch/node-dv/issues",
+    "author": "Christoph Schulz <schulzcbs@gmail.com>",
+    "main": "./lib/dv",
+    "directories": {
+        "lib": "lib"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/schulzch/node-dv.git"
+    },
+    "scripts": {
+        "test": "node test"
+    },
+    "engines": {
+        "node": ">=0.8.x"
+    }
+}
