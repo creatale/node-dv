@@ -42,17 +42,27 @@ Handle<Value> Tesseract::New(const Arguments &args)
     HandleScope scope;
     Local<String> datapath;
     Local<String> lang;
+    Local<Object> image;
     if (args.Length() == 1 && args[0]->IsString()) {
         datapath = args[0]->ToString();
         lang = String::New("eng");
     } else if (args.Length() == 2 && args[0]->IsString() && args[1]->IsString()) {
         datapath = args[0]->ToString();
         lang = args[1]->ToString();
+    } else if (args.Length() == 3 && args[0]->IsString() && args[1]->IsString()
+               && Image::HasInstance(args[2])) {
+        datapath = args[0]->ToString();
+        lang = args[1]->ToString();
+        image = args[2]->ToObject();
     } else {
         return THROW(TypeError, "could not convert arguments");
     }
     Tesseract* obj = new Tesseract(*String::AsciiValue(datapath),
                                    *String::AsciiValue(lang));
+    if (!image.IsEmpty()) {
+        obj->image_ = Persistent<Object>::New(image->ToObject());
+        obj->api_.SetImage(Image::Pixels(obj->image_));
+    }
     obj->Wrap(args.This());
     return args.This();
 }

@@ -15,9 +15,8 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 Once you've installed, download [that image](https://github.com/schulzch/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snipped to recognize text from your image:
 
-	var dv = require('../lib/dv');
-	var tesseract = new dv.Tesseract('.');
-	tesseract.image = new dv.Image('textpage300.png');
+	var dv = require('dv');
+	var tesseract = new dv.Tesseract('.', 'eng', new dv.Image('textpage300.png'));
 	console.log(tesseract.findText('plain'));
 
 ## Whats next?
