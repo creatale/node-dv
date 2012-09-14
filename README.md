@@ -1,6 +1,6 @@
-# Document Vision
+# DocumentVision
 
-Document Vision is a [node.js](http://nodejs.org) library for processing and understanding scanned documents.
+DocumentVision is a [node.js](http://nodejs.org) library for processing and understanding scanned documents.
 
 ## Features
 
@@ -24,7 +24,7 @@ Once you've installed, download [that image](https://github.com/schulzch/node-dv
 
 Here are some quick links to help you get started:
 
-- [Reference Manual](https://github.com/schulzch/node-dv/wiki/Reference)
+- [API Reference](https://github.com/schulzch/node-dv/wiki/API)
 - [Troubleshooting](https://github.com/schulzch/node-dv/wiki/Troubleshooting)
 - [Bug Tracker](https://github.com/schulzch/node-dv/issues)
 
