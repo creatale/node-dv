@@ -26,7 +26,7 @@ function diffIndex(first, second) {
 }
 
 
-var tesseract = new dv.Tesseract('.');
+var tesseract = new dv.Tesseract();
 console.log('Tesseract version: ' + tesseract.version);
 console.log('Tesseract image: ' + tesseract.image);
 console.log('Tesseract rectangle: ' + tesseract.rectangle);
