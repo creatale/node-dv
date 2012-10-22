@@ -53,9 +53,7 @@
 #include "otsuthr.h"
 #include "osdetect.h"
 
-#ifdef __MSW32__
 #include "version.h"
-#endif
 
 namespace tesseract {
 
