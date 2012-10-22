@@ -1,5 +1,6 @@
 #include "image.h"
 #include <node_buffer.h>
+#include <lodepng.h>
 #include <sstream>
 
 using namespace v8;
@@ -30,8 +31,8 @@ void Image::Init(Handle<Object> target)
     constructor_template->SetClassName(String::NewSymbol("Image"));
     constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
-    proto->Set(String::NewSymbol("write"),
-               FunctionTemplate::New(Write)->GetFunction());
+    proto->Set(String::NewSymbol("toBuffer"),
+               FunctionTemplate::New(ToBuffer)->GetFunction());
     target->Set(String::NewSymbol("Image"),
                 Persistent<Function>::New(constructor_template->GetFunction()));
 }
@@ -51,19 +52,40 @@ Handle<Value> Image::New(const Arguments &args)
     Pix *pix;
     if (args.Length() == 0) {
         pix = 0;
-    } else if (args.Length() == 1 && args[0]->IsString()) {
-        String::AsciiValue filename(args[0]->ToString());
-        if ((pix = pixRead(*filename)) == NULL) {
+    } else if (args.Length() == 2 && Buffer::HasInstance(args[1])) {
+        String::AsciiValue format(args[0]->ToString());
+        Local<Object> buffer = args[1]->ToObject();
+        if (strcmp("png", *format) != 0) {
             std::stringstream msg;
-            msg << "error reading file '" << *filename << "'";
+            msg << "invalid bufffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
-    } else if (args.Length() == 3 && Buffer::HasInstance(args[0])) {
-        Local<Object> buffer = args[0]->ToObject();
-        int32_t width = args[1]->Int32Value();
-        int32_t height = args[2]->Int32Value();
+        std::vector<unsigned char> out;
+        unsigned int width;
+        unsigned int height;
+        lodepng::State state;
+        unsigned char *in = reinterpret_cast<unsigned char*>(Buffer::Data(buffer));
         size_t length = Buffer::Length(buffer);
-        if (width* height * sizeof(l_uint32) != length) {
+        unsigned error = lodepng::decode(out, width, height, state, in, length);
+        if (error) {
+            std::stringstream msg;
+            msg << "error while decoding '" << lodepng_error_text(error) << "'";
+            return THROW(Error, msg.str().c_str());
+        }
+        pix = pixCreateNoInit(width, height, 32);
+        memcpy(pix->data, &out[0], out.size());
+    } else if (args.Length() == 4 && Buffer::HasInstance(args[1])) {
+        String::AsciiValue format(args[0]->ToString());
+        Local<Object> buffer = args[1]->ToObject();
+        int32_t width = args[2]->Int32Value();
+        int32_t height = args[3]->Int32Value();
+        size_t length = Buffer::Length(buffer);
+        if (strcmp("rgba", *format) != 0) {
+            std::stringstream msg;
+            msg << "invalid bufffer format '" << *format << "'";
+            return THROW(Error, msg.str().c_str());
+        }
+        if (width * height * sizeof(l_uint32) != length) {
             return THROW(Error, "Buffer has invalid length");
         }
         pix = pixCreateNoInit(width, height, sizeof(l_uint32) << 3);
@@ -76,20 +98,30 @@ Handle<Value> Image::New(const Arguments &args)
     return args.This();
 }
 
-Handle<Value> Image::Write(const Arguments &args)
+Handle<Value> Image::ToBuffer(const Arguments &args)
 {
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 1 && args[0]->IsString()) {
-        String::AsciiValue filename(args[0]->ToString());
-        if (pixWritePng(*filename, obj->pix_, 1.0f) != 0) {
+        String::AsciiValue format(args[0]->ToString());
+        if (strcmp("png", *format) != 0) {
             std::stringstream msg;
-            msg << "error writing file '" << *filename << "'";
+            msg << "invalid bufffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
+        std::vector<unsigned char> out;
+        unsigned char *inPtr = reinterpret_cast<unsigned char*>(obj->pix_->data);
+        std::vector<unsigned char> in(inPtr, inPtr + 4 * obj->pix_->wpl * obj->pix_->h);
+        lodepng::State state;
+        unsigned error = lodepng::encode(out, in, obj->pix_->w, obj->pix_->h, state);
+        if (error) {
+            std::stringstream msg;
+            msg << "error while encoding '" << lodepng_error_text(error) << "'";
+            return THROW(Error, msg.str().c_str());
+        }
+        return Buffer::New(reinterpret_cast<char *>(&out[0]), out.size())->handle_;
     } else {
         return THROW(TypeError, "could not convert arguments");
     }
-    return args.This();
 }
 
 Image::Image(Pix *pix)

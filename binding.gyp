@@ -3,9 +3,11 @@
     {
       'target_name': 'dvBinding',
       'dependencies': [
-        'deps/tesseract/tesseract.gyp:libtesseract'
+        'deps/tesseract/tesseract.gyp:libtesseract',
+		'deps/lodepng/lodepng.gyp:lodepng'
       ],
       'include_dirs': [
+        'deps/lodepng',
         'deps/leptonica/src',
         'deps/tesseract/api',
         'deps/tesseract/ccmain',

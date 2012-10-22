@@ -3,12 +3,7 @@
     {
       'target_name': 'liblept',
       'type': 'static_library',
-      'dependencies': [
-        '../libpng/libpng.gyp:libpng'
-      ],
       'include_dirs': [
-        '../zlib',
-        '../libpng',
         'src',
       ],
       'sources': [

@@ -11,6 +11,8 @@ pids
 logs
 results
 
+test/out/*.png
+
 build
 node_modules
 npm-debug.log

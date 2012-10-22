@@ -1,6 +1,8 @@
 var dv = require('../lib/dv');
+var fs = require('fs');
 
-var textPageImage = new dv.Image(__dirname + '/fixtures/textpage300.png');
+var textPageImageData = fs.readFileSync(__dirname + '/fixtures/textpage300.png');
+var textPageImage = new dv.Image("png", textPageImageData);
 var textPageParagraph =
         'Mr do raising article general norland my hastily. Its companions say uncommonly pianoforte ' +
         'favourable. Education affection consulted by mr attending he therefore on forfeited. High way ' +
