@@ -19,6 +19,10 @@ public:
 
 private:
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Rotate(const v8::Arguments& args);
+    static v8::Handle<v8::Value> ToGray(const v8::Arguments& args);
+    static v8::Handle<v8::Value> OtsuAdaptiveThreshold(const v8::Arguments& args);
+    static v8::Handle<v8::Value> FindSkew(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToBuffer(const v8::Arguments& args);
 
     Image(Pix *pix);
