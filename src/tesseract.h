@@ -29,6 +29,7 @@ private:
     static v8::Handle<v8::Value> FindRegions(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindTextLines(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindWords(const v8::Arguments& args);
+    static v8::Handle<v8::Value> FindSymbols(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindText(const v8::Arguments& args);
 
     // Util.

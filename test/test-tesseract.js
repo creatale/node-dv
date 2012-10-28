@@ -41,6 +41,7 @@ tesseract.image = textPageImage;
 console.log(tesseract.findRegions());
 console.log(tesseract.findTextLines());
 console.log(tesseract.findWords());
+console.log(tesseract.findSymbols());
 
 // Test text recognition.
 var srcParagraph = textPageParagraph.replace(/\s/g, '');

@@ -2,6 +2,7 @@
 #include "image.h"
 #include <sstream>
 #include <strngs.h>
+#include <resultiterator.h>
 
 using namespace v8;
 using namespace node;
@@ -31,6 +32,8 @@ void Tesseract::Init(Handle<Object> target)
                FunctionTemplate::New(FindTextLines)->GetFunction());
     proto->Set(String::NewSymbol("findWords"),
                FunctionTemplate::New(FindWords)->GetFunction());
+    proto->Set(String::NewSymbol("findSymbols"),
+               FunctionTemplate::New(FindSymbols)->GetFunction());
     proto->Set(String::NewSymbol("findText"),
                FunctionTemplate::New(FindText)->GetFunction());
     target->Set(String::NewSymbol("Tesseract"),
@@ -55,7 +58,10 @@ Handle<Value> Tesseract::New(const Arguments &args)
         lang = args[1]->ToString();
         image = args[2]->ToObject();
     } else {
-        return THROW(TypeError, "could not convert arguments");
+        return THROW(TypeError, "cannot convert argument list to "
+                     "(datapath: String) or "
+                     "(datapath: String, language: String) or "
+                     "(datapath: String, language: String, image: Image)");
     }
     Tesseract* obj = new Tesseract(*String::AsciiValue(datapath),
                                    *String::AsciiValue(lang));
@@ -89,6 +95,8 @@ void Tesseract::SetImage(Local<String> prop, Local<Value> value, const AccessorI
         }
         obj->image_ = Persistent<Object>::New(value->ToObject());
         obj->api_.SetImage(Image::Pixels(obj->image_));
+    } else {
+        THROW(TypeError, "value must be of type Image");
     }
 }
 
@@ -101,17 +109,23 @@ Handle<Value> Tesseract::GetRectangle(Local<String> prop, const AccessorInfo &in
 void Tesseract::SetRectangle(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
-    if (value->IsObject()) {
+    Local<Object> rect = value->ToObject();
+    Handle<String> x = String::NewSymbol("x");
+    Handle<String> y = String::NewSymbol("y");
+    Handle<String> width = String::NewSymbol("width");
+    Handle<String> height = String::NewSymbol("height");
+    if (value->IsObject() && rect->Has(x) && rect->Has(y) &&
+            rect->Has(width) && rect->Has(height)) {
         if (obj->rectangle_.IsEmpty()) {
             obj->rectangle_.Dispose();
             obj->rectangle_.Clear();
         }
-        obj->rectangle_ = Persistent<Object>::New(value->ToObject());
-        int x = obj->rectangle_->Get(String::New("x"))->Int32Value();
-        int y = obj->rectangle_->Get(String::New("y"))->Int32Value();
-        int w = obj->rectangle_->Get(String::New("width"))->Int32Value();
-        int h = obj->rectangle_->Get(String::New("height"))->Int32Value();
-        obj->api_.SetRectangle(x, y, w, h);
+        obj->rectangle_ = Persistent<Object>::New(rect);
+        obj->api_.SetRectangle(rect->Get(x)->Int32Value(), rect->Get(y)->Int32Value(),
+                               rect->Get(width)->Int32Value(), rect->Get(height)->Int32Value());
+    } else {
+        THROW(TypeError, "value must be of type Object with at least "
+              "x, y, width and height properties");
     }
 }
 
@@ -142,7 +156,7 @@ Handle<Value> Tesseract::GetPageSegMode(Local<String> prop, const AccessorInfo &
     case tesseract::PSM_SINGLE_CHAR:
         return String::New("single_char");
     default:
-        return String::New("unknown");
+        return THROW(Error, "cannot convert internal PSM to String");
     }
 }
 
@@ -172,6 +186,12 @@ void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const Acc
         obj->api_.SetPageSegMode(tesseract::PSM_CIRCLE_WORD);
     } else if (strcmp("single_char", *pageSegMode)) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_CHAR);
+    } else {
+        THROW(TypeError, "value must be of type String. "
+              "Valid values are: "
+              "osd_only, auto_osd, auto_only, auto, single_column, "
+              "single_block_vert_text, single_block, single_line, "
+              "single_word, circle_word, single_char");
     }
 }
 
@@ -238,42 +258,77 @@ Handle<Value> Tesseract::FindWords(const Arguments &args)
     return scope.Close(boxes);
 }
 
+Handle<Value> Tesseract::FindSymbols(const Arguments &args)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
+    obj->api_.Recognize(NULL);
+    tesseract::ResultIterator* resultIter = obj->api_.GetIterator();
+    Local<Array> symbols = Array::New();
+    int symbolIndex = 0;
+    if (resultIter)  {
+        do {
+            tesseract::ChoiceIterator choiceIter = tesseract::ChoiceIterator(*resultIter);
+            Local<Array> choices = Array::New();
+            int choiceIndex = 0;
+            do {
+                // Transform choice to object.
+                Local<Object> choice = Object::New();
+                choice->Set(String::NewSymbol("text"),
+                            String::New(choiceIter.GetUTF8Text()));
+                choice->Set(String::NewSymbol("confidence"),
+                            Number::New(choiceIter.Confidence()));
+                // Append choice to choices list.
+                choices->Set(choiceIndex, choice);
+                ++choiceIndex;
+            } while(choiceIter.Next());
+            // Append choices to symbols list.
+            symbols->Set(symbolIndex, choices);
+            ++symbolIndex;
+        } while((resultIter->Next(tesseract::RIL_SYMBOL)));
+        // Cleanup.
+        delete resultIter;
+    }
+    return scope.Close(symbols);
+}
+
 Handle<Value> Tesseract::FindText(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     if (args.Length() >= 1 && args[0]->IsString()) {
-        String::AsciiValue format(args[0]);
-        if (strcmp("plain", *format) == 0) {
+        String::AsciiValue mode(args[0]);
+        if (strcmp("plain", *mode) == 0) {
             return scope.Close(String::New(obj->api_.GetUTF8Text()));
-        } else if (strcmp("hocr", *format) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
+        } else if (strcmp("unlv", *mode) == 0) {
+            return scope.Close(String::New(obj->api_.GetUNLVText()));
+        } else if (strcmp("hocr", *mode) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
             return scope.Close(String::New(obj->api_.GetHOCRText(args[1]->Int32Value())));
-        } else if (strcmp("box", *format) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
+        } else if (strcmp("box", *mode) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
             return scope.Close(String::New(obj->api_.GetBoxText(args[1]->Int32Value())));
-        } else {
-            std::stringstream msg;
-            msg << "invalid format specified '" << *format << "'";
-            return THROW(Error, msg.str().c_str());
         }
-    } else {
-        return THROW(TypeError, "could not convert arguments");
     }
+    return THROW(TypeError, "cannot convert argument list to "
+                 "(\"plain\") or "
+                 "(\"unlv\") or "
+                 "(\"hocr\", pageNumber: Int32) or "
+                 "(\"box\", pageNumber: Int32)");
 }
 
 Handle<Object> Tesseract::createBox(Box* box)
 {
     Handle<Object> result = Object::New();
-    result->Set(String::New("x"), Int32::New(box->x));
-    result->Set(String::New("y"), Int32::New(box->y));
-    result->Set(String::New("width"), Int32::New(box->w));
-    result->Set(String::New("height"), Int32::New(box->h));
+    result->Set(String::NewSymbol("x"), Int32::New(box->x));
+    result->Set(String::NewSymbol("y"), Int32::New(box->y));
+    result->Set(String::NewSymbol("width"), Int32::New(box->w));
+    result->Set(String::NewSymbol("height"), Int32::New(box->h));
     return result;
 }
 
 Tesseract::Tesseract(const char *datapath, const char *language)
 {
-    int res = api_.Init(datapath, language, tesseract::OEM_DEFAULT,
-                        NULL, NULL, NULL, NULL, false);
+    int res = api_.Init(datapath, language, tesseract::OEM_DEFAULT);
+    api_.SetVariable("save_blob_choices", "T");
     assert(res == 0);
 }
 
