@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////
-// File:        resultiterator.h
-// Description: Iterator for tesseract results that avoids using tesseract
-//              internal data structures.
+// File:        ltrresultiterator.h
+// Description: Iterator for tesseract results in strict left-to-right
+//              order that avoids using tesseract internal data structures.
 // Author:      Ray Smith
 // Created:     Fri Feb 26 11:01:06 PST 2010
 //
@@ -18,12 +18,15 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_API_RESULTITERATOR_H__
-#define TESSERACT_API_RESULTITERATOR_H__
+#ifndef TESSERACT_CCMAIN_LTR_RESULT_ITERATOR_H__
+#define TESSERACT_CCMAIN_LTR_RESULT_ITERATOR_H__
 
+#include "platform.h"
 #include "pageiterator.h"
+#include "unicharset.h"
 
 class BLOB_CHOICE_IT;
+class WERD_RES;
 
 namespace tesseract {
 
@@ -38,9 +41,9 @@ class Tesseract;
 // DetectOS, or anything else that changes the internal PAGE_RES.
 // See apitypes.h for the definition of PageIteratorLevel.
 // See also base class PageIterator, which contains the bulk of the interface.
-// ResultIterator adds text-specific methods for access to OCR output.
+// LTRResultIterator adds text-specific methods for access to OCR output.
 
-class ResultIterator : public PageIterator {
+class TESS_API LTRResultIterator : public PageIterator {
   friend class ChoiceIterator;
  public:
   // page_res and tesseract come directly from the BaseAPI.
@@ -55,13 +58,13 @@ class ResultIterator : public PageIterator {
   // The scaled_yres indicates the effective resolution of the binary image
   // that tesseract has been given by the Thresholder.
   // After the constructor, Begin has already been called.
-  ResultIterator(PAGE_RES* page_res, Tesseract* tesseract,
-                 int scale, int scaled_yres,
-                 int rect_left, int rect_top,
-                 int rect_width, int rect_height);
-  virtual ~ResultIterator();
+  LTRResultIterator(PAGE_RES* page_res, Tesseract* tesseract,
+                    int scale, int scaled_yres,
+                    int rect_left, int rect_top,
+                    int rect_width, int rect_height);
+  virtual ~LTRResultIterator();
 
-  // ResultIterators may be copied! This makes it possible to iterate over
+  // LTRResultIterators may be copied! This makes it possible to iterate over
   // all the objects at a lower level, while maintaining an iterator to
   // objects at a higher level. These constructors DO NOT CALL Begin, so
   // iterations will continue from the location of src.
@@ -77,6 +80,12 @@ class ResultIterator : public PageIterator {
   // Returns the null terminated UTF-8 encoded text string for the current
   // object at the given level. Use delete [] to free after use.
   char* GetUTF8Text(PageIteratorLevel level) const;
+
+  // Set the string inserted at the end of each text line. "\n" by default.
+  void SetLineSeparator(const char *new_line);
+
+  // Set the string inserted at the end of each paragraph. "\n" by default.
+  void SetParagraphSeparator(const char *new_para);
 
   // Returns the mean confidence of the current object at the given level.
   // The number should be interpreted as a percent probability. (0.0f-100.0f)
@@ -101,11 +110,41 @@ class ResultIterator : public PageIterator {
                                  int* pointsize,
                                  int* font_id) const;
 
+  // Return the name of the language used to recognize this word.
+  // On error, NULL.  Do not delete this pointer.
+  const char* WordRecognitionLanguage() const;
+
+  // Return the overall directionality of this word.
+  StrongScriptDirection WordDirection() const;
+
   // Returns true if the current word was found in a dictionary.
   bool WordIsFromDictionary() const;
 
   // Returns true if the current word is numeric.
   bool WordIsNumeric() const;
+
+  // Returns true if the word contains blamer information.
+  bool HasBlamerInfo() const;
+
+  // Returns the pointer to ParamsTrainingBundle stored in the BlamerBundle
+  // of the current word.
+  void *GetParamsTrainingBundle() const;
+
+  // Returns a pointer to the string with blamer information for this word.
+  // Assumes that the word's blamer_bundle is not NULL.
+  const char *GetBlamerDebug() const;
+
+  // Returns a pointer to the string with misadaption information for this word.
+  // Assumes that the word's blamer_bundle is not NULL.
+  const char *GetBlamerMisadaptionDebug() const;
+
+  // Returns a null terminated UTF-8 encoded truth string for the current word.
+  // Use delete [] to free after use.
+  char* WordTruthUTF8Text() const;
+
+  // Returns a pointer to serialized choice lattice.
+  // Fills lattice_size with the number of bytes in lattice data.
+  const char *WordLattice(int *lattice_size) const;
 
   // ============= Functions that refer to symbols only ============.
 
@@ -121,15 +160,19 @@ class ResultIterator : public PageIterator {
   // If iterating at a higher level object than symbols, eg words, then
   // this will return the attributes of the first symbol in that word.
   bool SymbolIsDropcap() const;
+
+ protected:
+  const char *line_separator_;
+  const char *paragraph_separator_;
 };
 
 // Class to iterate over the classifier choices for a single RIL_SYMBOL.
 class ChoiceIterator {
  public:
-  // Construction is from a ResultIterator that points to the symbol of
+  // Construction is from a LTRResultIterator that points to the symbol of
   // interest. The ChoiceIterator allows a one-shot iteration over the
   // choices for this symbol and after that is is useless.
-  explicit ChoiceIterator(const ResultIterator& result_it);
+  explicit ChoiceIterator(const LTRResultIterator& result_it);
   ~ChoiceIterator();
 
   // Moves to the next choice for the symbol and returns false if there
@@ -140,7 +183,7 @@ class ChoiceIterator {
 
   // Returns the null terminated UTF-8 encoded text string for the current
   // choice.
-  // NOTE: Unlike ResultIterator::GetUTF8Text, the return points to an
+  // NOTE: Unlike LTRResultIterator::GetUTF8Text, the return points to an
   // internal structure and should NOT be delete[]ed to free after use.
   const char* GetUTF8Text() const;
 
@@ -149,12 +192,12 @@ class ChoiceIterator {
   float Confidence() const;
 
  private:
-  // Pointer to the Tesseract object owned by the API.
-  Tesseract* tesseract_;
+  // Pointer to the WERD_RES object owned by the API.
+  WERD_RES* word_res_;
   // Iterator over the blob choices.
   BLOB_CHOICE_IT* choice_it_;
 };
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_API_RESULT_ITERATOR_H__
+#endif  // TESSERACT_CCMAIN_LTR_RESULT_ITERATOR_H__

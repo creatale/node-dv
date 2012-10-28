@@ -51,7 +51,8 @@ enum DISPLAY_FLAGS
   DF_TEXT,                       //< Correct ascii
   DF_POLYGONAL,                  //< Polyg approx
   DF_EDGE_STEP,                  //< Edge steps
-  DF_BN_POLYGONAL                //< BL normalisd polyapx
+  DF_BN_POLYGONAL,               //< BL normalisd polyapx
+  DF_BLAMER                      //< Blamer information
 };
 
 class ROW;                       //forward decl
@@ -140,6 +141,7 @@ class WERD : public ELIST2_LINK {
     // tprintf word metadata (but not blob innards)
     void print();
 
+    #ifndef GRAPHICS_DISABLED
     // plot word on window in a uniform colour
     void plot(ScrollView *window, ScrollView::Color colour);
 
@@ -151,6 +153,7 @@ class WERD : public ELIST2_LINK {
 
     // plot rejected blobs in a rainbow of colours
     void plot_rej_blobs(ScrollView *window);
+    #endif  // GRAPHICS_DISABLED
 
  private:
     uinT8 blanks;                // no of blanks

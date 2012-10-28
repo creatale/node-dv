@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////
-// File:        resultiterator.cpp
-// Description: Iterator for tesseract results that avoids using tesseract
-//              internal data structures
+// File:        ltrresultiterator.cpp
+// Description: Iterator for tesseract results in strict left-to-right
+//              order that avoids using tesseract internal data structures.
 // Author:      Ray Smith
 // Created:     Fri Feb 26 14:32:09 PST 2010
 //
@@ -18,58 +18,60 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#include "resultiterator.h"
+#include "ltrresultiterator.h"
+
 #include "allheaders.h"
 #include "pageres.h"
+#include "strngs.h"
 #include "tesseractclass.h"
 
 namespace tesseract {
 
-ResultIterator::ResultIterator(PAGE_RES* page_res, Tesseract* tesseract,
-                               int scale, int scaled_yres,
-                               int rect_left, int rect_top,
-                               int rect_width, int rect_height)
+LTRResultIterator::LTRResultIterator(PAGE_RES* page_res, Tesseract* tesseract,
+                                     int scale, int scaled_yres,
+                                     int rect_left, int rect_top,
+                                     int rect_width, int rect_height)
   : PageIterator(page_res, tesseract, scale, scaled_yres,
-    rect_left, rect_top, rect_width, rect_height) {
+                 rect_left, rect_top, rect_width, rect_height),
+    line_separator_("\n"),
+    paragraph_separator_("\n") {
 }
 
-ResultIterator::~ResultIterator() {
+LTRResultIterator::~LTRResultIterator() {
 }
 
 // Returns the null terminated UTF-8 encoded text string for the current
 // object at the given level. Use delete [] to free after use.
-char* ResultIterator::GetUTF8Text(PageIteratorLevel level) const {
+char* LTRResultIterator::GetUTF8Text(PageIteratorLevel level) const {
   if (it_->word() == NULL) return NULL;  // Already at the end!
   STRING text;
   PAGE_RES_IT res_it(*it_);
   WERD_CHOICE* best_choice = res_it.word()->best_choice;
   ASSERT_HOST(best_choice != NULL);
-  switch (level) {
-    case RIL_BLOCK:
-    case RIL_PARA:
-      do {
-        best_choice = res_it.word()->best_choice;
-        ASSERT_HOST(best_choice != NULL);
-        text += best_choice->unichar_string();
-        text += res_it.word()->word->flag(W_EOL) ? "\n" : " ";
-        res_it.forward();
-      } while (res_it.block() == res_it.prev_block());
-      break;
-    case RIL_TEXTLINE:
-      do {
-        best_choice = res_it.word()->best_choice;
-        ASSERT_HOST(best_choice != NULL);
-        text += best_choice->unichar_string();
-        text += res_it.word()->word->flag(W_EOL) ? "\n" : " ";
-         res_it.forward();
-      } while (res_it.row() == res_it.prev_row());
-      break;
-    case RIL_WORD:
-      text = best_choice->unichar_string();
-      break;
-    case RIL_SYMBOL:
-      text = tesseract_->unicharset.id_to_unichar(
-          best_choice->unichar_id(blob_index_));
+  if (level == RIL_SYMBOL) {
+    text = res_it.word()->BestUTF8(blob_index_, false);
+  } else if (level == RIL_WORD) {
+    text = best_choice->unichar_string();
+  } else {
+    bool eol = false;  // end of line?
+    bool eop = false;  // end of paragraph?
+    do {  // for each paragraph in a block
+      do {  // for each text line in a paragraph
+        do {  // for each word in a text line
+          best_choice = res_it.word()->best_choice;
+          ASSERT_HOST(best_choice != NULL);
+          text += best_choice->unichar_string();
+          text += " ";
+          res_it.forward();
+          eol = res_it.row() != res_it.prev_row();
+        } while (!eol);
+        text.truncate_at(text.length() - 1);
+        text += line_separator_;
+        eop = res_it.block() != res_it.prev_block() ||
+            res_it.row()->row->para() != res_it.prev_row()->row->para();
+      } while (level != RIL_TEXTLINE && !eop);
+      if (eop) text += paragraph_separator_;
+    } while (level == RIL_BLOCK && res_it.block() == res_it.prev_block());
   }
   int length = text.length() + 1;
   char* result = new char[length];
@@ -77,9 +79,19 @@ char* ResultIterator::GetUTF8Text(PageIteratorLevel level) const {
   return result;
 }
 
+// Set the string inserted at the end of each text line. "\n" by default.
+void LTRResultIterator::SetLineSeparator(const char *new_line) {
+  line_separator_ = new_line;
+}
+
+// Set the string inserted at the end of each paragraph. "\n" by default.
+void LTRResultIterator::SetParagraphSeparator(const char *new_para) {
+  paragraph_separator_ = new_para;
+}
+
 // Returns the mean confidence of the current object at the given level.
 // The number should be interpreted as a percent probability. (0.0f-100.0f)
-float ResultIterator::Confidence(PageIteratorLevel level) const {
+float LTRResultIterator::Confidence(PageIteratorLevel level) const {
   if (it_->word() == NULL) return 0.0f;  // Already at the end!
   float mean_certainty = 0.0f;
   int certainty_count = 0;
@@ -88,7 +100,6 @@ float ResultIterator::Confidence(PageIteratorLevel level) const {
   ASSERT_HOST(best_choice != NULL);
   switch (level) {
     case RIL_BLOCK:
-    case RIL_PARA:
       do {
         best_choice = res_it.word()->best_choice;
         ASSERT_HOST(best_choice != NULL);
@@ -96,6 +107,16 @@ float ResultIterator::Confidence(PageIteratorLevel level) const {
         ++certainty_count;
         res_it.forward();
       } while (res_it.block() == res_it.prev_block());
+      break;
+    case RIL_PARA:
+      do {
+        best_choice = res_it.word()->best_choice;
+        ASSERT_HOST(best_choice != NULL);
+        mean_certainty += best_choice->certainty();
+        ++certainty_count;
+        res_it.forward();
+      } while (res_it.block() == res_it.prev_block() &&
+               res_it.row()->row->para() == res_it.prev_row()->row->para());
       break;
     case RIL_TEXTLINE:
       do {
@@ -148,39 +169,59 @@ float ResultIterator::Confidence(PageIteratorLevel level) const {
 // the iterator itself, ie rendered invalid by various members of
 // TessBaseAPI, including Init, SetImage, End or deleting the TessBaseAPI.
 // Pointsize is returned in printers points (1/72 inch.)
-const char* ResultIterator::WordFontAttributes(bool* is_bold,
-                                               bool* is_italic,
-                                               bool* is_underlined,
-                                               bool* is_monospace,
-                                               bool* is_serif,
-                                               bool* is_smallcaps,
-                                               int* pointsize,
-                                               int* font_id) const {
+const char* LTRResultIterator::WordFontAttributes(bool* is_bold,
+                                                  bool* is_italic,
+                                                  bool* is_underlined,
+                                                  bool* is_monospace,
+                                                  bool* is_serif,
+                                                  bool* is_smallcaps,
+                                                  int* pointsize,
+                                                  int* font_id) const {
   if (it_->word() == NULL) return NULL;  // Already at the end!
-  *font_id = it_->word()->fontinfo_id;
-  if (*font_id < 0) return NULL;  // No font available.
-  const UnicityTable<FontInfo> &font_table = tesseract_->get_fontinfo_table();
-  FontInfo font_info = font_table.get(*font_id);
+  if (it_->word()->fontinfo == NULL) {
+    *font_id = -1;
+    return NULL;  // No font information.
+  }
+  const FontInfo& font_info = *it_->word()->fontinfo;
+  *font_id = font_info.universal_id;
   *is_bold = font_info.is_bold();
   *is_italic = font_info.is_italic();
   *is_underlined = false;  // TODO(rays) fix this!
   *is_monospace = font_info.is_fixed_pitch();
   *is_serif = font_info.is_serif();
   *is_smallcaps = it_->word()->small_caps;
-  // The font size is calculated from a multiple of the x-height
-  // that came from the block.
-  float row_height = it_->row()->row->x_height() *
-      it_->block()->block->cell_over_xheight();
+  float row_height = it_->row()->row->x_height() +
+      it_->row()->row->ascenders() - it_->row()->row->descenders();
   // Convert from pixels to printers points.
   *pointsize = scaled_yres_ > 0
-    ? static_cast<int>(row_height * kPointsPerInch / scaled_yres_ + 0.5)
-    : 0;
+      ? static_cast<int>(row_height * kPointsPerInch / scaled_yres_ + 0.5)
+      : 0;
 
   return font_info.name;
 }
 
+// Returns the name of the language used to recognize this word.
+const char* LTRResultIterator::WordRecognitionLanguage() const {
+  if (it_->word() == NULL || it_->word()->tesseract == NULL) return NULL;
+  return it_->word()->tesseract->lang.string();
+}
+
+// Return the overall directionality of this word.
+StrongScriptDirection LTRResultIterator::WordDirection() const {
+  if (it_->word() == NULL) return DIR_NEUTRAL;
+  bool has_rtl = it_->word()->AnyRtlCharsInWord();
+  bool has_ltr = it_->word()->AnyLtrCharsInWord();
+  if (has_rtl && !has_ltr)
+    return DIR_RIGHT_TO_LEFT;
+  if (has_ltr && !has_rtl)
+    return DIR_LEFT_TO_RIGHT;
+  if (!has_ltr && !has_rtl)
+    return DIR_NEUTRAL;
+  return DIR_MIX;
+}
+
 // Returns true if the current word was found in a dictionary.
-bool ResultIterator::WordIsFromDictionary() const {
+bool LTRResultIterator::WordIsFromDictionary() const {
   if (it_->word() == NULL) return false;  // Already at the end!
   int permuter = it_->word()->best_choice->permuter();
   return permuter == SYSTEM_DAWG_PERM || permuter == FREQ_DAWG_PERM ||
@@ -188,16 +229,69 @@ bool ResultIterator::WordIsFromDictionary() const {
 }
 
 // Returns true if the current word is numeric.
-bool ResultIterator::WordIsNumeric() const {
+bool LTRResultIterator::WordIsNumeric() const {
   if (it_->word() == NULL) return false;  // Already at the end!
   int permuter = it_->word()->best_choice->permuter();
   return permuter == NUMBER_PERM;
 }
 
+// Returns true if the word contains blamer information.
+bool LTRResultIterator::HasBlamerInfo() const {
+  return (it_->word() != NULL && it_->word()->blamer_bundle != NULL &&
+           (it_->word()->blamer_bundle->debug.length() > 0 ||
+            it_->word()->blamer_bundle->misadaption_debug.length() > 0));
+}
+
+// Returns the pointer to ParamsTrainingBundle stored in the BlamerBundle
+// of the current word.
+void *LTRResultIterator::GetParamsTrainingBundle() const {
+  return (it_->word() != NULL && it_->word()->blamer_bundle != NULL) ?
+      &(it_->word()->blamer_bundle->params_training_bundle) : NULL;
+}
+
+// Returns the pointer to the string with blamer information for this word.
+// Assumes that the word's blamer_bundle is not NULL.
+const char *LTRResultIterator::GetBlamerDebug() const {
+  return it_->word()->blamer_bundle->debug.string();
+}
+
+// Returns the pointer to the string with misadaption information for this word.
+// Assumes that the word's blamer_bundle is not NULL.
+const char *LTRResultIterator::GetBlamerMisadaptionDebug() const {
+  return it_->word()->blamer_bundle->misadaption_debug.string();
+}
+
+// Returns the null terminated UTF-8 encoded truth string for the current word.
+// Use delete [] to free after use.
+char* LTRResultIterator::WordTruthUTF8Text() const {
+  if (it_->word() == NULL) return NULL;  // Already at the end!
+  if (it_->word()->blamer_bundle == NULL ||
+      it_->word()->blamer_bundle->incorrect_result_reason == IRR_NO_TRUTH) {
+    return NULL;  // no truth information for this word
+  }
+  const GenericVector<STRING> &truth_vec =
+      it_->word()->blamer_bundle->truth_text;
+  STRING truth_text;
+  for (int i = 0; i < truth_vec.size(); ++i) truth_text += truth_vec[i];
+  int length = truth_text.length() + 1;
+  char* result = new char[length];
+  strncpy(result, truth_text.string(), length);
+  return result;
+}
+
+// Returns a pointer to serialized choice lattice.
+// Fills lattice_size with the number of bytes in lattice data.
+const char *LTRResultIterator::WordLattice(int *lattice_size) const {
+  if (it_->word() == NULL) return NULL;  // Already at the end!
+  if (it_->word()->blamer_bundle == NULL) return NULL;
+  *lattice_size = it_->word()->blamer_bundle->lattice_size;
+  return it_->word()->blamer_bundle->lattice_data;
+}
+
 // Returns true if the current symbol is a superscript.
 // If iterating at a higher level object than symbols, eg words, then
 // this will return the attributes of the first symbol in that word.
-bool ResultIterator::SymbolIsSuperscript() const {
+bool LTRResultIterator::SymbolIsSuperscript() const {
   if (cblob_it_ == NULL && it_->word() != NULL)
     return it_->word()->box_word->BlobPosition(blob_index_) == SP_SUPERSCRIPT;
   return false;
@@ -206,7 +300,7 @@ bool ResultIterator::SymbolIsSuperscript() const {
 // Returns true if the current symbol is a subscript.
 // If iterating at a higher level object than symbols, eg words, then
 // this will return the attributes of the first symbol in that word.
-bool ResultIterator::SymbolIsSubscript() const {
+bool LTRResultIterator::SymbolIsSubscript() const {
   if (cblob_it_ == NULL && it_->word() != NULL)
     return it_->word()->box_word->BlobPosition(blob_index_) == SP_SUBSCRIPT;
   return false;
@@ -215,17 +309,17 @@ bool ResultIterator::SymbolIsSubscript() const {
 // Returns true if the current symbol is a dropcap.
 // If iterating at a higher level object than symbols, eg words, then
 // this will return the attributes of the first symbol in that word.
-bool ResultIterator::SymbolIsDropcap() const {
+bool LTRResultIterator::SymbolIsDropcap() const {
   if (cblob_it_ == NULL && it_->word() != NULL)
     return it_->word()->box_word->BlobPosition(blob_index_) == SP_DROPCAP;
   return false;
 }
 
-ChoiceIterator::ChoiceIterator(const ResultIterator& result_it) {
+ChoiceIterator::ChoiceIterator(const LTRResultIterator& result_it) {
   ASSERT_HOST(result_it.it_->word() != NULL);
-  tesseract_ = result_it.tesseract_;
+  word_res_ = result_it.it_->word();
   PAGE_RES_IT res_it(*result_it.it_);
-  WERD_CHOICE* best_choice = res_it.word()->best_choice;
+  WERD_CHOICE* best_choice = word_res_->best_choice;
   BLOB_CHOICE_LIST_CLIST* choices = best_choice->blob_choices();
   if (choices != NULL) {
     BLOB_CHOICE_LIST_C_IT blob_choices_it(choices);
@@ -257,10 +351,7 @@ const char* ChoiceIterator::GetUTF8Text() const {
   if (choice_it_ == NULL)
     return NULL;
   UNICHAR_ID id = choice_it_->data()->unichar_id();
-  if (id < 0 || id >= tesseract_->unicharset.size() ||
-      id == INVALID_UNICHAR_ID)
-    return NULL;
-  return tesseract_->unicharset.id_to_unichar(id);
+  return word_res_->uch_set->id_to_unichar_ext(id);
 }
 
 // Returns the confidence of the current choice.

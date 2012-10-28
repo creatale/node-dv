@@ -17,9 +17,11 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
+#include          "mfcpch.h"     // Precompiled headers
+#include          "helpers.h"
 #include          "tprintf.h"
 #include          "strngs.h"
+#include          "genericvector.h"
 
 #include <assert.h>
 // Size of buffer needed to host the decimal representation of the maximum
@@ -94,8 +96,8 @@ void STRING::FixHeader() const {
 
 
 STRING::STRING() {
-  // 0 indicates old NULL -- it doesnt even have '\0'
-  AllocData(0, kMinCapacity);
+  // Empty STRINGs contain just the "\0".
+  memcpy(AllocData(1, kMinCapacity), "", 1);
 }
 
 STRING::STRING(const STRING& str) {
@@ -109,7 +111,8 @@ STRING::STRING(const STRING& str) {
 
 STRING::STRING(const char* cstr) {
   if (cstr == NULL) {
-    AllocData(0, 0);
+    // Empty STRINGs contain just the "\0".
+    memcpy(AllocData(1, kMinCapacity), "", 1);
   } else {
     int len = strlen(cstr) + 1;
     char* this_cstr = AllocData(len, len);
@@ -120,6 +123,25 @@ STRING::STRING(const char* cstr) {
 
 STRING::~STRING() {
   DiscardData();
+}
+
+// Writes to the given file. Returns false in case of error.
+bool STRING::Serialize(FILE* fp) const {
+  inT32 len = length();
+  if (fwrite(&len, sizeof(len), 1, fp) != 1) return false;
+  if (fwrite(GetCStr(), 1, len, fp) != len) return false;
+  return true;
+}
+// Reads from the given file. Returns false in case of error.
+// If swap is true, assumes a big/little-endian swap is needed.
+bool STRING::DeSerialize(bool swap, FILE* fp) {
+  inT32 len;
+  if (fread(&len, sizeof(len), 1, fp) != 1) return false;
+  if (swap)
+    ReverseN(&len, sizeof(len));
+  truncate_at(len);
+  if (fread(GetCStr(), 1, len, fp) != len) return false;
+  return true;
 }
 
 BOOL8 STRING::contains(const char c) const {
@@ -197,14 +219,14 @@ void STRING::erase_range(inT32 index, int len) {
   assert(InvariantOk());
 }
 
+#else
 void STRING::truncate_at(inT32 index) {
-  char* this_cstr = ensure_cstr(index);
+  char* this_cstr = ensure_cstr(index + 1);
   this_cstr[index] = '\0';
-  GetHeader()->used_ = index;
+  GetHeader()->used_ = index + 1;
   assert(InvariantOk());
 }
 
-#else
 char& STRING::operator[](inT32 index) const {
   // Code is casting away this const and mutating the string,
   // so mark used_ as -1 to flag it unreliable.
@@ -212,6 +234,26 @@ char& STRING::operator[](inT32 index) const {
   return ((char *)GetCStr())[index];
 }
 #endif
+
+void STRING::split(const char c, GenericVector<STRING> *splited) {
+  int start_index = 0;
+  for (int i = 0; i < length(); i++) {
+    if ((*this)[i] == c) {
+      if (i != start_index) {
+        (*this)[i] = '\0';
+        STRING tmp = GetCStr() + start_index;
+        splited->push_back(tmp);
+        (*this)[i] = c;
+      }
+      start_index = i + 1;
+    }
+  }
+
+  if (length() != start_index) {
+    STRING tmp = GetCStr() + start_index;
+    splited->push_back(tmp);
+  }
+}
 
 BOOL8 STRING::operator==(const STRING& str) const {
   FixHeader();
@@ -309,18 +351,29 @@ STRING & STRING::operator=(const char* cstr) {
     this_header = GetHeader();  // for realloc
     memcpy(this_cstr, cstr, len);
     this_header->used_ = len;
-  }
-  else {
-    // Reallocate to zero capacity buffer, consistent with the corresponding
-    // copy constructor.
+  } else {
+    // Reallocate to same state as default constructor.
     DiscardData();
-    AllocData(0, 0);
+    // Empty STRINGs contain just the "\0".
+    memcpy(AllocData(1, kMinCapacity), "", 1);
   }
 
   assert(InvariantOk());
   return *this;
 }
 
+void STRING::assign(const char *cstr, int len) {
+  STRING_HEADER* this_header = GetHeader();
+  this_header->used_ = 0;  // dont bother copying data if need to realloc
+  char* this_cstr = ensure_cstr(len + 1);  // +1 for '\0'
+
+  this_header = GetHeader();  // for realloc
+  memcpy(this_cstr, cstr, len);
+  this_cstr[len] = '\0';
+  this_header->used_ = len + 1;
+
+  assert(InvariantOk());
+}
 
 STRING STRING::operator+(const STRING& str) const {
   STRING result(*this);

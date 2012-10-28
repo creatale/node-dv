@@ -20,6 +20,6 @@
 #ifndef API_VERSION_H_
 #define API_VERSION_H_
 
-#define VERSION "3.01"
+#define VERSION "3.02"
 
 #endif // API_VERSION_H_

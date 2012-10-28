@@ -22,6 +22,14 @@
  ** limitations under the License.
  *
  *********************************************************************************/
+
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
+
+#ifndef GRAPHICS_DISABLED
+
 /*----------------------------------------------------------------------
               I n c l u d e s
 ----------------------------------------------------------------------*/
@@ -31,13 +39,6 @@
 #include "blobs.h"
 #include "const.h"
 #include <math.h>
-
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
-
-#ifndef GRAPHICS_DISABLED
 
 /*----------------------------------------------------------------------
               V a r i a b l e s
@@ -83,14 +84,11 @@ void render_segmentation(ScrollView *window,
   int char_num = -1;
   int chunks_left = 0;
 
-  TPOINT topleft;
-  TPOINT botright;
-
-  // Find bounding box.
-  blobs_bounding_box(chunks, &topleft, &botright);
+  TBOX bbox;
+  if (chunks) bbox = chunks->bounding_box();
 
   for (blob = chunks; blob != NULL; blob = blob->next) {
-
+    bbox += blob->bounding_box();
     if (chunks_left-- == 0) {
       color = color_list[++char_num % NUM_COLORS];
 
@@ -101,7 +99,8 @@ void render_segmentation(ScrollView *window,
     }
     render_outline(window, blob->outlines, color);
   }
-  window->ZoomToRectangle(topleft.x, topleft.y, botright.x, botright.y);
+  window->ZoomToRectangle(bbox.left(), bbox.top(),
+                          bbox.right(), bbox.bottom());
 }
 
 #endif  // GRPAHICS_DISABLED

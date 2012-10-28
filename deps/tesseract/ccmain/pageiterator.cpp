@@ -36,7 +36,7 @@ PageIterator::PageIterator(PAGE_RES* page_res, Tesseract* tesseract,
     rect_left_(rect_left), rect_top_(rect_top),
     rect_width_(rect_width), rect_height_(rect_height) {
   it_ = new PAGE_RES_IT(page_res);
-  Begin();
+  PageIterator::Begin();
 }
 
 PageIterator::~PageIterator() {
@@ -44,9 +44,11 @@ PageIterator::~PageIterator() {
   delete cblob_it_;
 }
 
-// PageIterators may be copied! This makes it possible to iterate over
-// all the objects at a lower level, while maintaining an iterator to
-// objects at a higher level.
+/**
+ * PageIterators may be copied! This makes it possible to iterate over
+ * all the objects at a lower level, while maintaining an iterator to
+ * objects at a higher level.
+ */
 PageIterator::PageIterator(const PageIterator& src)
   : page_res_(src.page_res_), tesseract_(src.tesseract_),
     word_(NULL), word_length_(src.word_length_),
@@ -73,23 +75,56 @@ const PageIterator& PageIterator::operator=(const PageIterator& src) {
   return *this;
 }
 
+bool PageIterator::PositionedAtSameWord(const PAGE_RES_IT* other) const {
+  return (it_ == NULL && it_ == other) ||
+     ((other != NULL) && (it_ != NULL) && (*it_ == *other));
+}
+
 // ============= Moving around within the page ============.
 
-// Resets the iterator to point to the start of the page.
+/** Resets the iterator to point to the start of the page. */
 void PageIterator::Begin() {
   it_->restart_page_with_empties();
   BeginWord(0);
 }
 
-// Moves to the start of the next object at the given level in the
-// page hierarchy, and returns false if the end of the page was reached.
-// NOTE that RIL_SYMBOL will skip non-text blocks, but all other
-// PageIteratorLevel level values will visit each non-text block once.
-// Think of non text blocks as containing a single para, with a single line,
-// with a single imaginary word.
-// Calls to Next with different levels may be freely intermixed.
-// This function iterates words in right-to-left scripts correctly, if
-// the appropriate language has been loaded into Tesseract.
+void PageIterator::RestartParagraph() {
+  if (it_->block() == NULL) return; // At end of the document.
+  PAGE_RES_IT para(page_res_);
+  PAGE_RES_IT next_para(para);
+  next_para.forward_paragraph();
+  while (next_para.cmp(*it_) <= 0) {
+    para = next_para;
+    next_para.forward_paragraph();
+  }
+  *it_ = para;
+  BeginWord(0);
+}
+
+bool PageIterator::IsWithinFirstTextlineOfParagraph() const {
+  PageIterator p_start(*this);
+  p_start.RestartParagraph();
+  return p_start.it_->row() == it_->row();
+}
+
+void PageIterator::RestartRow() {
+  it_->restart_row();
+  BeginWord(0);
+}
+
+/**
+ * Moves to the start of the next object at the given level in the
+ * page hierarchy, and returns false if the end of the page was reached.
+ * NOTE (CHANGED!) that ALL PageIteratorLevel level values will visit each
+ * non-text block at least once.
+ * Think of non text blocks as containing a single para, with at least one
+ * line, with a single imaginary word, containing a single symbol.
+ * The bounding boxes mark out any polygonal nature of the block, and
+ * PTIsTextType(BLockType()) is false for non-text blocks.
+ * Calls to Next with different levels may be freely intermixed.
+ * This function iterates words in right-to-left scripts correctly, if
+ * the appropriate language has been loaded into Tesseract.
+ */
 bool PageIterator::Next(PageIteratorLevel level) {
   if (it_->block() == NULL) return false;  // Already at the end!
   if (it_->word() == NULL)
@@ -97,8 +132,10 @@ bool PageIterator::Next(PageIteratorLevel level) {
 
   switch (level) {
     case RIL_BLOCK:
-    case RIL_PARA:
       it_->forward_block();
+      break;
+    case RIL_PARA:
+      it_->forward_paragraph();
       break;
     case RIL_TEXTLINE:
       for (it_->forward_with_empties(); it_->row() == it_->prev_row();
@@ -112,7 +149,7 @@ bool PageIterator::Next(PageIteratorLevel level) {
         cblob_it_->forward();
       ++blob_index_;
       if (blob_index_ >= word_length_)
-        it_->forward();
+        it_->forward_with_empties();
       else
         return true;
       break;
@@ -121,18 +158,23 @@ bool PageIterator::Next(PageIteratorLevel level) {
   return it_->block() != NULL;
 }
 
-// Returns true if the iterator is at the start of an object at the given
-// level. Possible uses include determining if a call to Next(RIL_WORD)
-// moved to the start of a RIL_PARA.
+/**
+ * Returns true if the iterator is at the start of an object at the given
+ * level. Possible uses include determining if a call to Next(RIL_WORD)
+ * moved to the start of a RIL_PARA.
+ */
 bool PageIterator::IsAtBeginningOf(PageIteratorLevel level) const {
   if (it_->block() == NULL) return false;  // Already at the end!
   if (it_->word() == NULL) return true;  // In an image block.
   switch (level) {
     case RIL_BLOCK:
+      return blob_index_ == 0 && it_->block() != it_->prev_block();
     case RIL_PARA:
-      return it_->block() != it_->prev_block();
+      return blob_index_ == 0 &&
+          (it_->block() != it_->prev_block() ||
+           it_->row()->row->para() != it_->prev_row()->row->para());
     case RIL_TEXTLINE:
-      return it_->row() != it_->prev_row();
+      return blob_index_ == 0 && it_->row() != it_->prev_row();
     case RIL_WORD:
       return blob_index_ == 0;
     case RIL_SYMBOL:
@@ -141,11 +183,13 @@ bool PageIterator::IsAtBeginningOf(PageIteratorLevel level) const {
   return false;
 }
 
-// Returns whether the iterator is positioned at the last element in a
-// given level. (e.g. the last word in a line, the last line in a block)
+/**
+ * Returns whether the iterator is positioned at the last element in a
+ * given level. (e.g. the last word in a line, the last line in a block)
+ */
 bool PageIterator::IsAtFinalElement(PageIteratorLevel level,
                                     PageIteratorLevel element) const {
-  if (it_->word() == NULL) return true;  // Already at the end!
+  if (Empty(element)) return true;  // Already at the end!
   // The result is true if we step forward by element and find we are
   // at the the end of the page or at beginning of *all* levels in:
   // [level, element).
@@ -154,13 +198,30 @@ bool PageIterator::IsAtFinalElement(PageIteratorLevel level,
   // word on a line, so we also have to be at the first symbol in a word.
   PageIterator next(*this);
   next.Next(element);
-  if (next.it_->word() == NULL) return true;  // Reached the end of the page.
+  if (next.Empty(element)) return true;  // Reached the end of the page.
   while (element > level) {
     element = static_cast<PageIteratorLevel>(element - 1);
     if (!next.IsAtBeginningOf(element))
       return false;
   }
   return true;
+}
+
+/**
+ * Returns whether this iterator is positioned
+ *   before other:   -1
+ *   equal to other:  0
+ *   after other:     1
+ */
+int PageIterator::Cmp(const PageIterator &other) const {
+  int word_cmp = it_->cmp(*other.it_);
+  if (word_cmp != 0)
+    return word_cmp;
+  if (blob_index_ < other.blob_index_)
+    return -1;
+  if (blob_index_ == other.blob_index_)
+    return 0;
+  return 1;
 }
 
 // ============= Accessing data ==============.
@@ -176,22 +237,26 @@ bool PageIterator::IsAtFinalElement(PageIteratorLevel level,
 // If an image rectangle has been set in the API, then returned coordinates
 // relate to the original (full) image, rather than the rectangle.
 
-// Returns the bounding rectangle of the current object at the given level.
-// See comment on coordinate system above.
-// Returns false if there is no such object at the current position.
-bool PageIterator::BoundingBox(PageIteratorLevel level,
-                               int* left, int* top,
-                               int* right, int* bottom) const {
-  if (it_->block() == NULL) return false;  // Already at the end!
-  if (it_->word() == NULL && level != RIL_BLOCK) return false;
-  if (level == RIL_SYMBOL && blob_index_ >= word_length_)
-    return false;  // Zero length word, or already at the end of it.
+/**
+ * Returns the bounding rectangle of the current object at the given level in
+ * the coordinates of the working image that is pix_binary().
+ * See comment on coordinate system above.
+ * Returns false if there is no such object at the current position.
+ */
+bool PageIterator::BoundingBoxInternal(PageIteratorLevel level,
+                                       int* left, int* top,
+                                       int* right, int* bottom) const {
+  if (Empty(level))
+    return false;
   TBOX box;
+  PARA *para = NULL;
   switch (level) {
     case RIL_BLOCK:
-    case RIL_PARA:
       box = it_->block()->block->bounding_box();
       break;
+    case RIL_PARA:
+      para = it_->row()->row->para();
+      // explicit fall-through.
     case RIL_TEXTLINE:
       box = it_->row()->row->bounding_box();
       break;
@@ -204,23 +269,64 @@ bool PageIterator::BoundingBox(PageIteratorLevel level,
       else
         box = cblob_it_->data()->bounding_box();
   }
+  if (level == RIL_PARA) {
+    PageIterator other = *this;
+    other.Begin();
+    do {
+      if (other.it_->block() &&
+          other.it_->block()->block == it_->block()->block &&
+          other.it_->row() && other.it_->row()->row &&
+          other.it_->row()->row->para() == para) {
+        box = box.bounding_union(other.it_->row()->row->bounding_box());
+      }
+    } while (other.Next(RIL_TEXTLINE));
+  }
   if (level != RIL_SYMBOL || cblob_it_ != NULL)
     box.rotate(it_->block()->block->re_rotation());
   // Now we have a box in tesseract coordinates relative to the image rectangle,
-  // we have to convert the coords to global page coords in a top-down system.
-  *left = ClipToRange(box.left() / scale_ + rect_left_,
+  // we have to convert the coords to a top-down system.
+  const int pix_height = pixGetHeight(tesseract_->pix_binary());
+  const int pix_width = pixGetWidth(tesseract_->pix_binary());
+  *left = ClipToRange(static_cast<int>(box.left()), 0, pix_width);
+  *top = ClipToRange(pix_height - box.top(), 0, pix_height);
+  *right = ClipToRange(static_cast<int>(box.right()), *left, pix_width);
+  *bottom = ClipToRange(pix_height - box.bottom(), *top, pix_height);
+  return true;
+}
+
+/**
+ * Returns the bounding rectangle of the current object at the given level in
+ * coordinates of the original image.
+ * See comment on coordinate system above.
+ * Returns false if there is no such object at the current position.
+ */
+bool PageIterator::BoundingBox(PageIteratorLevel level,
+                               int* left, int* top,
+                               int* right, int* bottom) const {
+  if (!BoundingBoxInternal(level, left, top, right, bottom))
+    return false;
+  // Convert to the coordinate system of the original image.
+  *left = ClipToRange(*left / scale_ + rect_left_,
                       rect_left_, rect_left_ + rect_width_);
-  *top = ClipToRange((rect_height_ - box.top()) / scale_ + rect_top_,
+  *top = ClipToRange(*top / scale_ + rect_top_,
                      rect_top_, rect_top_ + rect_height_);
-  *right = ClipToRange((box.right() + scale_ - 1) / scale_ + rect_left_,
+  *right = ClipToRange((*right + scale_ - 1) / scale_ + rect_left_,
                        *left, rect_left_ + rect_width_);
-  *bottom = ClipToRange((rect_height_ - box.bottom() + scale_ - 1) / scale_
-                           + rect_top_,
+  *bottom = ClipToRange((*bottom + scale_ - 1) / scale_ + rect_top_,
                         *top, rect_top_ + rect_height_);
   return true;
 }
 
-// Returns the type of the current block. See apitypes.h for PolyBlockType.
+/** Return that there is no such object at a given level. */
+bool PageIterator::Empty(PageIteratorLevel level) const {
+  if (it_->block() == NULL) return true;  // Already at the end!
+  if (it_->word() == NULL && level != RIL_BLOCK) return true;  // image block
+  if (level == RIL_SYMBOL && blob_index_ >= word_length_)
+    return true;  // Zero length word, or already at the end of it.
+  return false;
+}
+
+/** Returns the type of the current block. See apitypes.h for PolyBlockType. */
 PolyBlockType PageIterator::BlockType() const {
   if (it_->block() == NULL || it_->block()->block == NULL)
     return PT_UNKNOWN;  // Already at the end!
@@ -229,43 +335,59 @@ PolyBlockType PageIterator::BlockType() const {
   return it_->block()->block->poly_block()->isA();
 }
 
-// Returns a binary image of the current object at the given level.
-// The position and size match the return from BoundingBox.
-// Use pixDestroy to delete the image after use.
-// The following methods are used to generate the images:
-// RIL_BLOCK: mask the page image with the block polygon.
-// RIL_TEXTLINE: Clip the rectangle of the line box from the page image.
-// TODO(rays) fix this to generate and use a line polygon.
-// RIL_WORD: Clip the rectangle of the word box from the page image.
-// RIL_SYMBOL: Render the symbol outline to an image for cblobs (prior
-// to recognition) or the bounding box otherwise.
-// A reconstruction of the original image (using xor to check for double
-// representation) should be reasonably accurate,
-// apart from removed noise, at the block level. Below the block level, the
-// reconstruction will be missing images and line separators.
-// At the symbol level, kerned characters will be invade the bounding box
-// if rendered after recognition, making an xor reconstruction inaccurate, but
-// an or construction better. Before recognition, symbol-level reconstruction
-// should be good, even with xor, since the images come from the connected
-// components.
+/**
+ * Returns a binary image of the current object at the given level.
+ * The position and size match the return from BoundingBoxInternal, and so this
+ * could be upscaled with respect to the original input image.
+ * Use pixDestroy to delete the image after use.
+ * The following methods are used to generate the images:
+ * RIL_BLOCK: mask the page image with the block polygon.
+ * RIL_TEXTLINE: Clip the rectangle of the line box from the page image.
+ * TODO(rays) fix this to generate and use a line polygon.
+ * RIL_WORD: Clip the rectangle of the word box from the page image.
+ * RIL_SYMBOL: Render the symbol outline to an image for cblobs (prior
+ * to recognition) or the bounding box otherwise.
+ * A reconstruction of the original image (using xor to check for double
+ * representation) should be reasonably accurate,
+ * apart from removed noise, at the block level. Below the block level, the
+ * reconstruction will be missing images and line separators.
+ * At the symbol level, kerned characters will be invade the bounding box
+ * if rendered after recognition, making an xor reconstruction inaccurate, but
+ * an or construction better. Before recognition, symbol-level reconstruction
+ * should be good, even with xor, since the images come from the connected
+ * components.
+ */
 Pix* PageIterator::GetBinaryImage(PageIteratorLevel level) const {
   int left, top, right, bottom;
-  if (!BoundingBox(level, &left, &top, &right, &bottom))
+  if (!BoundingBoxInternal(level, &left, &top, &right, &bottom))
     return NULL;
   Pix* pix = NULL;
   switch (level) {
     case RIL_BLOCK:
     case RIL_PARA:
+      int bleft, btop, bright, bbottom;
+      BoundingBoxInternal(RIL_BLOCK, &bleft, &btop, &bright, &bbottom);
       pix = it_->block()->block->render_mask();
       // AND the mask and the image.
       pixRasterop(pix, 0, 0, pixGetWidth(pix), pixGetHeight(pix),
                   PIX_SRC & PIX_DST, tesseract_->pix_binary(),
-                  left, top);
+                  bleft, btop);
+      if (level == RIL_PARA) {
+        // RIL_PARA needs further attention:
+        //   clip the paragraph from the block mask.
+        Box* box = boxCreate(left - bleft, top - btop,
+                             right - left, bottom - top);
+        Pix* pix2 = pixClipRectangle(pix, box, NULL);
+        boxDestroy(&box);
+        pixDestroy(&pix);
+        pix = pix2;
+      }
       break;
     case RIL_TEXTLINE:
     case RIL_WORD:
     case RIL_SYMBOL:
-      if (level == RIL_SYMBOL && cblob_it_ != NULL)
+      if (level == RIL_SYMBOL && cblob_it_ != NULL &&
+          cblob_it_->data()->area() != 0)
         return cblob_it_->data()->render();
       // Just clip from the bounding box.
       Box* box = boxCreate(left, top, right - left, bottom - top);
@@ -276,14 +398,16 @@ Pix* PageIterator::GetBinaryImage(PageIteratorLevel level) const {
   return pix;
 }
 
-// Returns an image of the current object at the given level in greyscale
-// if available in the input. To guarantee a binary image use BinaryImage.
-// NOTE that in order to give the best possible image, the bounds are
-// expanded slightly over the binary connected component, by the supplied
-// padding, so the top-left position of the returned image is returned
-// in (left,top). These will most likely not match the coordinates
-// returned by BoundingBox.
-// Use pixDestroy to delete the image after use.
+/**
+ * Returns an image of the current object at the given level in greyscale
+ * if available in the input. To guarantee a binary image use BinaryImage.
+ * NOTE that in order to give the best possible image, the bounds are
+ * expanded slightly over the binary connected component, by the supplied
+ * padding, so the top-left position of the returned image is returned
+ * in (left,top). These will most likely not match the coordinates
+ * returned by BoundingBox.
+ * Use pixDestroy to delete the image after use.
+ */
 Pix* PageIterator::GetImage(PageIteratorLevel level, int padding,
                             int* left, int* top) const {
   int right, bottom;
@@ -301,7 +425,7 @@ Pix* PageIterator::GetImage(PageIteratorLevel level, int padding,
   Box* box = boxCreate(*left, *top, right - *left, bottom - *top);
   Pix* grey_pix = pixClipRectangle(pix, box, NULL);
   boxDestroy(&box);
-  if (level == RIL_BLOCK || level == RIL_PARA) {
+  if (level == RIL_BLOCK) {
     Pix* mask = it_->block()->block->render_mask();
     Pix* expanded_mask = pixCreate(right - *left, bottom - *top, 1);
     pixRasterop(expanded_mask, padding, padding,
@@ -316,10 +440,11 @@ Pix* PageIterator::GetImage(PageIteratorLevel level, int padding,
   return grey_pix;
 }
 
-
-// Returns the baseline of the current object at the given level.
-// The baseline is the line that passes through (x1, y1) and (x2, y2).
-// WARNING: with vertical text, baselines may be vertical!
+/**
+ * Returns the baseline of the current object at the given level.
+ * The baseline is the line that passes through (x1, y1) and (x2, y2).
+ * WARNING: with vertical text, baselines may be vertical!
+ */
 bool PageIterator::Baseline(PageIteratorLevel level,
                             int* x1, int* y1, int* x2, int* y2) const {
   if (it_->word() == NULL) return false;  // Already at the end!
@@ -345,7 +470,7 @@ bool PageIterator::Baseline(PageIteratorLevel level,
 void PageIterator::Orientation(tesseract::Orientation *orientation,
                                tesseract::WritingDirection *writing_direction,
                                tesseract::TextlineOrder *textline_order,
-                               float *deskew_angle) {
+                               float *deskew_angle) const {
   BLOCK* block = it_->block()->block;
 
   // Orientation
@@ -388,8 +513,26 @@ void PageIterator::Orientation(tesseract::Orientation *orientation,
   *deskew_angle = -skew.angle();
 }
 
-// Sets up the internal data for iterating the blobs of a new word, then
-// moves the iterator to the given offset.
+void PageIterator::ParagraphInfo(tesseract::ParagraphJustification *just,
+                                 bool *is_list_item,
+                                 bool *is_crown,
+                                 int *first_line_indent) const {
+  *just = tesseract::JUSTIFICATION_UNKNOWN;
+  if (!it_->row() || !it_->row()->row || !it_->row()->row->para() ||
+      !it_->row()->row->para()->model)
+    return;
+
+  PARA *para = it_->row()->row->para();
+  *is_list_item = para->is_list_item;
+  *is_crown = para->is_very_first_or_continuation;
+  *first_line_indent = para->model->first_indent() -
+      para->model->body_indent();
+}
+
+/**
+ * Sets up the internal data for iterating the blobs of a new word, then
+ * moves the iterator to the given offset.
+ */
 void PageIterator::BeginWord(int offset) {
   WERD_RES* word_res = it_->word();
   if (word_res == NULL) {
@@ -404,6 +547,12 @@ void PageIterator::BeginWord(int offset) {
     // is already baseline denormalized.
     word_length_ = word_res->best_choice->length();
     ASSERT_HOST(word_res->box_word != NULL);
+    if (word_res->box_word->length() != word_length_) {
+      tprintf("Corrupted word! best_choice[len=%d] = %s, box_word[len=%d]: ",
+              word_length_, word_res->best_choice->unichar_string().string(),
+              word_res->box_word->length());
+      word_res->box_word->bounding_box().print();
+    }
     ASSERT_HOST(word_res->box_word->length() == word_length_);
     word_ = NULL;
     // We will be iterating the box_word.

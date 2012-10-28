@@ -1,5 +1,5 @@
 /*
-LodePNG version 20121016
+LodePNG version 20121027
 
 Copyright (c) 2005-2012 Lode Vandevenne
 
@@ -1521,6 +1521,7 @@ yyyymmdd.
 Some changes aren't backwards compatible. Those are indicated with a (!)
 symbol.
 
+*) 27 okt 2012: Tweaks in text chunk keyword length error handling.
 *) 8 okt 2012 (!): Added new filter strategy (entropy) and new auto color mode.
     (no palette). Better deflate tree encoding. New compression tweak settings.
     Faster color conversions while decoding. Some internal cleanups.

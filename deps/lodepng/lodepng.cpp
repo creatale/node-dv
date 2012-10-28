@@ -1,5 +1,5 @@
 /*
-LodePNG version 20121016
+LodePNG version 20121027
 
 Copyright (c) 2005-2012 Lode Vandevenne
 
@@ -37,7 +37,7 @@ Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for
 #include <fstream>
 #endif /*LODEPNG_COMPILE_CPP*/
 
-#define VERSION_STRING "20121016"
+#define VERSION_STRING "20121027"
 
 /*
 This source file is built up in the following large parts. The code sections
@@ -2114,13 +2114,9 @@ static unsigned zlib_decompress(unsigned char** out, size_t* outsize, const unsi
                                 size_t insize, const LodePNGDecompressSettings* settings)
 {
   if(settings->custom_zlib)
-  {
     return settings->custom_zlib(out, outsize, in, insize, settings);
-  }
   else
-  {
     return lodepng_zlib_decompress(out, outsize, in, insize, settings);
-  }
 }
 
 #endif /*LODEPNG_COMPILE_DECODER*/
@@ -4310,8 +4306,9 @@ static unsigned readChunk_tEXt(LodePNGInfo* info, const unsigned char* data, siz
 
     length = 0;
     while(length < chunkLength && data[length] != 0) length++;
-    /*error, end reached, no null terminator?*/
-    if(length + 1 >= chunkLength) CERROR_BREAK(error, 75);
+    /*even though it's not allowed by the standard, no error is thrown if
+    there's no null termination char, if the text is empty*/
+    if(length < 1 || length > 79) CERROR_BREAK(error, 89); /*keyword too short or long*/
 
     key = (char*)mymalloc(length + 1);
     if(!key) CERROR_BREAK(error, 83); /*alloc fail*/
@@ -4319,11 +4316,9 @@ static unsigned readChunk_tEXt(LodePNGInfo* info, const unsigned char* data, siz
     key[length] = 0;
     for(i = 0; i < length; i++) key[i] = data[i];
 
-    string2_begin = length + 1;
-    /*error, end reached, no null terminator?*/
-    if(string2_begin > chunkLength) CERROR_BREAK(error, 75);
+    string2_begin = length + 1; /*skip keyword null terminator*/
 
-    length = chunkLength - string2_begin;
+    length = chunkLength < string2_begin ? 0 : chunkLength - string2_begin;
     str = (char*)mymalloc(length + 1);
     if(!str) CERROR_BREAK(error, 83); /*alloc fail*/
 
@@ -4358,6 +4353,7 @@ static unsigned readChunk_zTXt(LodePNGInfo* info, const LodePNGDecompressSetting
   {
     for(length = 0; length < chunkLength && data[length] != 0; length++) ;
     if(length + 2 >= chunkLength) CERROR_BREAK(error, 75); /*no null termination, corrupt?*/
+    if(length < 1 || length > 79) CERROR_BREAK(error, 89); /*keyword too short or long*/
 
     key = (char*)mymalloc(length + 1);
     if(!key) CERROR_BREAK(error, 83); /*alloc fail*/
@@ -4371,9 +4367,10 @@ static unsigned readChunk_zTXt(LodePNGInfo* info, const LodePNGDecompressSetting
     if(string2_begin > chunkLength) CERROR_BREAK(error, 75); /*no null termination, corrupt?*/
 
     length = chunkLength - string2_begin;
+    /*will fail if zlib error, e.g. if length is too small*/
     error = zlib_decompress(&decoded.data, &decoded.size,
-                                   (unsigned char*)(&data[string2_begin]),
-                                   length, zlibsettings);
+                            (unsigned char*)(&data[string2_begin]),
+                            length, zlibsettings);
     if(error) break;
     ucvector_push_back(&decoded, 0);
 
@@ -4408,7 +4405,8 @@ static unsigned readChunk_iTXt(LodePNGInfo* info, const LodePNGDecompressSetting
 
     /*read the key*/
     for(length = 0; length < chunkLength && data[length] != 0; length++) ;
-    if(length + 2 >= chunkLength) CERROR_BREAK(error, 75); /*no null termination char found*/
+    if(length + 3 >= chunkLength) CERROR_BREAK(error, 75); /*no null termination char, corrupt?*/
+    if(length < 1 || length > 79) CERROR_BREAK(error, 89); /*keyword too short or long*/
 
     key = (char*)mymalloc(length + 1);
     if(!key) CERROR_BREAK(error, 83); /*alloc fail*/
@@ -4420,11 +4418,13 @@ static unsigned readChunk_iTXt(LodePNGInfo* info, const LodePNGDecompressSetting
     compressed = data[length + 1];
     if(data[length + 2] != 0) CERROR_BREAK(error, 72); /*the 0 byte indicating compression must be 0*/
 
+    /*even though it's not allowed by the standard, no error is thrown if
+    there's no null termination char, if the text is empty for the next 3 texts*/
+
     /*read the langtag*/
     begin = length + 3;
     length = 0;
     for(i = begin; i < chunkLength && data[i] != 0; i++) length++;
-    if(begin + length + 1 >= chunkLength) CERROR_BREAK(error, 75); /*no null termination char found*/
 
     langtag = (char*)mymalloc(length + 1);
     if(!langtag) CERROR_BREAK(error, 83); /*alloc fail*/
@@ -4436,7 +4436,6 @@ static unsigned readChunk_iTXt(LodePNGInfo* info, const LodePNGDecompressSetting
     begin += length + 1;
     length = 0;
     for(i = begin; i < chunkLength && data[i] != 0; i++) length++;
-    if(begin + length + 1 >= chunkLength) CERROR_BREAK(error, 75); /*no null termination, corrupt?*/
 
     transkey = (char*)mymalloc(length + 1);
     if(!transkey) CERROR_BREAK(error, 83); /*alloc fail*/
@@ -4446,12 +4445,12 @@ static unsigned readChunk_iTXt(LodePNGInfo* info, const LodePNGDecompressSetting
 
     /*read the actual text*/
     begin += length + 1;
-    if(begin > chunkLength) CERROR_BREAK(error, 75); /*no null termination, corrupt?*/
 
-    length = chunkLength - begin;
+    length = chunkLength < begin ? 0 : chunkLength - begin;
 
     if(compressed)
     {
+      /*will fail if zlib error, e.g. if length is too small*/
       error = zlib_decompress(&decoded.data, &decoded.size,
                               (unsigned char*)(&data[begin]),
                               length, zlibsettings);
@@ -4964,7 +4963,8 @@ static unsigned addChunk_tEXt(ucvector* out, const char* keyword, const char* te
   ucvector text;
   ucvector_init(&text);
   for(i = 0; keyword[i] != 0; i++) ucvector_push_back(&text, (unsigned char)keyword[i]);
-  ucvector_push_back(&text, 0);
+  if(i < 1 || i > 79) return 89; /*error: invalid keyword size*/
+  ucvector_push_back(&text, 0); /*0 termination char*/
   for(i = 0; textstring[i] != 0; i++) ucvector_push_back(&text, (unsigned char)textstring[i]);
   error = addChunk(out, "tEXt", text.data, text.size);
   ucvector_cleanup(&text);
@@ -4982,6 +4982,7 @@ static unsigned addChunk_zTXt(ucvector* out, const char* keyword, const char* te
   ucvector_init(&data);
   ucvector_init(&compressed);
   for(i = 0; keyword[i] != 0; i++) ucvector_push_back(&data, (unsigned char)keyword[i]);
+  if(i < 1 || i > 79) return 89; /*error: invalid keyword size*/
   ucvector_push_back(&data, 0); /*0 termination char*/
   ucvector_push_back(&data, 0); /*compression method: 0*/
 
@@ -5008,6 +5009,7 @@ static unsigned addChunk_iTXt(ucvector* out, unsigned compressed, const char* ke
   ucvector_init(&data);
 
   for(i = 0; keyword[i] != 0; i++) ucvector_push_back(&data, (unsigned char)keyword[i]);
+  if(i < 1 || i > 79) return 89; /*error: invalid keyword size*/
   ucvector_push_back(&data, 0); /*null termination char*/
   ucvector_push_back(&data, compressed ? 1 : 0); /*compression flag*/
   ucvector_push_back(&data, 0); /*compression method*/
@@ -5966,6 +5968,7 @@ const char* lodepng_error_text(unsigned code)
     case 86: return "impossible offset in lz77 encoding (internal bug)";
     case 87: return "must provide custom zlib function pointer if LODEPNG_COMPILE_ZLIB is not defined";
     case 88: return "invalid filter strategy given for LodePNGEncoderSettings.filter_strategy";
+    case 89: return "text chunk keyword too short or long: must have size 1-79";
   }
   return "unknown error code";
 }

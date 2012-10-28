@@ -71,17 +71,16 @@ FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm) {
     Feature->Params[MFBulge1] = 0.0f;
     Feature->Params[MFBulge2] = 0.0f;
 
-#ifndef WIN32
+#ifndef _WIN32
     // Assert that feature parameters are well defined.
     int i;
     for (i = 0; i < Feature->Type->NumParams; i++) {
-      assert (!isnan(Feature->Params[i]));
+      ASSERT_HOST(!isnan(Feature->Params[i]));
     }
 #endif
 
     AddFeature(FeatureSet, Feature);
   }
   FreeMicroFeatures(OldFeatures);
-  return (FeatureSet);
-
+  return FeatureSet;
 }                                /* ExtractMicros */

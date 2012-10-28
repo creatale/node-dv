@@ -58,12 +58,16 @@ class DLLSYM POLY_BLOCK {
   // Rotate about the origin by the given rotation. (Analogous to
   // multiplying by a complex number.
   void rotate(FCOORD rotation);
+  // Reflect the coords of the polygon in the y-axis. (Flip the sign of x.)
+  void reflect_in_y_axis();
   // Move by adding shift to all coordinates.
   void move(ICOORD shift);
 
   void plot(ScrollView* window, inT32 num);
 
+  #ifndef GRAPHICS_DISABLED
   void fill(ScrollView* window, ScrollView::Color colour);
+  #endif  // GRAPHICS_DISABLED
 
   // Returns true if other is inside this.
   bool contains(POLY_BLOCK *other);
@@ -76,10 +80,11 @@ class DLLSYM POLY_BLOCK {
   // test_pt outside this.
   inT16 winding_number(const ICOORD &test_pt);
 
+  #ifndef GRAPHICS_DISABLED
   // Static utility functions to handle the PolyBlockType.
-
   // Returns a color to draw the given type.
   static ScrollView::Color ColorForPolyBlockType(PolyBlockType type);
+  #endif  // GRAPHICS_DISABLED
 
  private:
   ICOORDELT_LIST vertices;     // vertices

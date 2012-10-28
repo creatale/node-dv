@@ -11,7 +11,12 @@
 // - A LMB click either draws point-to-point, point or text.
 // - A LMB dragging either draws a line, a rectangle or ellipse.
 
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
 
+#ifndef GRAPHICS_DISABLED
 #include "scrollview.h"
 #include "svmnode.h"
 #include <stdlib.h>
@@ -218,3 +223,4 @@ int main(int argc, char** argv) {
 	if (argc > 1) { server_name = argv[1]; } else { server_name = "localhost"; }
 	SVPaint svp(server_name);
 }
+#endif  // GRAPHICS_DISABLED
