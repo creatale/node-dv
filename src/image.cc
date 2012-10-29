@@ -285,21 +285,25 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
             state.info_png.color.colortype = LCT_RGB;
             state.info_raw.colortype = LCT_RGB;
             error = lodepng::encode(out, in, obj->pix_->w, obj->pix_->h, state);
-        } else {
+        } else if (obj->pix_->d <= 8) {
+            PIX *pix8 = pixConvertTo8(obj->pix_, 0);
             // Image is Grayscale, so create a 1 byte per pixel image.
             uint32_t *line;
             std::vector<unsigned char> in;
-            in.reserve(obj->pix_->w * obj->pix_->h);
-            line = obj->pix_->data;
-            for (uint32_t y = 0; y < obj->pix_->h; ++y) {
-                for (uint32_t x = 0; x < obj->pix_->w; ++x) {
+            in.reserve(pix8->w * pix8->h);
+            line = pix8->data;
+            for (uint32_t y = 0; y < pix8->h; ++y) {
+                for (uint32_t x = 0; x < pix8->w; ++x) {
                     in.push_back(GET_DATA_BYTE(line, x));
                 }
-                line += obj->pix_->wpl;
+                line += pix8->wpl;
             }
             state.info_png.color.colortype = LCT_GREY;
             state.info_raw.colortype = LCT_GREY;
-            error = lodepng::encode(out, in, obj->pix_->w, obj->pix_->h, state);
+            error = lodepng::encode(out, in, pix8->w, pix8->h, state);
+            pixDestroy(&pix8);
+        } else {
+            return THROW(Error, "wront image format");
         }
         if (error) {
             std::stringstream msg;
