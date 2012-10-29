@@ -6,6 +6,7 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 - Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69) and [LodePNG](http://lodev.org/lodepng/) (Version 20121027)
 - OCR using [Tesseract](http://code.google.com/p/tesseract-ocr/) (Version 3.02)
+- Barcode reading using [ZBar](http://zbar.sourceforge.net/) (Version 0.10 with patches from SVN)
 
 ## Installation
 

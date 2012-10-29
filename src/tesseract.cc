@@ -16,7 +16,6 @@ void Tesseract::Init(Handle<Object> target)
     constructor_template->SetClassName(String::NewSymbol("Tesseract"));
     constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
-    proto->SetAccessor(String::NewSymbol("version"), GetVersion);
     proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
     proto->SetAccessor(String::NewSymbol("rectangle"), GetRectangle, SetRectangle);
     proto->SetAccessor(String::NewSymbol("pageSegMode"), GetPageSegMode, SetPageSegMode);
@@ -71,12 +70,6 @@ Handle<Value> Tesseract::New(const Arguments &args)
     }
     obj->Wrap(args.This());
     return args.This();
-}
-
-Handle<Value> Tesseract::GetVersion(Local<String> prop, const AccessorInfo &info)
-{
-    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
-    return String::New(obj->api_.Version());
 }
 
 Handle<Value> Tesseract::GetImage(Local<String> prop, const AccessorInfo &info)

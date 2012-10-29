@@ -3,8 +3,9 @@
     {
       'target_name': 'dvBinding',
       'dependencies': [
+        'deps/lodepng/lodepng.gyp:lodepng',
         'deps/tesseract/tesseract.gyp:libtesseract',
-		'deps/lodepng/lodepng.gyp:lodepng'
+        'deps/zbar/zbar.gyp:libzbar',
       ],
       'include_dirs': [
         'deps/lodepng',
@@ -20,11 +21,13 @@
         'deps/tesseract/textord',
         'deps/tesseract/viewer',
         'deps/tesseract/wordrec',
+        'deps/zbar',
       ],
       'sources': [
         'src/image.cc',
-        'src/module.cc',
         'src/tesseract.cc',
+        'src/zbar.cc',
+        'src/module.cc',
       ],
     },
   ]

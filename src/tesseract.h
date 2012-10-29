@@ -14,7 +14,6 @@ private:
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
 
     // Accessors.
-    static v8::Handle<v8::Value> GetVersion(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
     static v8::Handle<v8::Value> GetImage(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
     static void SetImage(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
     static v8::Handle<v8::Value> GetRectangle(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
