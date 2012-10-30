@@ -27,6 +27,9 @@
 #ifdef DEBUG_EAN
 # define DEBUG_LEVEL (DEBUG_EAN)
 #endif
+#ifdef HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
 #include "debug.h"
 #include "decoder.h"
 
