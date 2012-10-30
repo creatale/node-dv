@@ -177,12 +177,12 @@ zbar_symbol_type_t _zbar_decode_pdf417 (zbar_decoder_t *dcode)
     if(dcode417->character < 0) {
         pdf417_decode_start(dcode);
         dbprintf(4, "\n");
-        return(0);
+        return (zbar_symbol_type_t)0;
     }
 
     /* process every 8th element of active symbol */
     if(++dcode417->element)
-        return(0);
+        return (zbar_symbol_type_t)0;
     dcode417->element = 0;
 
     dbprintf(2, "      pdf417[%c%02d]:",
@@ -203,7 +203,7 @@ zbar_symbol_type_t _zbar_decode_pdf417 (zbar_decoder_t *dcode)
         dbprintf(1, (c < 0) ? " [aborted]\n" : " [overflow]\n");
         release_lock(dcode, ZBAR_PDF417);
         dcode417->character = -1;
-        return(0);
+        return (zbar_symbol_type_t)0;
     }
 
     /* FIXME TBD infer dimensions, save codewords */
@@ -218,5 +218,5 @@ zbar_symbol_type_t _zbar_decode_pdf417 (zbar_decoder_t *dcode)
     }
 
     dbprintf(2, "\n");
-    return(0);
+    return (zbar_symbol_type_t)0;
 }

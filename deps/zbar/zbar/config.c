@@ -45,7 +45,7 @@ int zbar_parse_config (const char *cfgstr,
     if(dot) {
         int len = dot - cfgstr;
         if(!len || (len == 1 && !strncmp(cfgstr, "*", len)))
-            *sym = 0;
+            *sym = (zbar_symbol_type_t)0;
         else if(len < 2)
             return(1);
         else if(!strncmp(cfgstr, "qrcode", len))
@@ -103,7 +103,7 @@ int zbar_parse_config (const char *cfgstr,
         cfgstr = dot + 1;
     }
     else
-        *sym = 0;
+        *sym = (zbar_symbol_type_t)0;
 
     len = strlen(cfgstr);
     eq = strchr(cfgstr, '=');

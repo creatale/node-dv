@@ -74,7 +74,7 @@ static inline void sym_add_point (zbar_symbol_t *sym,
 {
     int i = sym->npts;
     if(++sym->npts >= sym->pts_alloc)
-        sym->pts = realloc(sym->pts, ++sym->pts_alloc * sizeof(point_t));
+        sym->pts = (point_t *)realloc(sym->pts, ++sym->pts_alloc * sizeof(point_t));
     sym->pts[i].x = x;
     sym->pts[i].y = y;
 }

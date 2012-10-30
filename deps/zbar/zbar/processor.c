@@ -189,7 +189,7 @@ int _zbar_processor_handle_input (zbar_processor_t *proc,
 
 static ZTHREAD proc_video_thread (void *arg)
 {
-    zbar_processor_t *proc = arg;
+    zbar_processor_t *proc = (zbar_processor_t *)arg;
     zbar_thread_t *thread = &proc->video_thread;
 
     _zbar_mutex_lock(&proc->mutex);
@@ -236,7 +236,7 @@ static ZTHREAD proc_video_thread (void *arg)
 
 static ZTHREAD proc_input_thread (void *arg)
 {
-    zbar_processor_t *proc = arg;
+    zbar_processor_t *proc = (zbar_processor_t *)arg;
     zbar_thread_t *thread = &proc->input_thread;
     if(proc->window && proc_open(proc))
         goto done;
@@ -268,7 +268,7 @@ static ZTHREAD proc_input_thread (void *arg)
 
 zbar_processor_t *zbar_processor_create (int threaded)
 {
-    zbar_processor_t *proc = calloc(1, sizeof(zbar_processor_t));
+    zbar_processor_t *proc = (zbar_processor_t *)calloc(1, sizeof(zbar_processor_t));
     if(!proc)
         return(NULL);
     err_init(&proc->err, ZBAR_MOD_PROCESSOR);

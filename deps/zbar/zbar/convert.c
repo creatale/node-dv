@@ -314,8 +314,8 @@ static inline void convert_y_resize (zbar_image_t *dst,
         memcpy((void*)dst->data, src->data, n);
         return;
     }
-    psrc = (void*)src->data;
-    pdst = (void*)dst->data;
+    psrc = (uint8_t*)src->data;
+    pdst = (uint8_t*)dst->data;
     width = (dst->width > src->width) ? src->width : dst->width;
     xpad = (dst->width > src->width) ? dst->width - src->width : 0;
     height = (dst->height > src->height) ? src->height : dst->height;
@@ -396,13 +396,13 @@ static void convert_yuv_pack (zbar_image_t *dst,
     dst->datalen = dst->width * dst->height + uvp_size(dst, dstfmt) * 2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    dstp = (uint8_t*)dst->data;
 
     srcm = uvp_size(src, srcfmt);
     srcn = src->width * src->height;
     assert(src->datalen >= srcn + 2 * srcn);
     flags = dstfmt->p.yuv.packorder ^ srcfmt->p.yuv.packorder;
-    srcy = (void*)src->data;
+    srcy = (uint8_t*)src->data;
     if(flags & 1) {
         srcv = (uint8_t*)src->data + srcn;
         srcu = srcv + srcm;
@@ -473,7 +473,7 @@ static void convert_yuv_unpack (zbar_image_t *dst,
 
     flags = srcfmt->p.yuv.packorder ^ dstfmt->p.yuv.packorder;
     flags &= 2;
-    srcp = src->data;
+    srcp = (const uint8_t *)src->data;
     if(flags)
         srcp++;
 
@@ -531,10 +531,10 @@ static void convert_uv_resample (zbar_image_t *dst,
     dst->datalen = dstn + uvp_size(dst, dstfmt) * 2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    dstp = (uint8_t*)dst->data;
 
     flags = (srcfmt->p.yuv.packorder ^ dstfmt->p.yuv.packorder) & 1;
-    srcp = src->data;
+    srcp = (const uint8_t *)src->data;
 
     srcl = src->width + (src->width >> srcfmt->p.yuv.xsub2);
     for(y = 0; y < dst->height; y++) {
@@ -585,7 +585,7 @@ static void convert_yuvp_to_rgb (zbar_image_t *dst,
     dst->datalen = dst->width * dst->height * dstfmt->p.rgb.bpp;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    dstp = (uint8_t*)dst->data;
 
     drbits = RGB_SIZE(dstfmt->p.rgb.red);
     drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
@@ -597,7 +597,7 @@ static void convert_yuvp_to_rgb (zbar_image_t *dst,
     srcm = uvp_size(src, srcfmt);
     srcn = src->width * src->height;
     assert(src->datalen >= srcn + 2 * srcm);
-    srcy = (void*)src->data;
+    srcy = (uint8_t*)src->data;
 
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
@@ -641,10 +641,10 @@ static void convert_rgb_to_yuvp (zbar_image_t *dst,
     if(!dst->data) return;
     if(dstm2)
         memset((uint8_t*)dst->data + dstn, 0x80, dstm2);
-    dsty = (void*)dst->data;
+    dsty = (uint8_t*)dst->data;
 
     assert(src->datalen >= (src->width * src->height * srcfmt->p.rgb.bpp));
-    srcp = src->data;
+    srcp = (const uint8_t *)src->data;
 
     rbits = RGB_SIZE(srcfmt->p.rgb.red);
     rbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
@@ -694,7 +694,7 @@ static void convert_yuv_to_rgb (zbar_image_t *dst,
     dst->datalen = dstn * dstfmt->p.rgb.bpp;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    dstp = (uint8_t*)dst->data;
 
     drbits = RGB_SIZE(dstfmt->p.rgb.red);
     drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
@@ -705,7 +705,7 @@ static void convert_yuv_to_rgb (zbar_image_t *dst,
 
     assert(src->datalen >= (src->width * src->height +
                             uvp_size(src, srcfmt) * 2));
-    srcp = src->data;
+    srcp = (const uint8_t *)src->data;
     if(srcfmt->p.yuv.packorder & 2)
         srcp++;
 
@@ -756,11 +756,11 @@ static void convert_rgb_to_yuv (zbar_image_t *dst,
     dst->datalen = dst->width * dst->height + uvp_size(dst, dstfmt) * 2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    dstp = (uint8_t*)dst->data;
     flags = dstfmt->p.yuv.packorder & 2;
 
     assert(src->datalen >= (src->width * src->height * srcfmt->p.rgb.bpp));
-    srcp = src->data;
+    srcp = (const uint8_t *)src->data;
 
     rbits = RGB_SIZE(srcfmt->p.rgb.red);
     rbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
@@ -816,7 +816,7 @@ static void convert_rgb_resample (zbar_image_t *dst,
     dst->datalen = dstn * dstfmt->p.rgb.bpp;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    dstp = (uint8_t*)dst->data;
 
     drbits = RGB_SIZE(dstfmt->p.rgb.red);
     drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
@@ -826,7 +826,7 @@ static void convert_rgb_resample (zbar_image_t *dst,
     dbbit0 = RGB_OFFSET(dstfmt->p.rgb.blue);
 
     assert(src->datalen >= (src->width * src->height * srcfmt->p.rgb.bpp));
-    srcp = src->data;
+    srcp = (const uint8_t *)src->data;
 
     srbits = RGB_SIZE(srcfmt->p.rgb.red);
     srbit0 = RGB_OFFSET(srcfmt->p.rgb.red);

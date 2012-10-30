@@ -112,7 +112,7 @@ static inline int _zbar_window_add_format (zbar_window_t *w,
         if(w->formats[i] == fmt)
             return(i);
 
-    w->formats = realloc(w->formats, (i + 2) * sizeof(uint32_t));
+    w->formats = (uint32_t *)realloc(w->formats, (i + 2) * sizeof(uint32_t));
     w->formats[i] = fmt;
     w->formats[i + 1] = 0;
     return(i);

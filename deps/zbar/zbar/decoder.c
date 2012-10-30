@@ -39,9 +39,9 @@
 
 zbar_decoder_t *zbar_decoder_create ()
 {
-    zbar_decoder_t *dcode = calloc(1, sizeof(zbar_decoder_t));
+    zbar_decoder_t *dcode = (zbar_decoder_t *)calloc(1, sizeof(zbar_decoder_t));
     dcode->buf_alloc = BUFFER_MIN;
-    dcode->buf = malloc(dcode->buf_alloc);
+    dcode->buf = (unsigned char *)malloc(dcode->buf_alloc);
 
     /* initialize default configs */
 #ifdef ENABLE_EAN
@@ -69,7 +69,7 @@ zbar_decoder_t *zbar_decoder_create ()
     dcode->databar.config_exp = ((1 << ZBAR_CFG_ENABLE) |
                                  (1 << ZBAR_CFG_EMIT_CHECK));
     dcode->databar.csegs = 4;
-    dcode->databar.segs = calloc(4, sizeof(*dcode->databar.segs));
+    dcode->databar.segs = (databar_segment_t *)calloc(4, sizeof(*dcode->databar.segs));
 #endif
 #ifdef ENABLE_CODABAR
     dcode->codabar.config = 1 << ZBAR_CFG_ENABLE;
@@ -143,7 +143,7 @@ void zbar_decoder_new_scan (zbar_decoder_t *dcode)
 {
     /* soft reset decoder */
     memset(dcode->w, 0, sizeof(dcode->w));
-    dcode->lock = 0;
+    dcode->lock = (zbar_symbol_type_t)0;
     dcode->idx = 0;
     dcode->s6 = 0;
 #ifdef ENABLE_EAN
@@ -178,7 +178,7 @@ void zbar_decoder_new_scan (zbar_decoder_t *dcode)
 
 zbar_color_t zbar_decoder_get_color (const zbar_decoder_t *dcode)
 {
-    return(get_color(dcode));
+    return(zbar_color_t)(get_color(dcode));
 }
 
 const char *zbar_decoder_get_data (const zbar_decoder_t *dcode)
@@ -408,7 +408,7 @@ static inline int decoder_set_config_bool (zbar_decoder_t *dcode,
                                            zbar_config_t cfg,
                                            int val)
 {
-    unsigned *config = (void*)decoder_get_configp(dcode, sym);
+    unsigned *config = (unsigned *)decoder_get_configp(dcode, sym);
     if(!config || cfg >= ZBAR_CFG_NUM)
         return(1);
 
@@ -489,7 +489,7 @@ int zbar_decoder_set_config (zbar_decoder_t *dcode,
             ZBAR_UPCA, ZBAR_UPCE, ZBAR_ISBN10, ZBAR_ISBN13,
             ZBAR_I25, ZBAR_DATABAR, ZBAR_DATABAR_EXP, ZBAR_CODABAR,
 	    ZBAR_CODE39, ZBAR_CODE93, ZBAR_CODE128, ZBAR_QRCODE, 
-	    ZBAR_PDF417, 0
+	    ZBAR_PDF417, (zbar_symbol_type_t)0
         };
         const zbar_symbol_type_t *symp;
         for(symp = all; *symp; symp++)
@@ -519,7 +519,7 @@ const char *_zbar_decoder_buf_dump (unsigned char *buf,
     if(!decoder_dump || dumplen > decoder_dumplen) {
         if(decoder_dump)
             free(decoder_dump);
-        decoder_dump = malloc(dumplen);
+        decoder_dump = (char *)malloc(dumplen);
         decoder_dumplen = dumplen;
     }
     p = decoder_dump +

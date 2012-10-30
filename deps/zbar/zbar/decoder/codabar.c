@@ -43,7 +43,7 @@ static const unsigned char codabar_hi[8] = {
     0x1, 0x4, 0x7, 0x6, 0x2, 0x3, 0x0, 0x5
 };
 
-static const unsigned char codabar_characters[20] =
+static const unsigned char codabar_characters[21] =
     "0123456789-$:/.+ABCD";
 
 static inline int
@@ -347,7 +347,7 @@ _zbar_decode_codabar (zbar_decoder_t *dcode)
     if(get_color(dcode) != ZBAR_SPACE)
         return(ZBAR_NONE);
     if(codabar->character < 0)
-        return(codabar_decode_start(dcode));
+        return(zbar_symbol_type_t)(codabar_decode_start(dcode));
     if(codabar->character < 2 &&
        codabar_decode_start(dcode))
         return(ZBAR_PARTIAL);

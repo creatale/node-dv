@@ -1021,7 +1021,7 @@ decode_char (zbar_decoder_t *dcode,
     }
 
     i = ((n & 0x3) ^ 1) * 5 + (sum1 >> 1);
-    zassert(i < sizeof(groups) / sizeof(*groups), -1,
+    zassert(i < sizeof(groups) / sizeof(*groups), (zbar_symbol_type_t)-1,
             "n=%d sum=%d/%d sig=%04x/%04x g=%d",
             n, sum0, sum1, sig0, sig1, i);
     struct group_s *g = groups + i;
@@ -1125,7 +1125,7 @@ alloc_segment (databar_decoder_t *db)
             csegs = DATABAR_MAX_SEGMENTS;
         if(csegs != db->csegs) {
             databar_segment_t *seg;
-            db->segs = realloc(db->segs, csegs * sizeof(*db->segs));
+            db->segs = (databar_segment_t*)realloc(db->segs, csegs * sizeof(*db->segs));
             db->csegs = csegs;
             seg = db->segs + csegs;
             while(--seg, --csegs >= i) {
@@ -1223,7 +1223,7 @@ decode_finder (zbar_decoder_t *dcode)
     int i = (dcode->idx + 8 + dir) & 0xf;
     zassert(db->chars[i] == -1, ZBAR_NONE, "\n");
     db->chars[i] = iseg;
-    return(rc);
+    return(zbar_symbol_type_t)(rc);
 }
 
 zbar_symbol_type_t

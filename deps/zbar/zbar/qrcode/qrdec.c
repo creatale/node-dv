@@ -3213,11 +3213,10 @@ static int qr_code_data_parse(qr_code_data *_qrdata,int _version,
        centries*sizeof(*_qrdata->entries));
     }
     entry=_qrdata->entries+_qrdata->nentries++;
-    entry->mode=mode;
+    entry->mode= (qr_mode)mode;
     /*Set the buffer to NULL, because if parsing fails, we might try to free it
        on clean-up.*/
     entry->payload.data.buf=NULL;
-    switch(mode){
       /*The number of bits used to encode the character count for each version
          range and each data mode.*/
       static const unsigned char LEN_BITS[3][4]={
@@ -3225,6 +3224,7 @@ static int qr_code_data_parse(qr_code_data *_qrdata,int _version,
         {12,11,16,10},
         {14,13,16,12}
       };
+	  switch(mode){
       case QR_MODE_NUM:{
         unsigned char *buf;
         unsigned       bits;
@@ -3970,7 +3970,7 @@ int _zbar_qr_found_line (qr_reader *reader,
 
     if(lines->nlines >= lines->clines) {
         lines->clines *= 2;
-        lines->lines = realloc(lines->lines,
+        lines->lines = (qr_finder_line*)realloc(lines->lines,
                                ++lines->clines * sizeof(*lines->lines));
     }
 
@@ -4021,13 +4021,13 @@ int _zbar_qr_decode (qr_reader *reader,
     qr_svg_centers(centers, ncenters);
 
     if(ncenters >= 3) {
-        void *bin = qr_binarize(img->data, img->width, img->height);
+        void *bin = qr_binarize((const unsigned char*)img->data, img->width, img->height);
 
         qr_code_data_list qrlist;
         qr_code_data_list_init(&qrlist);
 
         qr_reader_match_centers(reader, &qrlist, centers, ncenters,
-                                bin, img->width, img->height);
+                                (const unsigned char*)bin, img->width, img->height);
 
         if(qrlist.nqrdata > 0)
             nqrdata = qr_code_data_list_extract_text(&qrlist, iscn, img);

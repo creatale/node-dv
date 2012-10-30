@@ -309,7 +309,7 @@ char *zbar_symbol_xml (const zbar_symbol_t *sym,
     if(!*buf || (*len < maxlen)) {
         if(*buf)
             free(*buf);
-        *buf = malloc(maxlen);
+        *buf = (char *)malloc(maxlen);
         /* FIXME check OOM */
         *len = maxlen;
     }
@@ -322,7 +322,7 @@ char *zbar_symbol_xml (const zbar_symbol_t *sym,
         TMPL_COPY(" modifiers='");
         for(j = 0; mods && j < ZBAR_MOD_NUM; j++, mods >>= 1)
             if(mods & 1)
-                TMPL_FMT("%s ", zbar_get_modifier_name(j));
+                TMPL_FMT("%s ", zbar_get_modifier_name((zbar_modifier_t)j));
         /* cleanup trailing space */
         n--;
         TMPL_COPY("'");
@@ -333,7 +333,7 @@ char *zbar_symbol_xml (const zbar_symbol_t *sym,
         TMPL_COPY(" configs='");
         for(j = 0; cfgs && j < ZBAR_CFG_NUM; j++, cfgs >>= 1)
             if(cfgs & 1)
-                TMPL_FMT("%s ", zbar_get_config_name(j));
+                TMPL_FMT("%s ", zbar_get_config_name((zbar_config_t)j));
         /* cleanup trailing space */
         n--;
         TMPL_COPY("'");
@@ -366,7 +366,7 @@ char *zbar_symbol_xml (const zbar_symbol_t *sym,
 
 zbar_symbol_set_t *_zbar_symbol_set_create ()
 {
-    zbar_symbol_set_t *syms = calloc(1, sizeof(*syms));
+    zbar_symbol_set_t *syms = (zbar_symbol_set_t *)calloc(1, sizeof(*syms));
     _zbar_refcnt(&syms->refcnt, 1);
     return(syms);
 }

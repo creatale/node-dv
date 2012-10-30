@@ -56,7 +56,7 @@ zbar_symbol_type_t _zbar_find_qr (zbar_decoder_t *dcode)
       If we find finder patterns with the opposite polarity, we should invert
        the final binarized image and use them to search for QR codes in that.*/
     if(get_color(dcode) != ZBAR_SPACE || s < 7)
-        return(0);
+        return(zbar_symbol_type_t)0;
 
     dbprintf(2, "    qrf: s=%d", s);
 
@@ -102,5 +102,5 @@ zbar_symbol_type_t _zbar_find_qr (zbar_decoder_t *dcode)
 
 invalid:
     dbprintf(2, " [invalid]\n");
-    return(0);
+    return(zbar_symbol_type_t)0;
 }

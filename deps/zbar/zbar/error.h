@@ -124,8 +124,8 @@ extern int _zbar_verbosity;
 static inline int err_copy (void *dst_c,
                             void *src_c)
 {
-    errinfo_t *dst = dst_c;
-    errinfo_t *src = src_c;
+    errinfo_t *dst = (errinfo_t *)dst_c;
+    errinfo_t *src = (errinfo_t *)src_c;
     assert(dst->magic == ERRINFO_MAGIC);
     assert(src->magic == ERRINFO_MAGIC);
 

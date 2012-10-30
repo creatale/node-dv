@@ -261,7 +261,7 @@ static inline char release_lock (zbar_decoder_t *dcode,
 {
     zassert(dcode->lock == req, 1, "lock=%d req=%d\n",
             dcode->lock, req);
-    dcode->lock = 0;
+    dcode->lock = (zbar_symbol_type_t)0;
     return(0);
 }
 
@@ -282,7 +282,7 @@ static inline char size_buf (zbar_decoder_t *dcode,
         if(len > BUFFER_MAX)
             len = BUFFER_MAX;
     }
-    buf = realloc(dcode->buf, len);
+    buf = (unsigned char*)realloc(dcode->buf, len);
     if(!buf)
         return(1);
     dcode->buf = buf;

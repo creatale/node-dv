@@ -79,7 +79,7 @@ void zbar_increase_verbosity ()
 int _zbar_error_spew (const void *container,
                       int verbosity)
 {
-    const errinfo_t *err = container;
+    const errinfo_t *err = (const errinfo_t *)container;
     assert(err->magic == ERRINFO_MAGIC);
     fprintf(stderr, "%s", _zbar_error_string(err, verbosity));
     return(-err->sev);
@@ -87,7 +87,7 @@ int _zbar_error_spew (const void *container,
 
 zbar_error_t _zbar_get_error_code (const void *container)
 {
-    const errinfo_t *err = container;
+    const errinfo_t *err = (const errinfo_t *)container;
     assert(err->magic == ERRINFO_MAGIC);
     return(err->type);
 }
@@ -125,7 +125,7 @@ const char *_zbar_error_string (const void *container,
         type = err_str[ZBAR_ERR_NUM];
 
     len = SEV_MAX + MOD_MAX + ERR_MAX + strlen(func) + sizeof(basefmt);
-    err->buf = realloc(err->buf, len);
+    err->buf = (char *)realloc(err->buf, len);
     len = sprintf(err->buf, basefmt, sev, mod, func, type);
     if(len <= 0)
         return("<unknown>");
@@ -135,15 +135,15 @@ const char *_zbar_error_string (const void *container,
         if(strstr(err->detail, "%s")) {
             if(!err->arg_str)
                 err->arg_str = strdup("<?>");
-            err->buf = realloc(err->buf, newlen + strlen(err->arg_str));
+            err->buf = (char *)realloc(err->buf, newlen + strlen(err->arg_str));
             len += sprintf(err->buf + len, err->detail, err->arg_str);
         }
         else if(strstr(err->detail, "%d") || strstr(err->detail, "%x")) {
-            err->buf = realloc(err->buf, newlen + 32);
+            err->buf = (char *)realloc(err->buf, newlen + 32);
             len += sprintf(err->buf + len, err->detail, err->arg_int);
         }
         else {
-            err->buf = realloc(err->buf, newlen);
+            err->buf = (char *)realloc(err->buf, newlen);
             len += sprintf(err->buf + len, "%s", err->detail);
         }
         if(len <= 0)
@@ -154,7 +154,7 @@ const char *_zbar_error_string (const void *container,
     if(err->type == ZBAR_ERR_SYSTEM) {
         static const char sysfmt[] = ": %s (%d)\n";
         const char *syserr = strerror(err->errnum);
-        err->buf = realloc(err->buf, len + strlen(sysfmt) + strlen(syserr));
+        err->buf = (char *)realloc(err->buf, len + strlen(sysfmt) + strlen(syserr));
         len += sprintf(err->buf + len, sysfmt, syserr, err->errnum);
     }
 #endif
@@ -167,14 +167,14 @@ const char *_zbar_error_string (const void *container,
                          NULL, err->errnum, 0, (LPTSTR)&syserr, 1, NULL) &&
            syserr) {
             char sysfmt[] = ": %s (%d)\n";
-            err->buf = realloc(err->buf, len + strlen(sysfmt) + strlen(syserr));
+            err->buf = (char *)realloc(err->buf, len + strlen(sysfmt) + strlen(syserr));
             len += sprintf(err->buf + len, sysfmt, syserr, err->errnum);
             LocalFree(syserr);
         }
     }
 #endif
     else {
-        err->buf = realloc(err->buf, len + 2);
+        err->buf = (char *)realloc(err->buf, len + 2);
         len += sprintf(err->buf + len, "\n");
     }
     return(err->buf);

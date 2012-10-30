@@ -464,7 +464,7 @@ zbar_symbol_type_t _zbar_decode_code128 (zbar_decoder_t *dcode)
           ++dcode128->element != 6 ||
           /* decode color based on direction */
           get_color(dcode) != dcode128->direction))
-        return(0);
+        return (zbar_symbol_type_t)0;
     dcode128->element = 0;
 
     dbprintf(2, "      code128[%c%02d+%x]:",
@@ -477,12 +477,12 @@ zbar_symbol_type_t _zbar_decode_code128 (zbar_decoder_t *dcode)
         dbprintf(2, " c=%02x", c);
         if(c < START_A || c > STOP_REV || c == STOP_FWD) {
             dbprintf(2, " [invalid]\n");
-            return(0);
+            return (zbar_symbol_type_t)0;
         }
         qz = get_width(dcode, 6);
         if(qz && qz < (dcode128->s6 * 3) / 4) {
             dbprintf(2, " [invalid qz %d]\n", qz);
-            return(0);
+            return (zbar_symbol_type_t)0;
         }
         /* decoded valid start/stop */
         /* initialize state */
@@ -496,14 +496,14 @@ zbar_symbol_type_t _zbar_decode_code128 (zbar_decoder_t *dcode)
         dcode128->start = c;
         dcode128->width = dcode128->s6;
         dbprintf(2, " dir=%x [valid start]\n", dcode128->direction);
-        return(0);
+        return (zbar_symbol_type_t)0;
     }
     else if(c < 0 || size_buf(dcode, dcode128->character + 1)) {
         dbprintf(1, (c < 0) ? " [aborted]\n" : " [overflow]\n");
         if(dcode128->character > 1)
             release_lock(dcode, ZBAR_CODE128);
         dcode128->character = -1;
-        return(0);
+        return (zbar_symbol_type_t)0;
     }
     else {
         unsigned dw;
@@ -517,12 +517,12 @@ zbar_symbol_type_t _zbar_decode_code128 (zbar_decoder_t *dcode)
             if(dcode128->character > 1)
                 release_lock(dcode, ZBAR_CODE128);
             dcode128->character = -1;
-            return(0);
+            return (zbar_symbol_type_t)0;
         }
     }
     dcode128->width = dcode128->s6;
 
-    zassert(dcode->buf_alloc > dcode128->character, 0,
+    zassert(dcode->buf_alloc > dcode128->character, (zbar_symbol_type_t)0,
             "alloc=%x idx=%x c=%02x %s\n",
             dcode->buf_alloc, dcode128->character, c,
             _zbar_decoder_buf_dump(dcode->buf, dcode->buf_alloc));
@@ -531,7 +531,7 @@ zbar_symbol_type_t _zbar_decode_code128 (zbar_decoder_t *dcode)
         /* lock shared resources */
         if(acquire_lock(dcode, ZBAR_CODE128)) {
             dcode128->character = -1;
-            return(0);
+            return (zbar_symbol_type_t)0;
         }
         dcode->buf[0] = dcode128->start;
     }
@@ -561,5 +561,5 @@ zbar_symbol_type_t _zbar_decode_code128 (zbar_decoder_t *dcode)
     }
 
     dbprintf(2, "\n");
-    return(0);
+    return (zbar_symbol_type_t)0;
 }

@@ -123,7 +123,7 @@ static const char39_t code39_encodings[NUM_CHARS] = {
     { 0xc0, 0x20, 0x1a }, /* 2b */
 };
 
-static const unsigned char code39_characters[NUM_CHARS] =
+static const unsigned char code39_characters[NUM_CHARS + 1] =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%*";
 
 static inline unsigned char code39_decode1 (unsigned char enc,
@@ -262,7 +262,7 @@ zbar_symbol_type_t _zbar_decode_code39 (zbar_decoder_t *dcode)
         if(get_color(dcode) != ZBAR_BAR)
             return(ZBAR_NONE);
         dbprintf(2, "      code39:");
-        return(code39_decode_start(dcode));
+        return(zbar_symbol_type_t)(code39_decode_start(dcode));
     }
 
     if(++dcode39->element < 9)

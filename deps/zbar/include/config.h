@@ -12,7 +12,7 @@
 #define ENABLE_CODE93 1
 #define ENABLE_CODE128 1
 #define ENABLE_PDF417 1
-#define ENABLE_QRCODE 1
+//#define ENABLE_QRCODE 1 //TOTO: reenable sometime
 #define ENABLE_EAN 1
 #define ENABLE_I25 1
 #define ENABLE_DATABAR 1
@@ -23,8 +23,6 @@
 #define ENABLE_PDF417 1
 #define ENABLE_QRCODE 1
 
-#define inline
-
 #ifdef __APPLE__
 #define HAVE_ERRNO_H
 #define HAVE_INTTYPES_H
@@ -33,6 +31,10 @@
 #endif
 
 #ifdef WIN32
+#define HAVE_ERRNO_H
+#define PRIx32 "PRIx32"
+#define snprintf _snprintf
+#define inline __inline
 typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
 typedef __int16 int16_t;

@@ -211,7 +211,7 @@ zbar_symbol_type_t _zbar_decode_i25 (zbar_decoder_t *dcode)
         return(ZBAR_NONE);
 
     if(--dcode25->element == 6 - dcode25->direction)
-        return(i25_decode_end(dcode));
+        return(zbar_symbol_type_t)(i25_decode_end(dcode));
     else if(dcode25->element)
         return(ZBAR_NONE);
 

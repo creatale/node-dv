@@ -31,7 +31,7 @@
 
 zbar_window_t *zbar_window_create ()
 {
-    zbar_window_t *w = calloc(1, sizeof(zbar_window_t));
+    zbar_window_t *w = (zbar_window_t *)calloc(1, sizeof(zbar_window_t));
     if(!w)
         return(NULL);
     err_init(&w->err, ZBAR_MOD_WINDOW);

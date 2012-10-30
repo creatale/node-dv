@@ -27,7 +27,7 @@
 
 zbar_image_t *zbar_image_create ()
 {
-    zbar_image_t *img = calloc(1, sizeof(zbar_image_t));
+    zbar_image_t *img = (zbar_image_t *)calloc(1, sizeof(zbar_image_t));
     _zbar_refcnt_init();
     _zbar_image_refcnt(img, 1);
     img->srcidx = -1;
@@ -242,7 +242,7 @@ int zbar_image_write (const zbar_image_t *img,
                       const char *filebase)
 {
     int len = strlen(filebase) + 16;
-    char *filename = malloc(len);
+    char *filename = (char *)malloc(len);
     int n = 0, rc = 0;
     FILE *f;
     zimg_hdr_t hdr;

@@ -199,7 +199,7 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
       dir[1] = (qrdataj->bbox[2][1] - qrdataj->bbox[0][1] +
                 qrdataj->bbox[3][1] - qrdataj->bbox[1][1]);
       horiz = abs(dir[0]) > abs(dir[1]);
-      (*sym)->orient = horiz + 2 * (dir[1 - horiz] < 0);
+      (*sym)->orient = (zbar_orientation_t)(horiz + 2 * (dir[1 - horiz] < 0));
 
       for(k=0;k<qrdataj->nentries&&!err;k++){
         size_t              inleft;
@@ -224,7 +224,7 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
             if(fnc1)for(;;){
               size_t plen;
               char   c;
-              p=memchr(in,'%',inleft*sizeof(*in));
+              p=(char *)memchr(in,'%',inleft*sizeof(*in));
               if(p==NULL)break;
               plen=p-in;
               if(sa_ctext-sa_ntext<plen+1)break;
@@ -275,7 +275,7 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
                 inleft-=3;
                 /*Actually try converting (to check validity).*/
                 err=utf8_cd==(iconv_t)-1||
-                 iconv(utf8_cd,&in,&inleft,&out,&outleft)==(size_t)-1;
+                 iconv(utf8_cd,(const char**)&in,&inleft,&out,&outleft)==(size_t)-1;
                 if(!err){
                   sa_ntext=out-sa_text;
                   enc_list_mtf(enc_list,utf8_cd);
@@ -310,7 +310,7 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
                   for(ej=ei+1;ej<3;ej++)enc_list[ej-1]=enc_list[ej];
                   enc_list[2]=latin1_cd;
                 }
-                err=iconv(enc_list[ei],&in,&inleft,&out,&outleft)==(size_t)-1;
+                err=iconv(enc_list[ei],(const char**)&in,&inleft,&out,&outleft)==(size_t)-1;
                 if(!err){
                   sa_ntext=out-sa_text;
                   enc_list_mtf(enc_list,enc_list[ei]);
@@ -328,7 +328,7 @@ int qr_code_data_list_extract_text(const qr_code_data_list *_qrlist,
                mode.*/
             else{
               err=eci_cd==(iconv_t)-1||
-               iconv(eci_cd,&in,&inleft,&out,&outleft)==(size_t)-1;
+               iconv(eci_cd,(const char**)&in,&inleft,&out,&outleft)==(size_t)-1;
               if(!err)sa_ntext=out-sa_text;
             }
           }break;

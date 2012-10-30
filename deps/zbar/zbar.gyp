@@ -39,7 +39,7 @@
         #'zbar/processor/posix.c',
         #'zbar/processor/win.c',
         #'zbar/processor/x.c',
-        'zbar/qrcode/bch15_5.c',
+		'zbar/qrcode/bch15_5.c',
         'zbar/qrcode/binarize.c',
         'zbar/qrcode/isaac.c',
         'zbar/qrcode/qrdec.c',
@@ -47,6 +47,42 @@
         'zbar/qrcode/rs.c',
         'zbar/qrcode/util.c',
       ],
+      'conditions': [
+        ['OS=="win"',
+          {
+            'defines': [
+			  '_CRT_SECURE_NO_WARNINGS',
+            ],
+            'include_dirs': [
+              'port',
+            ],
+            'sources': [
+              'port/win_iconv.c',
+            ],
+            'link_settings': {
+              'libraries': [
+			   '-lwinmm.lib',
+              ],
+            },
+            'configurations': {
+              'Debug': {
+                'msvs_settings': {
+                  'VCCLCompilerTool': {
+                    'AdditionalOptions': [ '/TP' ]
+                  },
+                },
+              },
+              'Release': {
+                'msvs_settings': {
+                  'VCCLCompilerTool': {
+                    'AdditionalOptions': [ '/TP' ]
+                  },
+                },
+              },
+            },
+          }
+        ]
+      ]
     },
   ]
 }
