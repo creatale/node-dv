@@ -3,11 +3,7 @@
 
 #include <v8.h>
 #include <node.h>
-extern "C" {
-#undef __cplusplus
 #include <include/zbar.h>
-#define __cplusplus
-}
 
 class ZBar : public node::ObjectWrap
 {
