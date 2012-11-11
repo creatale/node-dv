@@ -5,7 +5,7 @@
       'dependencies': [
         'deps/lodepng/lodepng.gyp:lodepng',
         'deps/tesseract/tesseract.gyp:libtesseract',
-        'deps/zbar/zbar.gyp:libzbar',
+        'deps/zxing/zxing.gyp:libzxing',
       ],
       'include_dirs': [
         'deps/lodepng',
@@ -21,12 +21,12 @@
         'deps/tesseract/textord',
         'deps/tesseract/viewer',
         'deps/tesseract/wordrec',
-        'deps/zbar',
+        'deps/zxing/core/src',
       ],
       'sources': [
         'src/image.cc',
         'src/tesseract.cc',
-        'src/zbar.cc',
+        'src/zxing.cc',
         'src/module.cc',
       ],
     },
