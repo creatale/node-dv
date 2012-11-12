@@ -34,6 +34,8 @@ void Image::Init(Handle<Object> target)
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
     proto->Set(String::NewSymbol("rotate"),
                FunctionTemplate::New(Rotate)->GetFunction());
+    proto->Set(String::NewSymbol("crop"),
+               FunctionTemplate::New(Crop)->GetFunction());
     proto->Set(String::NewSymbol("toGray"),
                FunctionTemplate::New(ToGray)->GetFunction());
     proto->Set(String::NewSymbol("otsuAdaptiveThreshold"),
@@ -139,7 +141,6 @@ Handle<Value> Image::Rotate(const Arguments &args)
     if (args.Length() == 1 && args[0]->IsNumber()) {
         const float deg2rad = 3.1415926535 / 180.;
         float angle = args[0]->ToNumber()->Value();
-        std::cout << pixGetColormap(obj->pix_) << std::endl;
         Pix *pixd = pixRotateAM(obj->pix_, deg2rad * angle, L_BRING_IN_WHITE);
         if (pixd == NULL) {
             return THROW(TypeError, "error while rotating");
@@ -147,6 +148,28 @@ Handle<Value> Image::Rotate(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected number as first argument");
+    }
+}
+
+Handle<Value> Image::Crop(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 4 && args[0]->IsInt32() &&
+            args[0]->IsInt32() && args[0]->IsInt32()) {
+        int left = args[0]->ToInt32()->Value();
+        int top = args[1]->ToInt32()->Value();
+        int width = args[2]->ToInt32()->Value();
+        int height = args[3]->ToInt32()->Value();
+        BOX *box = boxCreate(left, top, width, height);
+        PIX *pixd = pixClipRectangle(obj->pix_, box, 0);
+        boxDestroy(&box);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while cropping");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int, int, int, int) signature");
     }
 }
 

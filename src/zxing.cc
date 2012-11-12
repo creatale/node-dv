@@ -69,7 +69,7 @@ unsigned char* PixSource::getRow(int yy, unsigned char* row)
     }
     uint32_t *line = pix_->data;
     for (uint32_t y = 0; y < pix_->h; ++y) {
-        if (yy == y) {
+        if ((uint32_t)yy == y) {
             unsigned char *r = row;
             for (uint32_t x = 0; x < pix_->w; ++x) {
                 *r = GET_DATA_BYTE(line, x);
