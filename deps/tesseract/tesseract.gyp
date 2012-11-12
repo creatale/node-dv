@@ -298,7 +298,7 @@
             'defines': [
               '__MSW32__',
               '_CRT_SECURE_NO_WARNINGS',
-			  'WINDLLNAME="libtesseract"',
+              'WINDLLNAME="libtesseract"',
             ],
             'include_dirs': [
               'port',

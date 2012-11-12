@@ -95,7 +95,17 @@
         'core/src/zxing/qrcode/detector/FinderPatternInfo.cpp',
         'core/src/zxing/qrcode/detector/QREdgeDetector.cpp',
       ],
-	  'conditions': [
+      'cflags!': ['-fno-exceptions'],
+      'cflags_cc!': ['-fno-exceptions'],
+      'conditions': [
+        ['OS=="mac"',
+          {
+            'xcode_settings': {
+              'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
+            }
+
+          }
+        ],
         ['OS=="win"',
           {
             'include_dirs': [
@@ -104,9 +114,9 @@
             'sources': [
               'port/win_iconv.c',
             ],
-	      }
-		],
-	  ],
+          }
+        ],
+      ],
     },
   ]
 }
