@@ -1,19 +1,6 @@
-lib-cov
-*.seed
 *.log
-*.csv
-*.dat
-*.out
-*.pid
-*.gz
 .DS_Store
-
-pids
-logs
-results
-
-test/out/*.png
 
 build
 node_modules
-npm-debug.log
+test/fixtures_out/*.png
