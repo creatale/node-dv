@@ -32,12 +32,28 @@ void Image::Init(Handle<Object> target)
     constructor_template->SetClassName(String::NewSymbol("Image"));
     constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
+    proto->Set(String::NewSymbol("invert"),
+               FunctionTemplate::New(Invert)->GetFunction());
+    proto->Set(String::NewSymbol("or"),
+               FunctionTemplate::New(Or)->GetFunction());
+    proto->Set(String::NewSymbol("and"),
+               FunctionTemplate::New(And)->GetFunction());
+    proto->Set(String::NewSymbol("xor"),
+               FunctionTemplate::New(Xor)->GetFunction());
+    proto->Set(String::NewSymbol("subtract"),
+               FunctionTemplate::New(Subtract)->GetFunction());
     proto->Set(String::NewSymbol("rotate"),
                FunctionTemplate::New(Rotate)->GetFunction());
     proto->Set(String::NewSymbol("crop"),
                FunctionTemplate::New(Crop)->GetFunction());
+    proto->Set(String::NewSymbol("rankFilter"),
+               FunctionTemplate::New(RankFilter)->GetFunction());
     proto->Set(String::NewSymbol("toGray"),
                FunctionTemplate::New(ToGray)->GetFunction());
+    proto->Set(String::NewSymbol("erode"),
+               FunctionTemplate::New(Erode)->GetFunction());
+    proto->Set(String::NewSymbol("dilate"),
+               FunctionTemplate::New(Dilate)->GetFunction());
     proto->Set(String::NewSymbol("otsuAdaptiveThreshold"),
                FunctionTemplate::New(OtsuAdaptiveThreshold)->GetFunction());
     proto->Set(String::NewSymbol("findSkew"),
@@ -134,6 +150,81 @@ Handle<Value> Image::New(const Arguments &args)
     return args.This();
 }
 
+Handle<Value> Image::Invert(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    Pix *pixd = pixInvert(NULL, obj->pix_);
+    if (pixd == NULL) {
+        return THROW(TypeError, "error while applying INVERT");
+    }
+    return scope.Close(Image::New(pixd));
+}
+
+Handle<Value> Image::Or(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && Image::HasInstance(args[0])) {
+        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+        Pix *pixd = pixOr(NULL, obj->pix_, otherPix);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying OR");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected image as first argument");
+    }
+}
+
+Handle<Value> Image::And(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && Image::HasInstance(args[0])) {
+        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+        Pix *pixd = pixAnd(NULL, obj->pix_, otherPix);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying AND");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected image as first argument");
+    }
+}
+
+Handle<Value> Image::Xor(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && Image::HasInstance(args[0])) {
+        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+        Pix *pixd = pixXor(NULL, obj->pix_, otherPix);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying XOR");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected image as first argument");
+    }
+}
+
+Handle<Value> Image::Subtract(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && Image::HasInstance(args[0])) {
+        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+        Pix *pixd = pixSubtract(NULL, obj->pix_, otherPix);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying SUBSTRACT");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected image as first argument");
+    }
+}
+
 Handle<Value> Image::Rotate(const Arguments &args)
 {
     HandleScope scope;
@@ -155,8 +246,9 @@ Handle<Value> Image::Crop(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (args.Length() == 4 && args[0]->IsInt32() &&
-            args[0]->IsInt32() && args[0]->IsInt32()) {
+    if (args.Length() == 4 && args[0]->IsInt32()
+            && args[1]->IsInt32() && args[2]->IsInt32()
+            && args[3]->IsInt32()) {
         int left = args[0]->ToInt32()->Value();
         int top = args[1]->ToInt32()->Value();
         int width = args[2]->ToInt32()->Value();
@@ -170,6 +262,25 @@ Handle<Value> Image::Crop(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (int, int, int, int) signature");
+    }
+}
+
+Handle<Value> Image::RankFilter(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 3 && args[0]->IsInt32() &&
+            args[1]->IsInt32() && args[2]->IsNumber()) {
+        int width = args[0]->ToInt32()->Value();
+        int height = args[1]->ToInt32()->Value();
+        float rank = args[2]->ToNumber()->Value();
+        PIX *pixd = pixRankFilter(obj->pix_, width, height, rank);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying rank filter");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int, int, float) signature");
     }
 }
 
@@ -218,6 +329,40 @@ Handle<Value> Image::ToGray(const Arguments &args)
         }
     } else {
         return THROW(TypeError, "could not convert arguments");
+    }
+}
+
+Handle<Value> Image::Erode(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 2 && args[0]->IsInt32() && args[1]->IsInt32()) {
+        int width = args[0]->ToInt32()->Value();
+        int height = args[1]->ToInt32()->Value();
+        PIX *pixd = pixErodeGray(obj->pix_, width, height);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while eroding");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int, int) signature");
+    }
+}
+
+Handle<Value> Image::Dilate(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 2 && args[0]->IsInt32() && args[1]->IsInt32()) {
+        int width = args[0]->ToInt32()->Value();
+        int height = args[1]->ToInt32()->Value();
+        PIX *pixd = pixDilateGray(obj->pix_, width, height);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while dilating");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int, int) signature");
     }
 }
 

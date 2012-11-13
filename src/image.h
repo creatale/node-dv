@@ -19,9 +19,17 @@ public:
 
 private:
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Invert(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Or(const v8::Arguments& args);
+    static v8::Handle<v8::Value> And(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Xor(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Subtract(const v8::Arguments& args);
     static v8::Handle<v8::Value> Rotate(const v8::Arguments& args);
     static v8::Handle<v8::Value> Crop(const v8::Arguments& args);
+    static v8::Handle<v8::Value> RankFilter(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToGray(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Erode(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Dilate(const v8::Arguments& args);
     static v8::Handle<v8::Value> OtsuAdaptiveThreshold(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindSkew(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToBuffer(const v8::Arguments& args);
