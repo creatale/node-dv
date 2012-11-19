@@ -103,7 +103,6 @@
             'xcode_settings': {
               'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
             }
-
           }
         ],
         ['OS=="win"',
@@ -114,6 +113,22 @@
             'sources': [
               'port/win_iconv.c',
             ],
+            'configurations': {
+              'Debug': {
+                'msvs_settings': {
+                  'VCCLCompilerTool': {
+                    'ExceptionHandling': '1',
+                  },
+                },
+              },
+              'Release': {
+                'msvs_settings': {
+                  'VCCLCompilerTool': {
+                    'ExceptionHandling': '1',
+                  },
+                },
+              },
+            },
           }
         ],
       ],

@@ -37,7 +37,23 @@
           {
             'xcode_settings': {
               'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
-            }
+            },
+            'configurations': {
+              'Debug': {
+                'msvs_settings': {
+                  'VCCLCompilerTool': {
+                    'ExceptionHandling': '1',
+                  },
+                },
+              },
+              'Release': {
+                'msvs_settings': {
+                  'VCCLCompilerTool': {
+                    'ExceptionHandling': '1',
+                  },
+                },
+              },
+            },
           }
         ],
       ],
