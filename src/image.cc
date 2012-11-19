@@ -44,6 +44,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Subtract)->GetFunction());
     proto->Set(String::NewSymbol("rotate"),
                FunctionTemplate::New(Rotate)->GetFunction());
+    proto->Set(String::NewSymbol("scale"),
+               FunctionTemplate::New(Scale)->GetFunction());
     proto->Set(String::NewSymbol("crop"),
                FunctionTemplate::New(Crop)->GetFunction());
     proto->Set(String::NewSymbol("rankFilter"),
@@ -58,6 +60,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(OtsuAdaptiveThreshold)->GetFunction());
     proto->Set(String::NewSymbol("findSkew"),
                FunctionTemplate::New(FindSkew)->GetFunction());
+    proto->Set(String::NewSymbol("drawBox"),
+               FunctionTemplate::New(DrawBox)->GetFunction());
     proto->Set(String::NewSymbol("toBuffer"),
                FunctionTemplate::New(ToBuffer)->GetFunction());
     target->Set(String::NewSymbol("Image"),
@@ -79,6 +83,8 @@ Handle<Value> Image::New(const Arguments &args)
     Pix *pix;
     if (args.Length() == 0) {
         pix = 0;
+    } else if (args.Length() == 1 &&  Image::HasInstance(args[0])) {
+        pix = pixCopy(NULL, Image::Pixels(args[0]->ToObject()));
     } else if (args.Length() == 2 && Buffer::HasInstance(args[1])) {
         String::AsciiValue format(args[0]->ToString());
         Local<Object> buffer = args[1]->ToObject();
@@ -242,6 +248,23 @@ Handle<Value> Image::Rotate(const Arguments &args)
     }
 }
 
+Handle<Value> Image::Scale(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 2 && args[0]->IsNumber() && args[1]->IsNumber()) {
+        float scaleX = args[0]->ToNumber()->Value();
+        float scaleY = args[1]->ToNumber()->Value();
+        Pix *pixd = pixScale(obj->pix_, scaleX, scaleY);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while scaling");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (float, float) signature");
+    }
+}
+
 Handle<Value> Image::Crop(const Arguments &args)
 {
     HandleScope scope;
@@ -310,9 +333,9 @@ Handle<Value> Image::ToGray(const Arguments &args)
         if (args[0]->IsString()) {
             String::AsciiValue type(args[0]->ToString());
             int32_t typeInt;
-            if (strcmp("min", *type) != 0) {
+            if (strcmp("min", *type) == 0) {
                 typeInt = L_CHOOSE_MIN;
-            } else if (strcmp("max", *type) != 0) {
+            } else if (strcmp("max", *type) == 0) {
                 typeInt = L_CHOOSE_MAX;
             } else {
                 return THROW(Error, "expected type to be 'min' or 'max'");
@@ -418,6 +441,41 @@ Handle<Value> Image::FindSkew(const Arguments &args)
         return scope.Close(object);
     } else {
         return THROW(Error, "angle measurment not valid");
+    }
+}
+
+Handle<Value> Image::DrawBox(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if ((args.Length() == 5 || args.Length() == 6)
+            && args[0]->IsInt32() && args[1]->IsInt32()
+            && args[2]->IsInt32() && args[3]->IsInt32()
+            && args[4]->IsInt32()) {
+        BOX *box = boxCreate(args[0]->ToInt32()->Value(),
+                             args[1]->ToInt32()->Value(),
+                             args[2]->ToInt32()->Value(),
+                             args[3]->ToInt32()->Value());
+        int borderWidth = args[4]->ToInt32()->Value();
+        int opInt = L_SET_PIXELS;
+        if (args.Length() == 6 && args[5]->IsString()) {
+            String::AsciiValue op(args[5]->ToString());
+            if (strcmp("set", *op) == 0) {
+                opInt = L_SET_PIXELS;
+            } else if (strcmp("clear", *op) == 0) {
+                opInt = L_CLEAR_PIXELS;
+            } else if (strcmp("flip", *op) == 0) {
+                opInt = L_FLIP_PIXELS;
+            }
+        }
+        int error = pixRenderBox(obj->pix_, box, borderWidth, opInt);
+        boxDestroy(&box);
+        if (error) {
+            return THROW(TypeError, "error while drawing box");
+        }
+        return scope.Close(args.This());
+    } else {
+        return THROW(TypeError, "expected (int, int, int, int, int[, string]) signature");
     }
 }
 

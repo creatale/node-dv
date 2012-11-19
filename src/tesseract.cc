@@ -157,27 +157,27 @@ void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const Acc
 {
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     String::AsciiValue pageSegMode(value);
-    if (strcmp("osd_only", *pageSegMode)) {
+    if (strcmp("osd_only", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_OSD_ONLY);
-    } else if (strcmp("auto_osd", *pageSegMode)) {
+    } else if (strcmp("auto_osd", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_AUTO_OSD);
-    } else if (strcmp("auto_only", *pageSegMode)) {
+    } else if (strcmp("auto_only", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_AUTO_ONLY);
-    } else if (strcmp("auto", *pageSegMode)) {
+    } else if (strcmp("auto", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_AUTO);
-    } else if (strcmp("single_column", *pageSegMode)) {
+    } else if (strcmp("single_column", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_COLUMN);
-    } else if (strcmp("single_block_vert_text", *pageSegMode)) {
+    } else if (strcmp("single_block_vert_text", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_BLOCK_VERT_TEXT);
-    } else if (strcmp("single_block", *pageSegMode)) {
+    } else if (strcmp("single_block", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_BLOCK);
-    } else if (strcmp("single_line", *pageSegMode)) {
+    } else if (strcmp("single_line", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_LINE);
-    } else if (strcmp("single_word", *pageSegMode)) {
+    } else if (strcmp("single_word", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_WORD);
-    } else if (strcmp("circle_word", *pageSegMode)) {
+    } else if (strcmp("circle_word", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_CIRCLE_WORD);
-    } else if (strcmp("single_char", *pageSegMode)) {
+    } else if (strcmp("single_char", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_CHAR);
     } else {
         THROW(TypeError, "value must be of type String. "
