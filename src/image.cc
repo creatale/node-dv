@@ -1,14 +1,11 @@
 #include "image.h"
+#include "util.h"
 #include <node_buffer.h>
 #include <lodepng.h>
 #include <sstream>
-#include <iostream> //TODO: remove me
 
 using namespace v8;
 using namespace node;
-
-#define THROW(type, msg) \
-    ThrowException(Exception::type(String::New(msg)))
 
 Persistent<FunctionTemplate> Image::constructor_template;
 
@@ -60,6 +57,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(OtsuAdaptiveThreshold)->GetFunction());
     proto->Set(String::NewSymbol("findSkew"),
                FunctionTemplate::New(FindSkew)->GetFunction());
+    proto->Set(String::NewSymbol("connectedComponents"),
+               FunctionTemplate::New(ConnectedComponents)->GetFunction());
     proto->Set(String::NewSymbol("drawBox"),
                FunctionTemplate::New(DrawBox)->GetFunction());
     proto->Set(String::NewSymbol("toBuffer"),
@@ -444,6 +443,27 @@ Handle<Value> Image::FindSkew(const Arguments &args)
     }
 }
 
+Handle<Value> Image::ConnectedComponents(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && args[0]->IsInt32()) {
+        int connectivity = args[0]->ToInt32()->Value();
+        BOXA *boxa = pixConnComp(obj->pix_, NULL, connectivity);
+        if (boxa == NULL) {
+            return THROW(TypeError, "error while computing connected components");
+        }
+        Local<Object> boxes = Array::New(boxa->n);
+        for (int i = 0; i < boxa->n; ++i) {
+            boxes->Set(i, createBox(boxa->box[i]));
+        }
+        boxaDestroy(&boxa);
+        return scope.Close(boxes);
+    } else {
+        return THROW(TypeError, "expected (int) signature");
+    }
+}
+
 Handle<Value> Image::DrawBox(const Arguments &args)
 {
     HandleScope scope;
@@ -473,7 +493,7 @@ Handle<Value> Image::DrawBox(const Arguments &args)
         if (error) {
             return THROW(TypeError, "error while drawing box");
         }
-        return scope.Close(args.This());
+        return args.This();
     } else {
         return THROW(TypeError, "expected (int, int, int, int, int[, string]) signature");
     }
@@ -559,7 +579,7 @@ Image::~Image()
 int Image::size() const
 {
     if (pix_) {
-        return pix_->w * pix_->h * (pix_->d >> 3);
+        return pix_->h * pix_->wpl * sizeof(uint32_t);
     } else {
         return 0;
     }

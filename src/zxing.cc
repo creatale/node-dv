@@ -1,5 +1,6 @@
 #include "zxing.h"
 #include "image.h"
+#include "util.h"
 #include <zxing/LuminanceSource.h>
 #include <zxing/Binarizer.h>
 #include <zxing/BinaryBitmap.h>
@@ -13,9 +14,6 @@
 
 using namespace v8;
 using namespace node;
-
-#define THROW(type, msg) \
-    ThrowException(Exception::type(String::New(msg)))
 
 class PixSource : public zxing::LuminanceSource
 {
@@ -64,9 +62,7 @@ int PixSource::getHeight() const
 
 unsigned char* PixSource::getRow(int yy, unsigned char* row)
 {
-    if (!row) {
-        row = new unsigned char[pix_->w];
-    }
+    row = row ? row : new unsigned char[pix_->w];
     uint32_t *line = pix_->data;
     for (uint32_t y = 0; y < pix_->h; ++y) {
         if ((uint32_t)yy == y) {

@@ -31,9 +31,6 @@ private:
     static v8::Handle<v8::Value> FindSymbols(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindText(const v8::Arguments& args);
 
-    // Util.
-    static v8::Handle<v8::Object> createBox(Box* box);
-
     Tesseract(const char *datapath, const char *language);
     ~Tesseract();
 

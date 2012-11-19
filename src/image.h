@@ -33,6 +33,7 @@ private:
     static v8::Handle<v8::Value> Dilate(const v8::Arguments& args);
     static v8::Handle<v8::Value> OtsuAdaptiveThreshold(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindSkew(const v8::Arguments& args);
+    static v8::Handle<v8::Value> ConnectedComponents(const v8::Arguments& args);
     static v8::Handle<v8::Value> DrawBox(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToBuffer(const v8::Arguments& args);
 

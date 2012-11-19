@@ -62,6 +62,18 @@ describe('Image', function(){
         skew.angle.should.equal(-0.703125);
         skew.confidence.should.equal(4.957831859588623);
     })
+    it('should #connectedComponents()', function(){
+        var textpage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
+        var binaryImage = textpage.otsuAdaptiveThreshold(32, 32, 0, 0, 0.1).image;
+        var boxes = binaryImage.connectedComponents(4);
+        var canvas = new dv.Image(binaryImage);
+        for (var i in boxes) {
+            canvas.drawBox(boxes[i].x, boxes[i].y,
+                           boxes[i].width, boxes[i].height,
+                           2, 'set');
+        }
+        writeImage('textpage-components.png', canvas);
+    })
     it('should #drawBox()', function(){
         var canvas = new dv.Image(this.gray)
         .drawBox(50, 50, 100, 100, 5)

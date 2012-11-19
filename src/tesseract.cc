@@ -1,14 +1,12 @@
 #include "tesseract.h"
 #include "image.h"
+#include "util.h"
 #include <sstream>
 #include <strngs.h>
 #include <resultiterator.h>
 
 using namespace v8;
 using namespace node;
-
-#define THROW(type, msg) \
-    ThrowException(Exception::type(String::New(msg)))
 
 void Tesseract::Init(Handle<Object> target)
 {
@@ -306,16 +304,6 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
                  "(\"unlv\") or "
                  "(\"hocr\", pageNumber: Int32) or "
                  "(\"box\", pageNumber: Int32)");
-}
-
-Handle<Object> Tesseract::createBox(Box* box)
-{
-    Handle<Object> result = Object::New();
-    result->Set(String::NewSymbol("x"), Int32::New(box->x));
-    result->Set(String::NewSymbol("y"), Int32::New(box->y));
-    result->Set(String::NewSymbol("width"), Int32::New(box->w));
-    result->Set(String::NewSymbol("height"), Int32::New(box->h));
-    return result;
 }
 
 Tesseract::Tesseract(const char *datapath, const char *language)
