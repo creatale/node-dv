@@ -184,14 +184,20 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
         object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result->getBarcodeFormat()]));
         object->Set(String::NewSymbol("data"), String::New(result->getText()->getText().c_str()));
         return scope.Close(object);
-    } catch (zxing::ReaderException& e) {
+    } catch (const zxing::ReaderException& e) {
+        if (strcmp(e.what(), "No code detected") == 0) {
+            return scope.Close(Null());
+        } else {
+            return THROW(Error, e.what());
+        }
+    } catch (const zxing::IllegalArgumentException& e) {
         return THROW(Error, e.what());
-    } catch (zxing::IllegalArgumentException& e) {
+    } catch (const zxing::Exception& e) {
         return THROW(Error, e.what());
-    } catch (zxing::Exception& e) {
+    } catch (const std::exception& e) {
         return THROW(Error, e.what());
-    } catch (std::exception& e) {
-        return THROW(Error, e.what());
+    } catch (...) {
+        return THROW(Error, "Uncaught exception");
     }
 }
 

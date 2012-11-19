@@ -10,13 +10,18 @@ describe('ZXing', function(){
         should.not.exist(this.zxing.image);
     })
     describe('#findCode()', function(){
-        it('should find ITF (truncated)', function(){
+        it('should find nothing', function(){
+            this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
+            var code = this.zxing.findCode();
+            should.not.exist(code);
+        })
+        it('should find ITF-10', function(){
             this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode1.png'));
             var code = this.zxing.findCode();
             code.type.should.equal('ITF');
-            code.data.should.equal('301036108');
+            code.data.should.equal('1234567890');
         })
-        it('should find ITF', function(){
+        it('should find ITF-14', function(){
             this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode2.png'));
             var code = this.zxing.findCode();
             code.type.should.equal('ITF');
