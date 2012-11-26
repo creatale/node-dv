@@ -29,6 +29,7 @@
         'src/util.cc',
         'src/zxing.cc',
         'src/module.cc',
+        'src/omr.cc',
       ],
       'cflags!': ['-fno-exceptions'],
       'cflags_cc!': ['-fno-exceptions'],
