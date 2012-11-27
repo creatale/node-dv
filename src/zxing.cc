@@ -100,9 +100,8 @@ bool PixSource::isRotateSupported() const
 
 zxing::Ref<zxing::LuminanceSource> PixSource::rotateCounterClockwise()
 {
-    const float pi = 3.1415926535f;
     // Rotate 90 degree counterclockwise.
-    Pix *rotatedPix = pixRotateAM(pix_, -pi, L_BRING_IN_WHITE);
+    Pix *rotatedPix = pixRotate90(pix_, -1);
     return zxing::Ref<PixSource>(new PixSource(rotatedPix, true));
 }
 
@@ -204,11 +203,11 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
 ZXing::ZXing()
     : reader_(new zxing::MultiFormatReader)
 {
+    zxing::DecodeHints hints(zxing::DecodeHints::DEFAULT_HINT);
     //TODO: implement getters/setters for hints
-    //zxing::DecodeHints hints(zxing::DecodeHints::DEFAULT_HINT);
-    //hints.setTryHarder(...);
-    //hint.addFormat(...)
-    //reader_->setState(hints)
+    //hints.addFormat(...)
+    hints.setTryHarder(true);
+    reader_->setHints(hints);
 }
 
 ZXing::~ZXing()
