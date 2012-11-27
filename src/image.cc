@@ -237,7 +237,9 @@ Handle<Value> Image::Rotate(const Arguments &args)
     if (args.Length() == 1 && args[0]->IsNumber()) {
         const float deg2rad = 3.1415926535 / 180.;
         float angle = args[0]->ToNumber()->Value();
-        Pix *pixd = pixRotateAM(obj->pix_, deg2rad * angle, L_BRING_IN_WHITE);
+        Pix *pixd = pixRotate(obj->pix_, deg2rad * angle,
+                              L_ROTATE_AREA_MAP, L_BRING_IN_WHITE,
+                              obj->pix_->w, obj->pix_->h);
         if (pixd == NULL) {
             return THROW(TypeError, "error while rotating");
         }

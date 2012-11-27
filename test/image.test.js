@@ -30,7 +30,7 @@ describe('Image', function(){
     })
     it('should #rotate()', function(){
         writeImage('gray-rotate.png', this.gray.rotate(-0.703125));
-        writeImage('gray-rotate90.png', this.gray.rotate(90));
+        writeImage('gray-rotate45.png', this.gray.rotate(45));
     })
     it('should #scale()', function(){
         writeImage('gray-scale2.png', this.gray.scale(2.0, 2.0));
