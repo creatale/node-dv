@@ -29,6 +29,9 @@ void Image::Init(Handle<Object> target)
     constructor_template->SetClassName(String::NewSymbol("Image"));
     constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
+    proto->SetAccessor(String::NewSymbol("width"), GetWidth);
+    proto->SetAccessor(String::NewSymbol("height"), GetHeight);
+    proto->SetAccessor(String::NewSymbol("depth"), GetDepth);
     proto->Set(String::NewSymbol("invert"),
                FunctionTemplate::New(Invert)->GetFunction());
     proto->Set(String::NewSymbol("or"),
@@ -153,6 +156,24 @@ Handle<Value> Image::New(const Arguments &args)
     Image* obj = new Image(pix);
     obj->Wrap(args.This());
     return args.This();
+}
+
+Handle<Value> Image::GetWidth(Local<String> prop, const AccessorInfo &info)
+{
+    Image *obj = ObjectWrap::Unwrap<Image>(info.This());
+    return Number::New(obj->pix_->w);
+}
+
+Handle<Value> Image::GetHeight(Local<String> prop, const AccessorInfo &info)
+{
+    Image *obj = ObjectWrap::Unwrap<Image>(info.This());
+    return Number::New(obj->pix_->h);
+}
+
+Handle<Value> Image::GetDepth(Local<String> prop, const AccessorInfo &info)
+{
+    Image *obj = ObjectWrap::Unwrap<Image>(info.This());
+    return Number::New(obj->pix_->d);
 }
 
 Handle<Value> Image::Invert(const Arguments &args)

@@ -19,6 +19,13 @@ public:
 
 private:
     static v8::Handle<v8::Value> New(const v8::Arguments& args);
+
+    // Accessors.
+    static v8::Handle<v8::Value> GetWidth(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+    static v8::Handle<v8::Value> GetHeight(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+    static v8::Handle<v8::Value> GetDepth(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+
+    // Methods.
     static v8::Handle<v8::Value> Invert(const v8::Arguments& args);
     static v8::Handle<v8::Value> Or(const v8::Arguments& args);
     static v8::Handle<v8::Value> And(const v8::Arguments& args);
