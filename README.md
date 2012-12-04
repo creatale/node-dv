@@ -6,7 +6,8 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 - Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69) and [LodePNG](http://lodev.org/lodepng/) (Version 20121027)
 - OCR using [Tesseract](http://code.google.com/p/tesseract-ocr/) (Version 3.02)
-- Barcode reading using [ZXing](http://code.google.com/p/zxing/) (Version 2.10)
+- OMR using [ZXing](http://code.google.com/p/zxing/) (Version 2.10) for Barcodes 
+- OMR using a custom solution for Checkboxes
 
 ## Installation
 
@@ -16,18 +17,20 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 Once you've installed, download [that image](https://github.com/schulzch/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snipped to recognize text from your image:
 
-	var dv = require('dv');
-	var fs = require('fs');
-	var image = new dv.Image('png', fs.readFileSync('textpage300.png'));
-	var tesseract = new dv.Tesseract('.', 'eng', image);
-	console.log(tesseract.findText('plain'));
+```javascript
+var dv = require('dv');
+var fs = require('fs');
+var image = new dv.Image('png', fs.readFileSync('textpage300.png'));
+var tesseract = new dv.Tesseract('eng', image);
+console.log(tesseract.findText('plain'));
+```
 
 ## Whats next?
 
 Here are some quick links to help you get started:
 
+- [Introduction to Computer Vision](https://github.com/schulzch/node-dv/wiki/Introduction)
 - [API Reference](https://github.com/schulzch/node-dv/wiki/API)
-- [Troubleshooting](https://github.com/schulzch/node-dv/wiki/Troubleshooting)
 - [Bug Tracker](https://github.com/schulzch/node-dv/issues)
 
 ## License
