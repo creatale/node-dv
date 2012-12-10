@@ -19,7 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "omr.h"
+#include "tickreader.h"
 #include "image.h"
 #include <vector>
 #include <algorithm>
@@ -31,7 +31,7 @@ using namespace node;
 #define THROW(type, msg) \
     ThrowException(Exception::type(String::New(msg)))
 
-#define OMR_NOTHRESHOLD -1
+#define TICKREADER_NOTHRESHOLD -1
 #define NUM_INTENSITY_LEVELS 256
 #define MAX_INTENSITY_LEVEL NUM_INTENSITY_LEVELS - 1
 
@@ -296,10 +296,10 @@ void checkboxIsChecked(
 
 // use div(grad(img)) for detection?
 
-void OMR::Init(Handle<Object> target)
+void TickReader::Init(Handle<Object> target)
 {
     Local<FunctionTemplate> constructor_template = FunctionTemplate::New(New);
-    constructor_template->SetClassName(String::NewSymbol("OMR"));
+    constructor_template->SetClassName(String::NewSymbol("TickReader"));
     constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
     proto->Set(String::NewSymbol("getHorizontalProjection"),
@@ -314,11 +314,11 @@ void OMR::Init(Handle<Object> target)
                FunctionTemplate::New(GetFillRatio)->GetFunction());
     proto->Set(String::NewSymbol("checkboxIsChecked"),
                FunctionTemplate::New(CheckboxIsChecked)->GetFunction());
-    target->Set(String::NewSymbol("OMR"),
+    target->Set(String::NewSymbol("TickReader"),
                 Persistent<Function>::New(constructor_template->GetFunction()));
 }
 
-Handle<Value> OMR::New(const Arguments &args)
+Handle<Value> TickReader::New(const Arguments &args)
 {
     HandleScope scope;
     double outerCheckedThreshold = 0.5f;
@@ -354,12 +354,12 @@ Handle<Value> OMR::New(const Arguments &args)
             innerCheckedFalseMargin = innerCheckedFalseMarginValue->NumberValue();
         }
     }
-    OMR *obj = new OMR(outerCheckedThreshold, outerCheckedTrueMargin, outerCheckedFalseMargin, innerCheckedThreshold, innerCheckedTrueMargin, innerCheckedFalseMargin);
+    TickReader *obj = new TickReader(outerCheckedThreshold, outerCheckedTrueMargin, outerCheckedFalseMargin, innerCheckedThreshold, innerCheckedTrueMargin, innerCheckedFalseMargin);
     obj->Wrap(args.This());
     return args.This();
 }
 
-Handle<Value> OMR::GetHorizontalProjection(const Arguments &args) {
+Handle<Value> TickReader::GetHorizontalProjection(const Arguments &args) {
     HandleScope scope;
     if (args.Length() == 1 && Image::HasInstance(args[0])) {
         Pix *pix = Image::Pixels(args[0]->ToObject());
@@ -393,7 +393,7 @@ Handle<Value> OMR::GetHorizontalProjection(const Arguments &args) {
     }
 }
 
-Handle<Value> OMR::GetVerticalProjection(const Arguments &args) {
+Handle<Value> TickReader::GetVerticalProjection(const Arguments &args) {
     HandleScope scope;
     if (args.Length() == 1 && Image::HasInstance(args[0])) {
         Pix *pix = Image::Pixels(args[0]->ToObject());
@@ -427,7 +427,7 @@ Handle<Value> OMR::GetVerticalProjection(const Arguments &args) {
     }
 }
 
-Handle<Value> OMR::LocatePeaks(const Arguments &args) {
+Handle<Value> TickReader::LocatePeaks(const Arguments &args) {
     HandleScope scope;
     if (args.Length() == 4 && args[0]->IsArray() && args[1]->IsArray() && args[2]->IsNumber() && args[3]->IsNumber()) {
         Local<Object> projection = args[0]->ToObject();
@@ -466,7 +466,7 @@ Handle<Value> OMR::LocatePeaks(const Arguments &args) {
     }
 }
 
-Handle<Value> OMR::GetFill(const Arguments &args) {
+Handle<Value> TickReader::GetFill(const Arguments &args) {
     HandleScope scope;
     if (args.Length() == 5 && Image::HasInstance(args[0]) && args[1]->IsNumber() && args[2]->IsNumber() && args[3]->IsNumber() && args[4]->IsNumber()) {
         Pix *pix = Image::Pixels(args[0]->ToObject());
@@ -493,7 +493,7 @@ Handle<Value> OMR::GetFill(const Arguments &args) {
     }
 }
 
-Handle<Value> OMR::GetFillRatio(const Arguments &args) {
+Handle<Value> TickReader::GetFillRatio(const Arguments &args) {
     HandleScope scope;
     if (args.Length() == 5 && Image::HasInstance(args[0]) && args[1]->IsNumber() && args[2]->IsNumber() && args[3]->IsNumber() && args[4]->IsNumber()) {
         Pix *pix = Image::Pixels(args[0]->ToObject());
@@ -520,9 +520,9 @@ Handle<Value> OMR::GetFillRatio(const Arguments &args) {
     }
 }
 
-Handle<Value> OMR::CheckboxIsChecked(const Arguments &args) {
+Handle<Value> TickReader::CheckboxIsChecked(const Arguments &args) {
     HandleScope scope;
-    OMR* thisObj = ObjectWrap::Unwrap<OMR>(args.This());
+    TickReader* thisObj = ObjectWrap::Unwrap<TickReader>(args.This());
     if (args.Length() >= 1 && Image::HasInstance(args[0])) {
         Pix *pix = Image::Pixels(args[0]->ToObject());
 
@@ -584,7 +584,7 @@ Handle<Value> OMR::CheckboxIsChecked(const Arguments &args) {
     }
 }
 
-OMR::OMR(double outerCheckedThreshold, double outerCheckedTrueMargin, double outerCheckedFalseMargin, double innerCheckedThreshold, double innerCheckedTrueMargin, double innerCheckedFalseMargin)
+TickReader::TickReader(double outerCheckedThreshold, double outerCheckedTrueMargin, double outerCheckedFalseMargin, double innerCheckedThreshold, double innerCheckedTrueMargin, double innerCheckedFalseMargin)
     : m_outerCheckedThreshold(outerCheckedThreshold),
       m_outerCheckedTrueMargin(outerCheckedTrueMargin),
       m_outerCheckedFalseMargin(outerCheckedFalseMargin),
@@ -594,5 +594,6 @@ OMR::OMR(double outerCheckedThreshold, double outerCheckedTrueMargin, double out
 {
 }
 
-OMR::~OMR() {
+TickReader::~TickReader()
+{
 }

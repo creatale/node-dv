@@ -19,13 +19,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef OMR_H
-#define OMR_H
+#ifndef TICKREADER_H
+#define TICKREADER_H
 
 #include <v8.h>
 #include <node.h>
 
-class OMR : public node::ObjectWrap
+class TickReader : public node::ObjectWrap
 {
 public:
     static void Init(v8::Handle<v8::Object> target);
@@ -39,8 +39,11 @@ private:
     static v8::Handle<v8::Value> GetFillRatio(const v8::Arguments& args);
     static v8::Handle<v8::Value> CheckboxIsChecked(const v8::Arguments& args);
 
-    OMR(double outerCheckedThreshold, double outerCheckedTrueMargin, double outerCheckedFalseMargin, double innerCheckedThreshold, double innerCheckedTrueMargin, double innerCheckedFalseMargin);
-    ~OMR();
+    TickReader(double outerCheckedThreshold,
+               double outerCheckedTrueMargin, double outerCheckedFalseMargin,
+               double innerCheckedThreshold,
+               double innerCheckedTrueMargin, double innerCheckedFalseMargin);
+    ~TickReader();
 
     double m_outerCheckedThreshold;
     double m_outerCheckedTrueMargin;
