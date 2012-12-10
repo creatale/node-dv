@@ -204,6 +204,14 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
         Local<Object> object = Object::New();
         object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result->getBarcodeFormat()]));
         object->Set(String::NewSymbol("data"), String::New(result->getText()->getText().c_str()));
+        Local<Array> points = Array::New();
+        for (size_t i = 0; i < result->getResultPoints().size(); ++i) {
+            Local<Object> point = Object::New();
+            point->Set(String::NewSymbol("x"), Number::New(result->getResultPoints()[i]->getX()));
+            point->Set(String::NewSymbol("y"), Number::New(result->getResultPoints()[i]->getY()));
+            points->Set(i, point);
+        }
+        object->Set(String::NewSymbol("points"), points);
         return scope.Close(object);
     } catch (const zxing::ReaderException& e) {
         if (strcmp(e.what(), "No code detected") == 0) {

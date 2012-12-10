@@ -20,12 +20,14 @@ describe('ZXing', function(){
             var code = this.zxing.findCode();
             code.type.should.equal('ITF');
             code.data.should.equal('1234567890');
+            should.exist(code.points);
         })
         it('should find ITF-14', function(){
             this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode2.png'));
             var code = this.zxing.findCode();
             code.type.should.equal('ITF');
             code.data.should.equal('12345678901231');
+            should.exist(code.points);
         })
     })
 })
