@@ -44,7 +44,7 @@ public:
 
     int getWidth() const;
     int getHeight() const;
-    unsigned char* getRow(int yy, unsigned char* row);
+    unsigned char* getRow(int y, unsigned char* row);
     unsigned char* getMatrix();
 
     bool isCropSupported() const;
@@ -81,19 +81,16 @@ int PixSource::getHeight() const
     return pix_->h;
 }
 
-unsigned char* PixSource::getRow(int yy, unsigned char* row)
+unsigned char* PixSource::getRow(int y, unsigned char* row)
 {
     row = row ? row : new unsigned char[pix_->w];
-    uint32_t *line = pix_->data;
-    for (uint32_t y = 0; y < pix_->h; ++y) {
-        if ((uint32_t)yy == y) {
-            unsigned char *r = row;
-            for (uint32_t x = 0; x < pix_->w; ++x) {
-                *r = GET_DATA_BYTE(line, x);
-                ++r;
-            }
+    if (static_cast<uint32_t>(y) < pix_->h) {
+        uint32_t *line = pix_->data + (pix_->wpl * y);
+        unsigned char *r = row;
+        for (uint32_t x = 0; x < pix_->w; ++x) {
+            *r = GET_DATA_BYTE(line, x);
+            ++r;
         }
-        line += pix_->wpl;
     }
     return row;
 }
@@ -122,8 +119,12 @@ bool PixSource::isRotateSupported() const
 zxing::Ref<zxing::LuminanceSource> PixSource::rotateCounterClockwise()
 {
     // Rotate 90 degree counterclockwise.
-    Pix *rotatedPix = pixRotate90(pix_, -1);
-    return zxing::Ref<PixSource>(new PixSource(rotatedPix, true));
+    if (pix_->w != 0 && pix_->h != 0) {
+        Pix *rotatedPix = pixRotate90(pix_, -1);
+        return zxing::Ref<PixSource>(new PixSource(rotatedPix, true));
+    } else {
+        return zxing::Ref<PixSource>(new PixSource(pix_));
+    }
 }
 
 bool PixSource::isCropSupported() const
