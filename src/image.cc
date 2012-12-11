@@ -497,7 +497,7 @@ Handle<Value> Image::ConnectedComponents(const Arguments &args)
         if (boxa == NULL) {
             return THROW(TypeError, "error while computing connected components");
         }
-        Local<Object> boxes = Array::New(boxa->n);
+        Local<Object> boxes = Array::New();
         for (int i = 0; i < boxa->n; ++i) {
             boxes->Set(i, createBox(boxa->box[i]));
         }
