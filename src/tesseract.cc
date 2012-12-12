@@ -236,14 +236,9 @@ Handle<Value> Tesseract::FindRegions(const Arguments &args)
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     Boxa* boxa = obj->api_.GetRegions(NULL);
-<<<<<<< HEAD
     int n = boxa ? boxa->n : 0;
     Local<Object> boxes = Array::New(n);
     for (int i = 0; i < n; ++i) {
-=======
-    Local<Object> boxes = Array::New();
-    for (int i = 0; i < boxa->n; ++i) {
->>>>>>> e3bb475a3b5f23ed35e248d4b42b311198fd5e4a
         boxes->Set(i, createBox(boxa->box[i]));
     }
     boxaDestroy(&boxa);
@@ -255,14 +250,9 @@ Handle<Value> Tesseract::FindTextLines(const Arguments &args)
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     Boxa* boxa = obj->api_.GetTextlines(NULL, NULL);
-<<<<<<< HEAD
     int n = boxa ? boxa->n : 0;
     Local<Object> boxes = Array::New(n);
     for (int i = 0; i < n; ++i) {
-=======
-    Local<Object> boxes = Array::New();
-    for (int i = 0; i < boxa->n; ++i) {
->>>>>>> e3bb475a3b5f23ed35e248d4b42b311198fd5e4a
         boxes->Set(i, createBox(boxa->box[i]));
     }
     boxaDestroy(&boxa);
@@ -274,14 +264,9 @@ Handle<Value> Tesseract::FindWords(const Arguments &args)
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     Boxa* boxa = obj->api_.GetWords(NULL);
-<<<<<<< HEAD
     int n = boxa ? boxa->n : 0;
     Local<Object> boxes = Array::New(n);
     for (int i = 0; i < n; ++i) {
-=======
-    Local<Object> boxes = Array::New();
-    for (int i = 0; i < boxa->n; ++i) {
->>>>>>> e3bb475a3b5f23ed35e248d4b42b311198fd5e4a
         boxes->Set(i, createBox(boxa->box[i]));
     }
     boxaDestroy(&boxa);
