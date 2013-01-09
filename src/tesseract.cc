@@ -281,7 +281,7 @@ Handle<Value> Tesseract::FindSymbols(const Arguments &args)
     tesseract::ResultIterator* resultIter = obj->api_.GetIterator();
     Local<Array> symbols = Array::New();
     int symbolIndex = 0;
-    if (resultIter)  {
+    if (resultIter && !resultIter->Empty(tesseract::RIL_WORD)) {
         do {
             tesseract::ChoiceIterator choiceIter = tesseract::ChoiceIterator(*resultIter);
             Local<Array> choices = Array::New();
