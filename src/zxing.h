@@ -24,6 +24,7 @@
 
 #include <v8.h>
 #include <node.h>
+#include <zxing/DecodeHints.h>
 #include <zxing/MultiFormatReader.h>
 #include <zxing/multi/MultipleBarcodeReader.h>
 
@@ -38,6 +39,8 @@ private:
     // Accessors.
     static v8::Handle<v8::Value> GetImage(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
     static void SetImage(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
+    static v8::Handle<v8::Value> GetTryHarder(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+    static void SetTryHarder(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
 
     // Methods.
     static v8::Handle<v8::Value> FindCode(const v8::Arguments& args);
@@ -46,9 +49,10 @@ private:
     ZXing();
     ~ZXing();
 
+    v8::Persistent<v8::Object> image_;
+    zxing::DecodeHints hints_;
     zxing::Ref<zxing::MultiFormatReader> reader_;
     zxing::Ref<zxing::multi::MultipleBarcodeReader> multiReader_;
-    v8::Persistent<v8::Object> image_;
 };
 
 #endif

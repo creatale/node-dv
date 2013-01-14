@@ -29,7 +29,6 @@
 #include <zxing/common/HybridBinarizer.h>
 #include <zxing/Result.h>
 #include <zxing/ReaderException.h>
-#include <zxing/DecodeHints.h>
 #include <zxing/MultiFormatReader.h>
 #include <zxing/multi/GenericMultipleBarcodeReader.h>
 #include <sstream>
@@ -148,6 +147,7 @@ void ZXing::Init(Handle<Object> target)
     constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
     proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
+    proto->SetAccessor(String::NewSymbol("tryHarder"), GetTryHarder, SetTryHarder);
     proto->Set(String::NewSymbol("findCode"),
                FunctionTemplate::New(FindCode)->GetFunction());
     proto->Set(String::NewSymbol("findCodes"),
@@ -192,6 +192,22 @@ void ZXing::SetImage(Local<String> prop, Local<Value> value, const AccessorInfo 
         obj->image_ = Persistent<Object>::New(value->ToObject());
     } else {
         THROW(TypeError, "value must be of type Image");
+    }
+}
+
+Handle<Value> ZXing::GetTryHarder(Local<String> prop, const AccessorInfo &info)
+{
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+    return Boolean::New(obj->hints_.getTryHarder());
+}
+
+void ZXing::SetTryHarder(Local<String> prop, Local<Value> value, const AccessorInfo &info)
+{
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+    if (value->IsBoolean()) {
+        obj->hints_.setTryHarder(value->BooleanValue());
+    } else {
+        THROW(TypeError, "value must be of type bool");
     }
 }
 
@@ -241,7 +257,7 @@ Handle<Value> ZXing::FindCodes(const Arguments &args)
         zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
         zxing::Ref<zxing::Binarizer> binarizer(new zxing::GlobalHistogramBinarizer(source));
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
-        std::vector< zxing::Ref<zxing::Result> > result = obj->multiReader_->decodeMultiple(binary);
+        std::vector< zxing::Ref<zxing::Result> > result = obj->multiReader_->decodeMultiple(binary, obj->hints_);
         Local<Array> objects = Array::New();
         for (size_t i = 0; i < result.size(); ++i) {
             Local<Object> object = Object::New();
@@ -276,14 +292,12 @@ Handle<Value> ZXing::FindCodes(const Arguments &args)
 }
 
 ZXing::ZXing()
-    : reader_(new zxing::MultiFormatReader),
+    : hints_(zxing::DecodeHints::DEFAULT_HINT), reader_(new zxing::MultiFormatReader),
       multiReader_(new zxing::multi::GenericMultipleBarcodeReader(*reader_))
 {
-    zxing::DecodeHints hints(zxing::DecodeHints::DEFAULT_HINT);
     //TODO: implement getters/setters for hints
-    //hints.addFormat(...)
-    hints.setTryHarder(true);
-    reader_->setHints(hints);
+    //hints_.addFormat(...)
+    reader_->setHints(hints_);
 }
 
 ZXing::~ZXing()
