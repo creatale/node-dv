@@ -25,6 +25,7 @@
 #include <v8.h>
 #include <node.h>
 #include <zxing/MultiFormatReader.h>
+#include <zxing/multi/MultipleBarcodeReader.h>
 
 class ZXing : public node::ObjectWrap
 {
@@ -40,11 +41,13 @@ private:
 
     // Methods.
     static v8::Handle<v8::Value> FindCode(const v8::Arguments& args);
+    static v8::Handle<v8::Value> FindCodes(const v8::Arguments& args);
 
     ZXing();
     ~ZXing();
 
     zxing::Ref<zxing::MultiFormatReader> reader_;
+    zxing::Ref<zxing::multi::MultipleBarcodeReader> multiReader_;
     v8::Persistent<v8::Object> image_;
 };
 
