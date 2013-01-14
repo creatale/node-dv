@@ -241,9 +241,7 @@ Handle<Value> ZXing::FindCodes(const Arguments &args)
         zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
         zxing::Ref<zxing::Binarizer> binarizer(new zxing::GlobalHistogramBinarizer(source));
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
-        std::cout << "X" << std::endl;
         std::vector< zxing::Ref<zxing::Result> > result = obj->multiReader_->decodeMultiple(binary);
-        std::cout << "X" << std::endl;
         Local<Array> objects = Array::New();
         for (size_t i = 0; i < result.size(); ++i) {
             Local<Object> object = Object::New();
@@ -260,6 +258,12 @@ Handle<Value> ZXing::FindCodes(const Arguments &args)
             objects->Set(i, object);
         }
         return scope.Close(objects);
+    } catch (const zxing::ReaderException& e) {
+        if (strcmp(e.what(), "No code detected") == 0) {
+            return scope.Close(Array::New());
+        } else {
+            return THROW(Error, e.what());
+        }
     } catch (const zxing::IllegalArgumentException& e) {
         return THROW(Error, e.what());
     } catch (const zxing::Exception& e) {
