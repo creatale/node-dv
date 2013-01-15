@@ -287,10 +287,14 @@ Handle<Value> Tesseract::FindSymbols(const Arguments &args)
             Local<Array> choices = Array::New();
             int choiceIndex = 0;
             do {
+                const char* text = choiceIter.GetUTF8Text();
+                if (!text) {
+                    break;
+                }
                 // Transform choice to object.
                 Local<Object> choice = Object::New();
                 choice->Set(String::NewSymbol("text"),
-                            String::New(choiceIter.GetUTF8Text()));
+                            String::New(text));
                 choice->Set(String::NewSymbol("confidence"),
                             Number::New(choiceIter.Confidence()));
                 // Append choice to choices list.
@@ -298,8 +302,10 @@ Handle<Value> Tesseract::FindSymbols(const Arguments &args)
                 ++choiceIndex;
             } while(choiceIter.Next());
             // Append choices to symbols list.
-            symbols->Set(symbolIndex, choices);
-            ++symbolIndex;
+            if (choices->Length() > 0) {
+                symbols->Set(symbolIndex, choices);
+                ++symbolIndex;
+            }
         } while((resultIter->Next(tesseract::RIL_SYMBOL)));
         // Cleanup.
         delete resultIter;
