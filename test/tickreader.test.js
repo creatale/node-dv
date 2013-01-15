@@ -17,7 +17,7 @@ describe('TickReader', function(){
         var checkboxImage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/checkbox_perfect_unchecked.png'));
 		checkboxImage = checkboxImage.toGray('max');
         var horizontalProjection = this.tickReader.getHorizontalProjection(checkboxImage);
-		console.log(horizontalProjection);
+        //console.log(horizontalProjection);
 		var expectedResult =
 			[ 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,
 			 60, 2, 2, 2, 2, 2, 2, 2, 2,  2,
@@ -35,7 +35,7 @@ describe('TickReader', function(){
         var checkboxImage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/checkbox_perfect_unchecked.png'));
 		checkboxImage = checkboxImage.toGray('max');
         var verticalProjection = this.tickReader.getVerticalProjection(checkboxImage);
-		console.log(verticalProjection);
+        //console.log(verticalProjection);
 		var expectedResult =
 			[ 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,
 			 60, 2, 2, 2, 2, 2, 2, 2, 2,  2,
@@ -54,8 +54,8 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var horizontalProjection = this.tickReader.getHorizontalProjection(checkboxImage);
         var verticalProjection = this.tickReader.getVerticalProjection(checkboxImage);
-		console.log(horizontalProjection);
-		console.log(verticalProjection);
+        //console.log(horizontalProjection);
+        //console.log(verticalProjection);
 		var horizontalExpectedResult =
 			[60, 2, 2, 2, 2, 2, 2, 2, 2,  2,
 			  2, 2, 2, 2, 2, 2, 2, 2, 2,  2,
@@ -86,8 +86,8 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var horizontalProjection = this.tickReader.getHorizontalProjection(checkboxImage);
         var verticalProjection = this.tickReader.getVerticalProjection(checkboxImage);
-		console.log(horizontalProjection);
-		console.log(verticalProjection);
+        //console.log(horizontalProjection);
+        //console.log(verticalProjection);
 		var horizontalExpectedResult =
 			[  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
 			  60, 60, 60, 60, 60, 60, 60, 60, 60, 60,
@@ -189,14 +189,14 @@ describe('TickReader', function(){
         var checkboxImage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/checkbox_scan_unchecked.png'));
 		checkboxImage = checkboxImage.toGray('max');
         var peaks = this.tickReader.locatePeaks(this.tickReader.getHorizontalProjection(checkboxImage), 15, 3);
-		console.log(util.inspect(peaks, false, 5));
+        //console.log(util.inspect(peaks, false, 5));
         var fillRatios = this.tickReader.getFillRatios(checkboxImage, 15, 3);
     })
     it('should calculate fill ratio to ?', function(){
         var checkboxImage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/checkbox_scan_unchecked_skewed.png'));
 		checkboxImage = checkboxImage.toGray('max');
         var peaks = this.tickReader.locatePeaks(this.tickReader.getHorizontalProjection(checkboxImage), 15, 3);
-		console.log(util.inspect(peaks, false, 5));
+        //console.log(util.inspect(peaks, false, 5));
         var fillRatios = this.tickReader.getFillRatios(checkboxImage, 15, 3);
     })*/
     it('should be unchecked (checkbox_perfect_unchecked.png)', function(){
@@ -204,7 +204,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': false, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -215,7 +215,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': false, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -226,7 +226,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': false, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -237,7 +237,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': false, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -248,7 +248,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -259,7 +259,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -270,7 +270,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -281,7 +281,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -292,7 +292,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -303,7 +303,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -314,7 +314,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -325,7 +325,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -336,7 +336,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -347,7 +347,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -358,7 +358,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': true, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -369,7 +369,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': false, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -380,7 +380,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
 		var expectedResult = [{'checked': false, 'confidence': 1.0}];
-		console.log(util.inspect(boxes, false, 5));
+        //console.log(util.inspect(boxes, false, 5));
 		for (var i = 0; i < expectedResult.length; i++) {
 			boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
 			//boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
@@ -391,7 +391,7 @@ describe('TickReader', function(){
 		checkboxImage = checkboxImage.toGray('max');
         var horizontalProjection = this.tickReader.getHorizontalProjection(checkboxImage, 100);
         var verticalProjection = this.tickReader.getVerticalProjection(checkboxImage, 100);
-		console.log(util.inspect(horizontalProjection));
-		console.log(util.inspect(verticalProjection));
+        //console.log(util.inspect(horizontalProjection));
+        //console.log(util.inspect(verticalProjection));
     })*/
 })
