@@ -25,7 +25,7 @@
 #include <zxing/LuminanceSource.h>
 #include <zxing/Binarizer.h>
 #include <zxing/BinaryBitmap.h>
-#include <zxing/common/GlobalHistogramBinarizer.h>
+#include <zxing/common/HybridBinarizer.h>
 #include <zxing/common/HybridBinarizer.h>
 #include <zxing/Result.h>
 #include <zxing/ReaderException.h>
@@ -217,7 +217,7 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
     try {
         zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
-        zxing::Ref<zxing::Binarizer> binarizer(new zxing::GlobalHistogramBinarizer(source));
+        zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
         zxing::Ref<zxing::Result> result(obj->reader_->decodeWithState(binary));
         Local<Object> object = Object::New();
@@ -255,7 +255,7 @@ Handle<Value> ZXing::FindCodes(const Arguments &args)
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
     try {
         zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
-        zxing::Ref<zxing::Binarizer> binarizer(new zxing::GlobalHistogramBinarizer(source));
+        zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
         std::vector< zxing::Ref<zxing::Result> > result = obj->multiReader_->decodeMultiple(binary, obj->hints_);
         Local<Array> objects = Array::New();
