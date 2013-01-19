@@ -83,6 +83,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(FindSkew)->GetFunction());
     proto->Set(String::NewSymbol("connectedComponents"),
                FunctionTemplate::New(ConnectedComponents)->GetFunction());
+    proto->Set(String::NewSymbol("clearBox"),
+               FunctionTemplate::New(ClearBox)->GetFunction());
     proto->Set(String::NewSymbol("drawBox"),
                FunctionTemplate::New(DrawBox)->GetFunction());
     proto->Set(String::NewSymbol("toBuffer"),
@@ -395,6 +397,33 @@ Handle<Value> Image::ToGray(const Arguments &args)
         }
     } else {
         return THROW(TypeError, "could not convert arguments");
+    }
+}
+
+Handle<Value> Image::ClearBox(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 4
+            && args[0]->IsInt32() && args[1]->IsInt32()
+            && args[2]->IsInt32() && args[3]->IsInt32()) {
+        BOX *box = boxCreate(args[0]->ToInt32()->Value(),
+                args[1]->ToInt32()->Value(),
+                args[2]->ToInt32()->Value(),
+                args[3]->ToInt32()->Value());
+        int error;
+        if (obj->pix_->d == 1) {
+            error = pixClearInRect(obj->pix_, box);
+        } else {
+            error = pixSetInRect(obj->pix_, box);
+        }
+        boxDestroy(&box);
+        if (error) {
+            return THROW(TypeError, "error while clearing box");
+        }
+        return args.This();
+    } else {
+        return THROW(TypeError, "expected (int, int, int, int) signature");
     }
 }
 
