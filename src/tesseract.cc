@@ -319,14 +319,22 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     if (args.Length() >= 1 && args[0]->IsString()) {
         String::AsciiValue mode(args[0]);
+        const char *text = 0;
         if (strcmp("plain", *mode) == 0) {
-            return scope.Close(String::New(obj->api_.GetUTF8Text()));
+            text = obj->api_.GetUTF8Text();
         } else if (strcmp("unlv", *mode) == 0) {
-            return scope.Close(String::New(obj->api_.GetUNLVText()));
+            text = obj->api_.GetUNLVText();
         } else if (strcmp("hocr", *mode) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
-            return scope.Close(String::New(obj->api_.GetHOCRText(args[1]->Int32Value())));
+            text = obj->api_.GetHOCRText(args[1]->Int32Value());
         } else if (strcmp("box", *mode) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
-            return scope.Close(String::New(obj->api_.GetBoxText(args[1]->Int32Value())));
+            text = obj->api_.GetBoxText(args[1]->Int32Value());
+        }
+        if (text) {
+            Local<String> textString = String::New(text);
+            delete[] text;
+            return scope.Close(textString);
+        } else {
+            return THROW(Error, "Internal tesseract error");
         }
     }
     return THROW(TypeError, "cannot convert argument list to "
