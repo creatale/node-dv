@@ -228,20 +228,25 @@ Handle<Value> Tesseract::ThresholdImage(const Arguments &args)
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     Pix *pix = obj->api_.GetThresholdedImage();
-    return scope.Close(Image::New(pix));
+    if (pix) {
+        return scope.Close(Image::New(pix));
+    } else {
+        return scope.Close(Null());
+    }
 }
 
 Handle<Value> Tesseract::FindRegions(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
+    Local<Object> boxes = Array::New();
     Boxa* boxa = obj->api_.GetRegions(NULL);
-    int n = boxa ? boxa->n : 0;
-    Local<Object> boxes = Array::New(n);
-    for (int i = 0; i < n; ++i) {
-        boxes->Set(i, createBox(boxa->box[i]));
+    if (boxa) {
+        for (int i = 0; i < boxa->n; ++i) {
+            boxes->Set(i, createBox(boxa->box[i]));
+        }
+        boxaDestroy(&boxa);
     }
-    boxaDestroy(&boxa);
     return scope.Close(boxes);
 }
 
@@ -249,13 +254,14 @@ Handle<Value> Tesseract::FindTextLines(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
+    Local<Object> boxes = Array::New();
     Boxa* boxa = obj->api_.GetTextlines(NULL, NULL);
-    int n = boxa ? boxa->n : 0;
-    Local<Object> boxes = Array::New(n);
-    for (int i = 0; i < n; ++i) {
-        boxes->Set(i, createBox(boxa->box[i]));
+    if (boxa) {
+        for (int i = 0; i < boxa->n; ++i) {
+            boxes->Set(i, createBox(boxa->box[i]));
+        }
+        boxaDestroy(&boxa);
     }
-    boxaDestroy(&boxa);
     return scope.Close(boxes);
 }
 
@@ -263,13 +269,14 @@ Handle<Value> Tesseract::FindWords(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
+    Local<Object> boxes = Array::New();
     Boxa* boxa = obj->api_.GetWords(NULL);
-    int n = boxa ? boxa->n : 0;
-    Local<Object> boxes = Array::New(n);
-    for (int i = 0; i < n; ++i) {
-        boxes->Set(i, createBox(boxa->box[i]));
+    if (boxa) {
+        for (int i = 0; i < boxa->n; ++i) {
+            boxes->Set(i, createBox(boxa->box[i]));
+        }
+        boxaDestroy(&boxa);
     }
-    boxaDestroy(&boxa);
     return scope.Close(boxes);
 }
 
@@ -277,7 +284,9 @@ Handle<Value> Tesseract::FindSymbols(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    obj->api_.Recognize(NULL);
+    if (obj->api_.Recognize(NULL) != 0) {
+        return THROW(Error, "Internal tesseract error");
+    }
     tesseract::ResultIterator* resultIter = obj->api_.GetIterator();
     Local<Array> symbols = Array::New();
     int symbolIndex = 0;
@@ -300,13 +309,13 @@ Handle<Value> Tesseract::FindSymbols(const Arguments &args)
                 // Append choice to choices list.
                 choices->Set(choiceIndex, choice);
                 ++choiceIndex;
-            } while(choiceIter.Next());
+            } while (choiceIter.Next());
             // Append choices to symbols list.
             if (choices->Length() > 0) {
                 symbols->Set(symbolIndex, choices);
                 ++symbolIndex;
             }
-        } while((resultIter->Next(tesseract::RIL_SYMBOL)));
+        } while (resultIter->Next(tesseract::RIL_SYMBOL));
         // Cleanup.
         delete resultIter;
     }
@@ -319,7 +328,7 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     if (args.Length() >= 1 && args[0]->IsString()) {
         String::AsciiValue mode(args[0]);
-        const char *text = 0;
+        const char *text = NULL;
         if (strcmp("plain", *mode) == 0) {
             text = obj->api_.GetUTF8Text();
         } else if (strcmp("unlv", *mode) == 0) {
@@ -333,9 +342,8 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
             Local<String> textString = String::New(text);
             delete[] text;
             return scope.Close(textString);
-        } else {
-            return THROW(Error, "Internal tesseract error");
         }
+        return THROW(Error, "Internal tesseract error");
     }
     return THROW(TypeError, "cannot convert argument list to "
                  "(\"plain\") or "
