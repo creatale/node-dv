@@ -185,7 +185,7 @@ void ZXing::SetImage(Local<String> prop, Local<Value> value, const AccessorInfo 
 {
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
     if (Image::HasInstance(value)) {
-        if (obj->image_.IsEmpty()) {
+        if (!obj->image_.IsEmpty()) {
             obj->image_.Dispose();
             obj->image_.Clear();
         }

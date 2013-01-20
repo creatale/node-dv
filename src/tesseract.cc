@@ -101,7 +101,7 @@ void Tesseract::SetImage(Local<String> prop, Local<Value> value, const AccessorI
 {
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     if (Image::HasInstance(value)) {
-        if (obj->image_.IsEmpty()) {
+        if (!obj->image_.IsEmpty()) {
             obj->image_.Dispose();
             obj->image_.Clear();
         }
@@ -128,7 +128,7 @@ void Tesseract::SetRectangle(Local<String> prop, Local<Value> value, const Acces
     Handle<String> height = String::NewSymbol("height");
     if (value->IsObject() && rect->Has(x) && rect->Has(y) &&
             rect->Has(width) && rect->Has(height)) {
-        if (obj->rectangle_.IsEmpty()) {
+        if (!obj->rectangle_.IsEmpty()) {
             obj->rectangle_.Dispose();
             obj->rectangle_.Clear();
         }

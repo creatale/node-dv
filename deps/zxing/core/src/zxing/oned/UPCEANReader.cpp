@@ -167,7 +167,7 @@ namespace zxing {
         const int pattern[], int patternLen, int* start, int* end) {
       int patternLength = patternLen;
       std::vector<int> counters(patternLength);
-      int countersCount = sizeof(counters) / sizeof(int);
+      int countersCount = patternLength; //sizeof(counters) / sizeof(int);
       for (int i = 0; i < countersCount; i++) {
         counters[i] = 0;
       }
