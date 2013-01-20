@@ -309,7 +309,7 @@ Handle<Value> Tesseract::FindSymbols(const Arguments &args)
                 // Append choice to choices list and cleanup.
                 choices->Set(choiceIndex, choice);
                 ++choiceIndex;
-                delete[] text;
+                // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
             } while (choiceIter.Next());
             // Append choices to symbols list.
             if (choices->Length() > 0) {
@@ -341,7 +341,7 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
         }
         if (text) {
             Local<String> textString = String::New(text);
-            delete[] text;
+            // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
             return scope.Close(textString);
         }
         return THROW(Error, "Internal tesseract error");
