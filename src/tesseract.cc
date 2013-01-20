@@ -306,9 +306,10 @@ Handle<Value> Tesseract::FindSymbols(const Arguments &args)
                             String::New(text));
                 choice->Set(String::NewSymbol("confidence"),
                             Number::New(choiceIter.Confidence()));
-                // Append choice to choices list.
+                // Append choice to choices list and cleanup.
                 choices->Set(choiceIndex, choice);
                 ++choiceIndex;
+                delete[] text;
             } while (choiceIter.Next());
             // Append choices to symbols list.
             if (choices->Length() > 0) {
