@@ -522,8 +522,16 @@ Handle<Value> Image::ConnectedComponents(const Arguments &args)
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 1 && args[0]->IsInt32()) {
         int connectivity = args[0]->ToInt32()->Value();
-        BOXA *boxa = pixConnComp(obj->pix_, NULL, connectivity);
-        if (boxa == NULL) {
+        PIX *pix = obj->pix_;
+        // If image is grayscale, binarize with fixed threshold
+        if (pix->d != 1) {
+            pix = pixConvertTo1(pix, 128);
+        }
+        BOXA *boxa = pixConnComp(pix, NULL, connectivity);
+        if (pix != obj->pix_) {
+            pixDestroy(&pix);
+        }
+        if (!boxa) {
             return THROW(TypeError, "error while computing connected components");
         }
         Local<Object> boxes = Array::New();
