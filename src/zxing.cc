@@ -58,11 +58,11 @@ private:
 
 PixSource::PixSource(Pix* pix, bool take)
 {
-    assert(pix->d == 8);
     if (take) {
+        assert(pix->d == 8);
         pix_ = pix;
     } else {
-        pix_ = pixClone(pix);
+        pix_ = pixConvertTo8(pix, 0);
     }
 }
 
