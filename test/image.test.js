@@ -10,10 +10,31 @@ describe('Image', function(){
     before(function(){
         this.gray = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/dave.png'));
         this.rgba = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/rgba.png'));
+        this.rgbaBuffer = new Buffer(128 * 256 * 4);
+        for (var y = 0; y < 256; y++) {
+            for (var x = 0; x < 128; x++) {
+                // Fill a buffer with red, green and blue stripes.
+                for (var c = 0; c < 3; c++) {
+                    this.rgbaBuffer[y * 128 * 4 + x * 4 + c] = x % 4 == c ? 255 : 0;
+                }
+                this.rgbaBuffer[y * 128 * 4 + x * 4 + c + 3] = 128;
+            }
+        }
+        this.rgbBuffer = new Buffer(128 * 256 * 3);
+        for (var y = 0; y < 256; y++) {
+            for (var x = 0; x < 128; x++) {
+                // Fill a buffer with red, green and blue stripes.
+                for (var c = 0; c < 3; c++) {
+                    this.rgbBuffer[y * 128 * 3 + x * 3 + c] = x % 3 == c ? 255 : 0;
+                }
+            }
+        }
     })
     it('should save using #toBuffer()', function(){
         writeImage('gray.png', this.gray);
         writeImage('rgba.png', this.rgba);
+        writeImage('rgbaBuffer.png', new dv.Image('rgba', this.rgbaBuffer, 128, 256));
+        writeImage('rgbBuffer.png', new dv.Image('rgb', this.rgbBuffer, 128, 256));
     })
     it('should #invert()', function(){
         writeImage('gray-invert.png', this.gray.invert());

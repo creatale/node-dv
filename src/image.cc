@@ -30,6 +30,35 @@ using namespace node;
 
 Persistent<FunctionTemplate> Image::constructor_template;
 
+Pix* pixFromSource(uint8_t *pixSource, int32_t width, int32_t height, int32_t depth, int32_t targetDepth)
+{
+    // Create PIX and copy pixels from source.
+    PIX *pix = pixCreateNoInit(width, height, targetDepth);
+    uint32_t *line = pix->data;
+    for (uint32_t y = 0; y < pix->h; ++y) {
+        for (uint32_t x = 0; x < pix->w; ++x) {
+            if (pix->d == 8) {
+                // Fetch Gray = Red = Green = Blue.
+                SET_DATA_BYTE(line, x, *pixSource);
+                // Skip Green, Blue and Alpha.
+                ++pixSource; ++pixSource; ++pixSource; ++pixSource;
+            } else {
+                // Fetch RGB.
+                int rval = *pixSource; ++pixSource;
+                int gval = *pixSource; ++pixSource;
+                int bval = *pixSource; ++pixSource;
+                composeRGBPixel(rval, gval, bval, &line[x]);
+                if (depth == 32) {
+                    // Skip Alpha.
+                    ++pixSource;
+                }
+            }
+        }
+        line += pix->wpl;
+    }
+    return pix;
+}
+
 bool Image::HasInstance(Handle<Value> val)
 {
     if (!val->IsObject()) {
@@ -130,49 +159,31 @@ Handle<Value> Image::New(const Arguments &args)
             msg << "error while decoding '" << lodepng_error_text(error) << "'";
             return THROW(Error, msg.str().c_str());
         }
-        // Copy to leptonica PIX.
         if (state.info_png.color.colortype == LCT_GREY || state.info_png.color.colortype == LCT_GREY_ALPHA) {
-            pix = pixCreateNoInit(width, height, 8);
+            pix = pixFromSource(&out[0], width, height, 8, 8);
         } else {
-            pix = pixCreateNoInit(width, height, 32);
-        }
-        std::vector<unsigned char>::const_iterator iter = out.begin();
-        uint32_t *line = pix->data;
-        for (uint32_t y = 0; y < pix->h; ++y) {
-            for (uint32_t x = 0; x < pix->w; ++x) {
-                if (pix->d == 8) {
-                    // Fetch Gray = Red = Green = Blue.
-                    SET_DATA_BYTE(line, x, *iter);
-                    // Skip Green, Blue and Alpha.
-                    ++iter; ++iter; ++iter; ++iter;
-                } else {
-                    // Fetch RGB.
-                    int rval = *iter; ++iter;
-                    int gval = *iter; ++iter;
-                    int bval = *iter; ++iter;
-                    composeRGBPixel(rval, gval, bval, &line[x]);
-                    // Skip Alpha.
-                    ++iter;
-                }
-            }
-            line += pix->wpl;
+            pix = pixFromSource(&out[0], width, height, 32, 32);
         }
     } else if (args.Length() == 4 && Buffer::HasInstance(args[1])) {
         String::AsciiValue format(args[0]->ToString());
         Local<Object> buffer = args[1]->ToObject();
+        size_t length = Buffer::Length(buffer);
         int32_t width = args[2]->Int32Value();
         int32_t height = args[3]->Int32Value();
-        size_t length = Buffer::Length(buffer);
-        if (strcmp("rgba", *format) != 0) {
+        int32_t depth;
+        if (strcmp("rgba", *format) == 0) {
+            depth = 32;
+        } else if (strcmp("rgb", *format) == 0) {
+            depth = 24;
+        } else {
             std::stringstream msg;
-            msg << "invalid bufffer format '" << *format << "'";
+            msg << "invalid buffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
-        if (width * height * sizeof(l_uint32) != length) {
-            return THROW(Error, "Buffer has invalid length");
+        if (width * height * depth != length << 3) {
+            return THROW(Error, "invalid Buffer length");
         }
-        pix = pixCreateNoInit(width, height, sizeof(l_uint32) << 3);
-        memcpy(pix->data, Buffer::Data(buffer), length);
+        pix = pixFromSource(reinterpret_cast<uint8_t*>(Buffer::Data(buffer)), width, height, depth, 32);
     } else {
         return THROW(TypeError, "could not convert arguments");
     }
@@ -554,9 +565,9 @@ Handle<Value> Image::DrawBox(const Arguments &args)
             && args[2]->IsInt32() && args[3]->IsInt32()
             && args[4]->IsInt32()) {
         BOX *box = boxCreate(args[0]->ToInt32()->Value(),
-                             args[1]->ToInt32()->Value(),
-                             args[2]->ToInt32()->Value(),
-                             args[3]->ToInt32()->Value());
+                args[1]->ToInt32()->Value(),
+                args[2]->ToInt32()->Value(),
+                args[3]->ToInt32()->Value());
         int borderWidth = args[4]->ToInt32()->Value();
         int opInt = L_SET_PIXELS;
         if (args.Length() == 6 && args[5]->IsString()) {
