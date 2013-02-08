@@ -51,6 +51,7 @@ public:
     zxing::Ref<zxing::LuminanceSource> crop(int left, int top, int width, int height);
     bool isRotateSupported() const;
     zxing::Ref<zxing::LuminanceSource> rotateCounterClockwise();
+    int getStraightLine(unsigned char *line, int nLengthMax, int x1,int y1,int x2,int y2);
 
 private:
     PIX* pix_;
@@ -138,6 +139,91 @@ zxing::Ref<zxing::LuminanceSource> PixSource::crop(int left, int top, int width,
     PIX *croppedPix = pixClipRectangle(pix_, box, 0);
     boxDestroy(&box);
     return zxing::Ref<PixSource>(new PixSource(croppedPix, true));
+}
+
+//TODO: clean this code someday (more or less copied).
+int PixSource::getStraightLine(unsigned char *line, int nLengthMax, int x1,int y1,int x2,int y2)
+{
+  int width = pix_->w;
+  int height = pix_->h;
+  int x,y,xDiff,yDiff,xDiffAbs,yDiffAbs,nMigr,dX,dY;
+  int cnt;
+  int nLength = nLengthMax;
+  int nMigrGlob;
+
+  if(x1 < 0 || x1 >= 0 + width || x2 < 0 || x2 >= 0 + width
+     || y1 < 0 || y1 >= height || y2 < 0 || y2 >= 0 + height)
+    return 0;
+
+  x = x1;
+  y = y1;
+  cnt = 0;
+  xDiff = x2 - x1;
+  yDiff = y2 - y1;
+  xDiffAbs = std::abs(xDiff);
+  yDiffAbs = std::abs(yDiff);
+  dX = dY = 1;
+  if (xDiff < 0)
+    dX = -1;
+  if (yDiff < 0)
+    dY = -1;
+
+  nMigrGlob = nLength / 2;
+
+  unsigned char* matrix = getMatrix();
+
+  // horizontal dimension greater than vertical?
+  if (xDiffAbs > yDiffAbs) {
+    nMigr = xDiffAbs / 2;
+    // distributes regularly <nLength> points of the straight line to line[]:
+    while(cnt < nLength) {
+      while(cnt < nLength && nMigrGlob > 0) {
+        line[cnt] = matrix[(0 + y) * width + 0 + x];
+        nMigrGlob -= xDiffAbs;
+        cnt++;
+      }
+      while(nMigrGlob <= 0) {
+        nMigrGlob += nLength;
+        x += dX;
+        nMigr -= yDiffAbs;
+        if (nMigr < 0) {
+          nMigr += xDiffAbs;
+          y += dY;
+        }
+      }
+    }
+  }
+  else {
+    // vertical dimension greater than horizontal:
+    nMigr = yDiffAbs / 2;
+
+    while(cnt < nLength) {
+      while(cnt < nLength && nMigrGlob > 0) {
+        line[cnt] = matrix[(0 + y) * width + 0 + x];
+        nMigrGlob -= yDiffAbs;
+        cnt++;
+      }
+      while(nMigrGlob <= 0) {
+        nMigrGlob += nLength;
+        y += dY;
+        nMigr -= xDiffAbs;
+        if (nMigr < 0) {
+          nMigr += yDiffAbs;
+          x += dX;
+        }
+      }
+    }
+  }
+
+  // last point?
+  if (cnt < nLengthMax) {
+    line[cnt] = matrix[(0 + y) * width + 0 + x];
+    cnt++;
+  }
+
+  delete matrix;
+
+  return cnt;
 }
 
 void ZXing::Init(Handle<Object> target)

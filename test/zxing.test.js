@@ -29,6 +29,13 @@ describe('ZXing', function(){
             code.data.should.equal('12345678901231');
             should.exist(code.points);
         })
+        it('should find PDF417', function(){
+            this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode3.png'));
+            var code = this.zxing.findCode();
+            code.type.should.equal('PDF417');
+            code.data.should.equal('This PDF417 barcode has error correction level 4');
+            should.exist(code.points);
+        })
         it('should find multiple barcodes', function(){
             this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcodes.png'));
             var codes = this.zxing.findCodes();

@@ -24,6 +24,7 @@ const char *barcodeFormatNames[] = {
     "None",
     "QR_CODE",
     "DATA_MATRIX",
+    "PDF417",
     "UPC_E",
     "UPC_A",
     "EAN_8",

@@ -17,17 +17,24 @@
 
 #include <zxing/common/BitMatrix.h>
 #include <zxing/common/IllegalArgumentException.h>
+#include <zxing/NotFoundException.h>
+#include <zxing/common/Array.h>
+#include <zxing/image/ImageWriter.h>
 
 #include <iostream>
 #include <sstream>
 #include <string>
 
+#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
 using std::ostream;
 using std::ostringstream;
+#endif
 
 using zxing::BitMatrix;
 using zxing::BitArray;
 using zxing::Ref;
+using zxing::Array;
+using zxing::ArrayRef;
 
 namespace {
   size_t wordsForSize(size_t width,
@@ -40,9 +47,16 @@ namespace {
   }
 }
 
+#if (defined _MSC_VER) && (_MSC_VER<1300)      //* hfn for eMbedded c++ compiler
+const unsigned int BitMatrix::bitsPerWord = std::numeric_limits<unsigned int>::digits;
+const unsigned int BitMatrix::logBits = ZX_LOG_DIGITS(bitsPerWord);
+const unsigned int BitMatrix::bitsMask = (1 << logBits) - 1;
+#endif
+
 BitMatrix::BitMatrix(size_t dimension) :
   width_(dimension), height_(dimension), words_(0), bits_(NULL) {
   words_ = wordsForSize(width_, height_, bitsPerWord, logBits);
+  rowSize_ = (width_ + bitsPerWord - 1) >> logBits;
   bits_ = new unsigned int[words_];
   clear();
 }
@@ -50,6 +64,7 @@ BitMatrix::BitMatrix(size_t dimension) :
 BitMatrix::BitMatrix(size_t width, size_t height) :
   width_(width), height_(height), words_(0), bits_(NULL) {
   words_ = wordsForSize(width_, height_, bitsPerWord, logBits);
+  rowSize_ = (width_ + bitsPerWord - 1) >> logBits;
   bits_ = new unsigned int[words_];
   clear();
 }
@@ -122,6 +137,60 @@ Ref<BitArray> BitMatrix::getRow(int y, Ref<BitArray> row) {
   return row;
 }
 
+ArrayRef<int> BitMatrix::getTopLeftOnBit()
+{
+    int bitsOffset = 0;
+    while (bitsOffset < words_ /* stimmt das? Java: bits_.length */ && bits_[bitsOffset] == 0) {
+      bitsOffset++;
+    }
+    if (bitsOffset == words_) {
+	  /* hint: Java sources return "null" at this point, PDF417Reader::extractPureBits throws */
+	  /* exception. Here, NotFoundException is thrown right now. */
+      throw NotFoundException("BitMatrix::getTopLeftOnBit: TopLeftBit not found!");
+    }
+    int y = bitsOffset / rowSize_;
+    int x = (bitsOffset % rowSize_) << 5;
+
+    int theBits = bits_[bitsOffset];
+    int bit = 0;
+    while ((theBits << (31-bit)) == 0) {
+      bit++;
+    }
+    x += bit;
+	ArrayRef<int> res=new Array<int>(2);
+	res[0]=x;
+	res[1]=y;
+    return res;
+}
+
+ArrayRef<int> BitMatrix::getBottomRightOnBit()
+{
+    int bitsOffset = words_ /* stimmt das? Java: bits_.length */ - 1;
+    while (bitsOffset >= 0 && bits_[bitsOffset] == 0) {
+      bitsOffset--;
+    }
+    if (bitsOffset < 0) {
+	  /* hint: Java sources return "null" at this point, PDF417Reader::extractPureBits throws */
+	  /* exception. Here, NotFoundException is thrown right now. */
+      throw NotFoundException("BitMatrix::getBottomRightOnBit: BottomRightBit not found!");
+    }
+
+    int y = bitsOffset / rowSize_;
+    int x = (bitsOffset % rowSize_) << 5;
+
+    unsigned int theBits = bits_[bitsOffset];
+    int bit = 31;
+    while ((theBits >> bit) == 0) {
+      bit--;
+    }
+    x += bit;
+
+	ArrayRef<int> res=new Array<int>(2);
+	res[0]=x;
+	res[1]=y;
+    return res;
+}
+
 size_t BitMatrix::getWidth() const {
   return width_;
 }
@@ -138,6 +207,7 @@ unsigned int* BitMatrix::getBits() const {
   return bits_;
 }
 
+#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
 namespace zxing {
   ostream& operator<<(ostream &out, const BitMatrix &bm) {
     for (size_t y = 0; y < bm.height_; y++) {
@@ -149,9 +219,55 @@ namespace zxing {
     return out;
   }
 }
+#endif
+
 
 const char* BitMatrix::description() {
-  ostringstream out;
+  std::stringstream out;
+#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
   out << *this;
+#else					//* 2012-05-07 hfn den Teil von "operator<<(ostream &out, const BitMatrix &bm)" kopiert:
+    for (size_t y = 0; y < height_; y++) {
+      for (size_t x = 0; x < width_; x++) {
+        out << (get(x, y) ? "X" : " ");
+      }
+      out << "\n";
+    }
+#endif
   return out.str().c_str();
+}
+
+const char* BitMatrix::descriptionROW(int row) {
+  std::stringstream out;
+    if(row >= 0 && row < height_) {
+      for (size_t x = 0; x < width_; x++) {
+        out << (get(x, row) ? "X" : " ");
+      }
+      out << "\n";
+    }
+  return out.str().c_str();
+}
+
+void BitMatrix::writePng(const char *filename, int zoom, int zoomv) {
+  if (!zoomv) {
+    zoomv = zoom;
+  }
+  int imageWidth = getWidth() * zoom;
+  int imageHeight = getHeight() * zoomv;
+  unsigned char *data = new unsigned char[imageWidth * imageHeight];
+  for (int i = 0; i < getHeight(); i++) {
+    for (int j = 0; j < getWidth(); j++) {
+      unsigned char bitValue = get(j, i) ? 0 : 255;
+      for (int k = 0; k < zoom; k++) {
+        for (int l = 0; l < zoomv; l++) {
+          data[j * zoom + k + (i * zoomv + l) * imageWidth] = bitValue;
+        }
+      }
+    }
+  }
+  int result = stbi_write_png(filename, imageWidth, imageHeight, 1, data, imageWidth);
+  delete[] data;
+  if (!result) {
+    throw IllegalArgumentException("Invalid filename (cannot write png).");
+  }
 }

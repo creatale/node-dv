@@ -43,6 +43,9 @@ public:
   virtual bool isRotateSupported() const;
   virtual Ref<LuminanceSource> rotateCounterClockwise();
 
+  virtual int getStraightLine(unsigned char *line, int nLengthMax,
+	int x1,int y1,int x2,int y2);
+
   operator std::string (); // should be const but don't want to make sure a
                            // large breaking change right now
 };

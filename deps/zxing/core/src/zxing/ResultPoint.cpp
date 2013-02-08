@@ -85,11 +85,9 @@ void ResultPoint::orderBestPatterns(std::vector<Ref<ResultPoint> > &patterns) {
     patterns[2] = pointC;
 }
 
-  float ResultPoint::distance(Ref<ResultPoint> pattern1, Ref<ResultPoint> pattern2) {
-  return math_utils::distance(pattern1->posX_,
-                              pattern1->posY_,
-                              pattern2->posX_,
-                              pattern2->posY_);
+float ResultPoint::distance(Ref<ResultPoint> pattern1, Ref<ResultPoint> pattern2) {
+  return math_utils::distance(pattern1->posX_, pattern1->posY_,
+                              pattern2->posX_, pattern2->posY_);
 }
 
 float ResultPoint::distance(float x1, float x2, float y1, float y2) {
@@ -103,4 +101,5 @@ float ResultPoint::crossProductZ(Ref<ResultPoint> pointA, Ref<ResultPoint> point
   float bY = pointB->getY();
   return ((pointC->getX() - bX) * (pointA->getY() - bY)) - ((pointC->getY() - bY) * (pointA->getX() - bX));
 }
+
 }

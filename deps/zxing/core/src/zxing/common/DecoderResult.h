@@ -27,24 +27,54 @@
 
 namespace zxing {
 
+/**
+ * <p>Encapsulates the result of decoding a matrix of bits. This typically
+ * applies to 2D barcode formats. For now it contains the raw bytes obtained,
+ * as well as a String interpretation of those bytes, if applicable.</p>
+ *
+ * @author Sean Owen
+ */
 class DecoderResult : public Counted {
 private:
   ArrayRef<unsigned char> rawBytes_;
   Ref<String> text_;
   ArrayRef< ArrayRef<unsigned char> > byteSegments_;
-  std::string ecLevel_;
+  Ref<String> ecLevel_;
 
 public:
   DecoderResult(ArrayRef<unsigned char> rawBytes,
                 Ref<String> text,
-                ArrayRef< ArrayRef<unsigned char> >& byteSegments,
-                std::string const& ecLevel);
-
-  DecoderResult(ArrayRef<unsigned char> rawBytes, Ref<String> text);
+                ArrayRef< ArrayRef<unsigned char> > byteSegments,
+                Ref<String> ecLevel);
 
   ArrayRef<unsigned char> getRawBytes();
   Ref<String> getText();
+  ArrayRef< ArrayRef<unsigned char> > getByteSegments();
+  Ref<String> getECLevel();
 };
+
+inline DecoderResult::DecoderResult(ArrayRef<unsigned char> rawBytes,
+                                    Ref<String> text,
+                                    ArrayRef<ArrayRef<unsigned char> > byteSegments,
+                                    Ref<String> ecLevel) :
+  rawBytes_(rawBytes), text_(text), byteSegments_(byteSegments), ecLevel_(ecLevel) {
+}
+
+inline ArrayRef<unsigned char> DecoderResult::getRawBytes() {
+  return rawBytes_;
+}
+
+inline Ref<String> DecoderResult::getText() {
+  return text_;
+}
+
+inline ArrayRef< ArrayRef<unsigned char> > DecoderResult::getByteSegments() {
+return byteSegments_;
+}
+
+inline Ref<String> DecoderResult::getECLevel() {
+  return ecLevel_;
+}
 
 }
 

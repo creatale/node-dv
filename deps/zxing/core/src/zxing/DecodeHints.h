@@ -38,6 +38,7 @@ class DecodeHints {
 
   static const DecodeHintType BARCODEFORMAT_QR_CODE_HINT = 1 << BarcodeFormat_QR_CODE;
   static const DecodeHintType BARCODEFORMAT_DATA_MATRIX_HINT = 1 << BarcodeFormat_DATA_MATRIX;
+  static const DecodeHintType BARCODEFORMAT_PDF_417_HINT = 1 << BarcodeFormat_PDF_417;
   static const DecodeHintType BARCODEFORMAT_UPC_E_HINT = 1 << BarcodeFormat_UPC_E;
   static const DecodeHintType BARCODEFORMAT_UPC_A_HINT = 1 << BarcodeFormat_UPC_A;
   static const DecodeHintType BARCODEFORMAT_EAN_8_HINT = 1 << BarcodeFormat_EAN_8;
@@ -46,8 +47,8 @@ class DecodeHints {
   static const DecodeHintType BARCODEFORMAT_CODE_39_HINT = 1 << BarcodeFormat_CODE_39;
   static const DecodeHintType BARCODEFORMAT_ITF_HINT = 1 << BarcodeFormat_ITF;
   static const DecodeHintType BARCODEFORMAT_AZTEC_HINT = 1 << BarcodeFormat_AZTEC;
-  static const DecodeHintType CHARACTER_SET = 1 << 30;
-  static const DecodeHintType TRYHARDER_HINT = 1 << 31;
+  static const DecodeHintType CHARACTER_SET;
+  static const DecodeHintType TRYHARDER_HINT;
 
   static const DecodeHints PRODUCT_HINT;
   static const DecodeHints ONED_HINT;
@@ -58,6 +59,7 @@ class DecodeHints {
 
   void addFormat(BarcodeFormat toadd);
   bool containsFormat(BarcodeFormat tocheck) const;
+  bool isEmpty() const {return (hints==0);}; /* added 2012-05-30 hfn */
   void setTryHarder(bool toset);
   bool getTryHarder() const;
 

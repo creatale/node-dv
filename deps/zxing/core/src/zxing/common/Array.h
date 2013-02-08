@@ -167,7 +167,10 @@ public:
     return (*array_)[i];
   }
   size_t size() const {
-    return array_->size();
+    return array_ ? array_->size() : 0;
+  }
+  bool empty() const {
+    return !array_;
   }
 
   void reset(Array<T> *a) {

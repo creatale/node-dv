@@ -364,6 +364,9 @@ DecodedBitStreamParser::decode(ArrayRef<unsigned char> bytes,
         // We do little with FNC1 except alter the parsed result a bit according to the spec
         fc1InEffect = true;
       } else if (mode == &Mode::STRUCTURED_APPEND) {
+        if (bits.available() < 16) {
+          throw new FormatException();
+        }
         // not really supported; all we do is ignore it
         // Read next 8 bits (symbol sequence #) and 8 bits (parity data), then continue
         bits.readBits(16);
@@ -403,6 +406,6 @@ DecodedBitStreamParser::decode(ArrayRef<unsigned char> bytes,
     }
   } while (mode != &Mode::TERMINATOR);
 
-  return Ref<DecoderResult>(new DecoderResult(bytes, Ref<String>(new String(result)), byteSegments, (string)ecLevel));
+  return Ref<DecoderResult>(new DecoderResult(bytes, Ref<String>(new String(result)), byteSegments, Ref<String>(new String(ecLevel))));
 }
 

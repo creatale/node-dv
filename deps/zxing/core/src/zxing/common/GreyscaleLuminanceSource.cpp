@@ -20,6 +20,7 @@
 #include <zxing/common/GreyscaleLuminanceSource.h>
 #include <zxing/common/GreyscaleRotatedLuminanceSource.h>
 #include <zxing/common/IllegalArgumentException.h>
+#include <cmath>
 
 namespace zxing {
 
@@ -33,9 +34,13 @@ GreyscaleLuminanceSource::GreyscaleLuminanceSource(unsigned char* greyData, int 
   }
 }
 
+/* (2012-06-13 hfn) Attention: If, for the first call, "row" is NULL, then a sufficient space
+ * for the row is allocated. In this case, after the last call, when "row" is not needed anymore,
+ * the calling function should "delete[]" this array.
+ */
 unsigned char* GreyscaleLuminanceSource::getRow(int y, unsigned char* row) {
   if (y < 0 || y >= this->getHeight()) {
-    throw IllegalArgumentException("Requested row is outside the image.");
+    throw IllegalArgumentException("Requested row is outside the image: " + y);
   }
   int width = getWidth();
   // TODO(flyashi): determine if row has enough size.
@@ -45,6 +50,88 @@ unsigned char* GreyscaleLuminanceSource::getRow(int y, unsigned char* row) {
   int offset = (y + top_) * dataWidth_ + left_;
   memcpy(row, &greyData_[offset], width);
   return row;
+}
+
+/* 2012-08-10 hfn gets straight line from start to end point
+ */
+int GreyscaleLuminanceSource::getStraightLine(unsigned char *line, int nLengthMax,
+	int x1,int y1,int x2,int y2)
+{
+	int x,y,xDiff,yDiff,xDiffAbs,yDiffAbs,nMigr,dX,dY;
+	int cnt;
+	int nLength = nLengthMax;
+	int nMigrGlob;
+
+	if(x1 < left_ || x1 >= left_ + dataWidth_ || x2 < left_ || x2 >= left_ + dataWidth_
+		|| y1 < top_ || y1 >= dataHeight_ || y2 < top_ || y2 >= top_ + dataHeight_)
+		return 0;
+
+	x = x1;
+	y = y1;
+	cnt = 0;
+	xDiff = x2 - x1;
+	yDiff = y2 - y1;
+	xDiffAbs = std::abs(xDiff);
+	yDiffAbs = std::abs(yDiff);
+	dX = dY = 1;
+	if (xDiff < 0) 
+		dX = -1;
+	if (yDiff < 0)
+		dY = -1;
+
+	nMigrGlob = nLength / 2;
+
+	//* horizontal dimension greater than vertical?
+	if (xDiffAbs > yDiffAbs) {
+		nMigr = xDiffAbs / 2;
+		//* distributes regularly <nLength> points of the straight line to line[]:
+		while(cnt < nLength) {
+			while(cnt < nLength && nMigrGlob > 0) {
+				line[cnt] = greyData_[(top_ + y) * dataWidth_ + left_ + x];
+				nMigrGlob -= xDiffAbs;
+				cnt++;
+			}
+			while(nMigrGlob <= 0) {
+				nMigrGlob += nLength;
+				x += dX;
+				nMigr -= yDiffAbs;
+				if (nMigr < 0) {
+					nMigr += xDiffAbs;
+					y += dY;
+				}
+			}
+		}
+	}
+	else {
+	//* vertical dimension greater than horizontal:
+		nMigr = yDiffAbs / 2;
+
+		while(cnt < nLength) {
+			while(cnt < nLength && nMigrGlob > 0) {
+				line[cnt] = greyData_[(top_ + y) * dataWidth_ + left_ + x];
+				nMigrGlob -= yDiffAbs;
+				cnt++;
+			}
+			while(nMigrGlob <= 0) {
+				nMigrGlob += nLength;
+				y += dY;
+				nMigr -= xDiffAbs;
+				if (nMigr < 0) {
+					nMigr += yDiffAbs;
+					x += dX;
+				}
+			}
+		}
+	}
+
+	//* last point?
+	if (cnt < nLengthMax) {
+		line[cnt] = greyData_[(top_ + y) * dataWidth_ + left_ + x];
+		cnt++;
+	}
+
+	return cnt;
+
 }
 
 unsigned char* GreyscaleLuminanceSource::getMatrix() {

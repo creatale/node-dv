@@ -170,7 +170,7 @@ Ref<DecoderResult> Decoder::decode(Ref<zxing::aztec::AztecDetectorResult> detect
             
   // std::printf("returning\n");
             
-  return Ref<DecoderResult>(new DecoderResult(arrayOut, result));
+  return Ref<DecoderResult>(new DecoderResult(arrayOut, result, ArrayRef<ArrayRef<unsigned char> >(), Ref<String>()));
 }
         
 Ref<String> Decoder::getEncodedData(Ref<zxing::BitArray> correctedBits) {

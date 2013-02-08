@@ -22,9 +22,14 @@
 #include <zxing/MultiFormatReader.h>
 #include <zxing/qrcode/QRCodeReader.h>
 #include <zxing/datamatrix/DataMatrixReader.h>
+#include <zxing/pdf417/PDF417Reader.h>
+#ifndef NO_AZTEC_READER
 #include <zxing/aztec/AztecReader.h>
+#endif
+#if !NO_ONED_READER
 #include <zxing/oned/MultiFormatUPCEANReader.h>
 #include <zxing/oned/MultiFormatOneDReader.h>
+#endif
 #include <zxing/ReaderException.h>
 
 namespace zxing {
@@ -55,6 +60,7 @@ namespace zxing {
     readers_.clear();
     bool tryHarder = hints.getTryHarder();
 
+#if !NO_ONED_READER
     bool addOneDReader = hints.containsFormat(BarcodeFormat_UPC_E) ||
                          hints.containsFormat(BarcodeFormat_UPC_A) ||
                          hints.containsFormat(BarcodeFormat_EAN_8) ||
@@ -65,32 +71,47 @@ namespace zxing {
     if (addOneDReader && !tryHarder) {
       readers_.push_back(Ref<Reader>(new zxing::oned::MultiFormatOneDReader(hints)));
     }
+#endif
+
     if (hints.containsFormat(BarcodeFormat_QR_CODE)) {
       readers_.push_back(Ref<Reader>(new zxing::qrcode::QRCodeReader()));
     }
     if (hints.containsFormat(BarcodeFormat_DATA_MATRIX)) {
       readers_.push_back(Ref<Reader>(new zxing::datamatrix::DataMatrixReader()));
     }
+    //: added PDF417 here once PDF417 reader is implemented
+    if (hints.containsFormat(BarcodeFormat_PDF_417)) {
+      readers_.push_back(Ref<Reader>(new zxing::pdf417::PDF417Reader()));
+    }
+
+#ifndef NO_AZTEC_READER
     if (hints.containsFormat(BarcodeFormat_AZTEC)) {
       readers_.push_back(Ref<Reader>(new zxing::aztec::AztecReader()));
     }
-    //TODO: add PDF417 here once PDF417 reader is implemented
+#endif
+
+#if !NO_ONED_READER
     if (addOneDReader && tryHarder) {
       readers_.push_back(Ref<Reader>(new zxing::oned::MultiFormatOneDReader(hints)));
     }
+#endif
     if (readers_.size() == 0) {
+#if !NO_ONED_READER
       if (!tryHarder) {
         readers_.push_back(Ref<Reader>(new zxing::oned::MultiFormatOneDReader(hints)));
       }
+#endif
       readers_.push_back(Ref<Reader>(new zxing::qrcode::QRCodeReader()));
+#if !NO_ONED_READER
       if (tryHarder) {
         readers_.push_back(Ref<Reader>(new zxing::oned::MultiFormatOneDReader(hints)));
       }
+#endif
     }
   }
 
   Ref<Result> MultiFormatReader::decodeInternal(Ref<BinaryBitmap> image) {
-    for (unsigned int i = 0; i < readers_.size(); i++) {
+    for (size_t i = 0; i < readers_.size(); i++) {
       try {
         return readers_[i]->decode(image, hints_);
       } catch (ReaderException const& re) {
@@ -99,7 +120,7 @@ namespace zxing {
     }
     throw ReaderException("No code detected");
   }
-  
+
   MultiFormatReader::~MultiFormatReader() {
 
   }

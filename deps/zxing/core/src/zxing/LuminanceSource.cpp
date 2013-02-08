@@ -40,6 +40,7 @@ Ref<LuminanceSource> LuminanceSource::crop(int left, int top, int width, int hei
   (void)width;
   (void)height;
   throw IllegalArgumentException("This luminance source does not support cropping.");
+  return (Ref<LuminanceSource>)0;
 }
 
 bool LuminanceSource::isRotateSupported() const {
@@ -48,11 +49,12 @@ bool LuminanceSource::isRotateSupported() const {
 
 Ref<LuminanceSource> LuminanceSource::rotateCounterClockwise() {
   throw IllegalArgumentException("This luminance source does not support rotation.");
+  return (Ref<LuminanceSource>)0;
 }
 
 LuminanceSource::operator std::string() {
   unsigned char* row = 0;
-  std::ostringstream oss;
+  std::stringstream oss;
   for (int y = 0; y < getHeight(); y++) {
     row = getRow(y, row);
     for (int x = 0; x < getWidth(); x++) {
@@ -76,5 +78,10 @@ LuminanceSource::operator std::string() {
 }
 
 
+int LuminanceSource::getStraightLine(unsigned char *, int,
+	int,int,int,int)
+{
+	throw IllegalArgumentException("This luminance source does not support getStraightLine()");
+}
 
 }

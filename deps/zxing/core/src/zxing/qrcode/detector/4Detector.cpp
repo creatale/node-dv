@@ -33,21 +33,32 @@
 
 namespace math_utils = zxing::common::detector::math_utils;
 
+using std::ostringstream;
+using std::min;
+using std::max;
+using zxing::qrcode::Detector;
+using zxing::Ref;
+using zxing::BitMatrix;
+using zxing::ResultPointCallback;
+using zxing::DetectorResult;
+using zxing::PerspectiveTransform;
+using zxing::qrcode::AlignmentPattern;
+
 namespace zxing {
 namespace qrcode {
 
 using namespace std;
 
 Detector::Detector(Ref<BitMatrix> image) :
-    image_(image) {
+  image_(image) {
 }
 
 Ref<BitMatrix> Detector::getImage() const {
-   return image_;
+  return image_;
 }
 
 Ref<ResultPointCallback> Detector::getResultPointCallback() const {
-   return callback_;
+  return callback_;
 }
 
 Ref<DetectorResult> Detector::detect(DecodeHints const& hints) {
@@ -112,12 +123,12 @@ Ref<DetectorResult> Detector::processFinderPatternInfo(Ref<FinderPatternInfo> in
     points[3].reset(alignmentPattern);
   }
 
-            Ref<DetectorResult> result(new DetectorResult(bits, points));
+  Ref<DetectorResult> result(new DetectorResult(bits, points));
   return result;
 }
 
 Ref<PerspectiveTransform> Detector::createTransform(Ref<ResultPoint> topLeft, Ref<ResultPoint> topRight, Ref <
-    ResultPoint > bottomLeft, Ref<ResultPoint> alignmentPattern, int dimension) {
+                                                    ResultPoint > bottomLeft, Ref<ResultPoint> alignmentPattern, int dimension) {
 
   float dimMinusThree = (float)dimension - 3.5f;
   float bottomRightX;
@@ -138,8 +149,8 @@ Ref<PerspectiveTransform> Detector::createTransform(Ref<ResultPoint> topLeft, Re
   }
 
   Ref<PerspectiveTransform> transform(PerspectiveTransform::quadrilateralToQuadrilateral(3.5f, 3.5f, dimMinusThree, 3.5f, sourceBottomRightX,
-                                      sourceBottomRightY, 3.5f, dimMinusThree, topLeft->getX(), topLeft->getY(), topRight->getX(),
-                                      topRight->getY(), bottomRightX, bottomRightY, bottomLeft->getX(), bottomLeft->getY()));
+                                                                                         sourceBottomRightY, 3.5f, dimMinusThree, topLeft->getX(), topLeft->getY(), topRight->getX(),
+                                                                                         topRight->getY(), bottomRightX, bottomRightY, bottomLeft->getX(), bottomLeft->getY()));
 
   return transform;
 }
@@ -179,9 +190,9 @@ float Detector::calculateModuleSize(Ref<ResultPoint> topLeft, Ref<ResultPoint> t
 
 float Detector::calculateModuleSizeOneWay(Ref<ResultPoint> pattern, Ref<ResultPoint> otherPattern) {
   float moduleSizeEst1 = sizeOfBlackWhiteBlackRunBothWays((int)pattern->getX(), (int)pattern->getY(),
-                         (int)otherPattern->getX(), (int)otherPattern->getY());
+                                                          (int)otherPattern->getX(), (int)otherPattern->getY());
   float moduleSizeEst2 = sizeOfBlackWhiteBlackRunBothWays((int)otherPattern->getX(), (int)otherPattern->getY(),
-                         (int)pattern->getX(), (int)pattern->getY());
+                                                          (int)pattern->getX(), (int)pattern->getY());
   if (isnan(moduleSizeEst1)) {
     return moduleSizeEst2;
   }
@@ -195,104 +206,104 @@ float Detector::calculateModuleSizeOneWay(Ref<ResultPoint> pattern, Ref<ResultPo
 
 float Detector::sizeOfBlackWhiteBlackRunBothWays(int fromX, int fromY, int toX, int toY) {
 
-    float result = sizeOfBlackWhiteBlackRun(fromX, fromY, toX, toY);
+  float result = sizeOfBlackWhiteBlackRun(fromX, fromY, toX, toY);
 
-    // Now count other way -- don't run off image though of course
-    float scale = 1.0f;
-    int otherToX = fromX - (toX - fromX);
-    if (otherToX < 0) {
-      scale = (float) fromX / (float) (fromX - otherToX);
-      otherToX = 0;
-    } else if (otherToX >= (int)image_->getWidth()) {
-      scale = (float) (image_->getWidth() - 1 - fromX) / (float) (otherToX - fromX);
-      otherToX = image_->getWidth() - 1;
-    }
-    int otherToY = (int) (fromY - (toY - fromY) * scale);
+  // Now count other way -- don't run off image though of course
+  float scale = 1.0f;
+  int otherToX = fromX - (toX - fromX);
+  if (otherToX < 0) {
+    scale = (float) fromX / (float) (fromX - otherToX);
+    otherToX = 0;
+  } else if (otherToX >= (int)image_->getWidth()) {
+    scale = (float) (image_->getWidth() - 1 - fromX) / (float) (otherToX - fromX);
+    otherToX = image_->getWidth() - 1;
+  }
+  int otherToY = (int) (fromY - (toY - fromY) * scale);
 
-    scale = 1.0f;
-    if (otherToY < 0) {
-      scale = (float) fromY / (float) (fromY - otherToY);
-      otherToY = 0;
-    } else if (otherToY >= (int)image_->getHeight()) {
-      scale = (float) (image_->getHeight() - 1 - fromY) / (float) (otherToY - fromY);
-      otherToY = image_->getHeight() - 1;
-    }
-    otherToX = (int) (fromX + (otherToX - fromX) * scale);
+  scale = 1.0f;
+  if (otherToY < 0) {
+    scale = (float) fromY / (float) (fromY - otherToY);
+    otherToY = 0;
+  } else if (otherToY >= (int)image_->getHeight()) {
+    scale = (float) (image_->getHeight() - 1 - fromY) / (float) (otherToY - fromY);
+    otherToY = image_->getHeight() - 1;
+  }
+  otherToX = (int) (fromX + (otherToX - fromX) * scale);
 
-    result += sizeOfBlackWhiteBlackRun(fromX, fromY, otherToX, otherToY);
+  result += sizeOfBlackWhiteBlackRun(fromX, fromY, otherToX, otherToY);
 
-    // Middle pixel is double-counted this way; subtract 1
-    return result - 1.0f;
+  // Middle pixel is double-counted this way; subtract 1
+  return result - 1.0f;
 }
 
 float Detector::sizeOfBlackWhiteBlackRun(int fromX, int fromY, int toX, int toY) {
-    // Mild variant of Bresenham's algorithm;
-    // see http://en.wikipedia.org/wiki/Bresenham's_line_algorithm
-    bool steep = abs(toY - fromY) > abs(toX - fromX);
-    if (steep) {
-      int temp = fromX;
-      fromX = fromY;
-      fromY = temp;
-      temp = toX;
-      toX = toY;
-      toY = temp;
-    }
+  // Mild variant of Bresenham's algorithm;
+  // see http://en.wikipedia.org/wiki/Bresenham's_line_algorithm
+  bool steep = abs(toY - fromY) > abs(toX - fromX);
+  if (steep) {
+    int temp = fromX;
+    fromX = fromY;
+    fromY = temp;
+    temp = toX;
+    toX = toY;
+    toY = temp;
+  }
 
-    int dx = abs(toX - fromX);
-    int dy = abs(toY - fromY);
-    int error = -dx >> 1;
-    int xstep = fromX < toX ? 1 : -1;
-    int ystep = fromY < toY ? 1 : -1;
+  int dx = abs(toX - fromX);
+  int dy = abs(toY - fromY);
+  int error = -dx >> 1;
+  int xstep = fromX < toX ? 1 : -1;
+  int ystep = fromY < toY ? 1 : -1;
 
-    // In black pixels, looking for white, first or second time.
-    int state = 0;
-    // Loop up until x == toX, but not beyond
-    int xLimit = toX + xstep;
-    for (int x = fromX, y = fromY; x != xLimit; x += xstep) {
-      int realX = steep ? y : x;
-      int realY = steep ? x : y;
+  // In black pixels, looking for white, first or second time.
+  int state = 0;
+  // Loop up until x == toX, but not beyond
+  int xLimit = toX + xstep;
+  for (int x = fromX, y = fromY; x != xLimit; x += xstep) {
+    int realX = steep ? y : x;
+    int realY = steep ? x : y;
 
-      // Does current pixel mean we have moved white to black or vice versa?
-      if (!((state == 1) ^ image_->get(realX, realY))) {
-        if (state == 2) {
-          return math_utils::distance(x, y, fromX, fromY);
-        }
-        state++;
+    // Does current pixel mean we have moved white to black or vice versa?
+    if (!((state == 1) ^ image_->get(realX, realY))) {
+      if (state == 2) {
+        return math_utils::distance(x, y, fromX, fromY);
       }
+      state++;
+    }
 
-      error += dy;
-      if (error > 0) {
-        if (y == toY) {
-          break;
-        }
-        y += ystep;
-        error -= dx;
+    error += dy;
+    if (error > 0) {
+      if (y == toY) {
+        break;
       }
+      y += ystep;
+      error -= dx;
     }
-    // Found black-white-black; give the benefit of the doubt that the next pixel outside the image
-    // is "white" so this last point at (toX+xStep,toY) is the right ending. This is really a
-    // small approximation; (toX+xStep,toY+yStep) might be really correct. Ignore this.
-    if (state == 2) {
-      return math_utils::distance(toX + xstep, toY, fromX, fromY);
-    }
-    // else we didn't find even black-white-black; no estimate is really possible
-    return NAN;
+  }
+  // Found black-white-black; give the benefit of the doubt that the next pixel outside the image
+  // is "white" so this last point at (toX+xStep,toY) is the right ending. This is really a
+  // small approximation; (toX+xStep,toY+yStep) might be really correct. Ignore this.
+  if (state == 2) {
+    return math_utils::distance(toX + xstep, toY, fromX, fromY);
+  }
+  // else we didn't find even black-white-black; no estimate is really possible
+  return NAN;
 }
 
 Ref<AlignmentPattern> Detector::findAlignmentInRegion(float overallEstModuleSize, int estAlignmentX, int estAlignmentY,
-    float allowanceFactor) {
+                                                      float allowanceFactor) {
   // Look for an alignment pattern (3 modules in size) around where it
   // should be
   int allowance = (int)(allowanceFactor * overallEstModuleSize);
   int alignmentAreaLeftX = max(0, estAlignmentX - allowance);
   int alignmentAreaRightX = min((int)(image_->getWidth() - 1), estAlignmentX + allowance);
   if (alignmentAreaRightX - alignmentAreaLeftX < overallEstModuleSize * 3) {
-      throw zxing::ReaderException("region too small to hold alignment pattern");
+    throw zxing::ReaderException("region too small to hold alignment pattern");
   }
   int alignmentAreaTopY = max(0, estAlignmentY - allowance);
   int alignmentAreaBottomY = min((int)(image_->getHeight() - 1), estAlignmentY + allowance);
   if (alignmentAreaBottomY - alignmentAreaTopY < overallEstModuleSize * 3) {
-      throw zxing::ReaderException("region too small to hold alignment pattern");
+    throw zxing::ReaderException("region too small to hold alignment pattern");
   }
 
   AlignmentPatternFinder alignmentFinder(image_, alignmentAreaLeftX, alignmentAreaTopY, alignmentAreaRightX

@@ -166,11 +166,7 @@ namespace zxing {
     bool UPCEANReader::findGuardPattern(Ref<BitArray> row, int rowOffset, bool whiteFirst,
         const int pattern[], int patternLen, int* start, int* end) {
       int patternLength = patternLen;
-      std::vector<int> counters(patternLength);
-      int countersCount = patternLength; //sizeof(counters) / sizeof(int);
-      for (int i = 0; i < countersCount; i++) {
-        counters[i] = 0;
-      }
+      std::vector<int> counters(patternLength, 0);
       int width = row->getSize();
       bool isWhite = false;
       while (rowOffset < width) {
@@ -189,7 +185,7 @@ namespace zxing {
           counters[counterPosition]++;
         } else {
           if (counterPosition == patternLength - 1) {
-            if (patternMatchVariance(&counters[0], countersCount, pattern,
+            if (patternMatchVariance(&counters[0], patternLength, pattern,
                 MAX_INDIVIDUAL_VARIANCE) < MAX_AVG_VARIANCE) {
               *start = patternStart;
               *end = x;

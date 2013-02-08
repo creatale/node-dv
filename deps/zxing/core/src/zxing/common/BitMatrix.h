@@ -23,6 +23,7 @@
 
 #include <zxing/common/Counted.h>
 #include <zxing/common/BitArray.h>
+#include <zxing/common/Array.h>
 #include <limits>
 
 namespace zxing {
@@ -32,6 +33,7 @@ private:
   size_t width_;
   size_t height_;
   size_t words_;
+  size_t rowSize_; /* added from java */
   unsigned int* bits_;
 
 #define ZX_LOG_DIGITS(digits) \
@@ -42,10 +44,16 @@ private:
         ((digits == 128) ? 7 : \
          (-1))))))
 
+#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
   static const unsigned int bitsPerWord =
-    std::numeric_limits<unsigned int>::digits;
+	  std::numeric_limits<unsigned int>::digits;
   static const unsigned int logBits = ZX_LOG_DIGITS(bitsPerWord);
   static const unsigned int bitsMask = (1 << logBits) - 1;
+#else
+  static const unsigned int bitsPerWord;
+  static const unsigned int logBits;
+  static const unsigned int bitsMask;
+#endif
 
 public:
   BitMatrix(size_t dimension);
@@ -73,9 +81,19 @@ public:
   size_t getHeight() const;
 
   unsigned int* getBits() const;
+  
+  /* 2012-05-29 hfn added: */
+  ArrayRef<int> getTopLeftOnBit();
+  ArrayRef<int> getBottomRightOnBit();
+  
 
+#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
   friend std::ostream& operator<<(std::ostream &out, const BitMatrix &bm);
+#endif
   const char *description();
+  const char *descriptionROW(int row);
+
+  void writePng(const char *filename, int zoom, int zoomv = 0);
 
 private:
   BitMatrix(const BitMatrix&);

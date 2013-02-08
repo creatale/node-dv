@@ -53,6 +53,9 @@ class GreyscaleLuminanceSource : public LuminanceSource {
     return height_;
   }
 
+  virtual int getStraightLine(unsigned char *line, int nLengthMax,
+	int x1,int y1,int x2,int y2);
+
   Ref<LuminanceSource> rotateCounterClockwise();
 
 };
