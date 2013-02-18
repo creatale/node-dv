@@ -33,6 +33,7 @@
 #include <zxing/multi/GenericMultipleBarcodeReader.h>
 #include <cstdlib>
 #include <sstream>
+#include <cstdlib>
 
 using namespace v8;
 using namespace node;
