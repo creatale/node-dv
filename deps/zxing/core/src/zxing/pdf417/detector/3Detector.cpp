@@ -275,7 +275,7 @@ std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, siz
   // Bottom left
   if (found) { // Found the Top Left vertex
     found = false;
-    for (size_t i = height - 1; i > 0; i -= rowStep) {
+    for (long i = height - 1; i > 0; i -= rowStep) {
       ArrayRef<int> loc = findGuardPattern(matrix, 0, i, width, false, START_PATTERN_,
                                            SIZEOF_START_PATTERN_, counters);
       if (!loc.empty()) {
@@ -306,7 +306,7 @@ std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, siz
   // Bottom right
   if (found) { // Found the Top right vertex
     found = false;
-    for (size_t i = height - 1; i > 0; i -= rowStep) {
+    for (long i = height - 1; i > 0; i -= rowStep) {
       ArrayRef<int> loc = findGuardPattern(matrix, 0, i, width, false, STOP_PATTERN_,
                                            SIZEOF_STOP_PATTERN_, counters);
       if (!loc.empty()) {
