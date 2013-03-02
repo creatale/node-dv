@@ -55,6 +55,12 @@ describe('Image', function(){
         writeImage('gray-boole-xor.png', a.xor(b));
         writeImage('gray-boole-subtract.png', a.subtract(b));
     })
+    it('should subtract arithmetically', function(){
+        var red = this.rgba.toGray(1, 0, 0);
+        var cyan = this.rgba.toGray(0, 0.5, 0.5);
+        this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
+        writeImage('gray-arith-subtract.png', red.subtract(cyan));
+    })
     it('should #rotate()', function(){
         writeImage('gray-rotate.png', this.gray.rotate(-0.703125));
         writeImage('gray-rotate45.png', this.gray.rotate(45));

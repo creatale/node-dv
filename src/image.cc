@@ -283,9 +283,14 @@ Handle<Value> Image::Subtract(const Arguments &args)
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 1 && Image::HasInstance(args[0])) {
         Pix *otherPix = Image::Pixels(args[0]->ToObject());
-        Pix *pixd = pixSubtract(NULL, obj->pix_, otherPix);
+        Pix *pixd;
+        if(obj->pix_->d >= 8) {
+            pixd = pixSubtractGray(NULL, obj->pix_, otherPix);
+        } else {
+            pixd = pixSubtract(NULL, obj->pix_, otherPix);
+        }
         if (pixd == NULL) {
-            return THROW(TypeError, "error while applying SUBSTRACT");
+            return THROW(TypeError, "error while applying SUBTRACT");
         }
         return scope.Close(Image::New(pixd));
     } else {
