@@ -325,13 +325,13 @@ Handle<Value> Image::Crop(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (args.Length() == 4 && args[0]->IsInt32()
-            && args[1]->IsInt32() && args[2]->IsInt32()
-            && args[3]->IsInt32()) {
-        int left = args[0]->ToInt32()->Value();
-        int top = args[1]->ToInt32()->Value();
-        int width = args[2]->ToInt32()->Value();
-        int height = args[3]->ToInt32()->Value();
+    if (args.Length() == 4 && args[0]->IsNumber()
+            && args[1]->IsNumber() && args[2]->IsNumber()
+            && args[3]->IsNumber()) {
+        int left = floor(args[0]->ToNumber()->Value());
+        int top = floor(args[1]->ToNumber()->Value());
+        int width = ceil(args[2]->ToNumber()->Value());
+        int height = ceil(args[3]->ToNumber()->Value());
         BOX *box = boxCreate(left, top, width, height);
         PIX *pixd = pixClipRectangle(obj->pix_, box, 0);
         boxDestroy(&box);
@@ -416,12 +416,13 @@ Handle<Value> Image::ClearBox(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 4
-            && args[0]->IsInt32() && args[1]->IsInt32()
-            && args[2]->IsInt32() && args[3]->IsInt32()) {
-        BOX *box = boxCreate(args[0]->ToInt32()->Value(),
-                args[1]->ToInt32()->Value(),
-                args[2]->ToInt32()->Value(),
-                args[3]->ToInt32()->Value());
+            && args[0]->IsNumber() && args[1]->IsNumber()
+            && args[2]->IsNumber() && args[3]->IsNumber()) {
+        int left = floor(args[0]->ToNumber()->Value());
+        int top = floor(args[1]->ToNumber()->Value());
+        int width = ceil(args[2]->ToNumber()->Value());
+        int height = ceil(args[3]->ToNumber()->Value());
+        BOX *box = boxCreate(left, top, width, height);
         int error;
         if (obj->pix_->d == 1) {
             error = pixClearInRect(obj->pix_, box);
@@ -561,13 +562,14 @@ Handle<Value> Image::DrawBox(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if ((args.Length() == 5 || args.Length() == 6)
-            && args[0]->IsInt32() && args[1]->IsInt32()
-            && args[2]->IsInt32() && args[3]->IsInt32()
+            && args[0]->IsNumber() && args[1]->IsNumber()
+            && args[2]->IsNumber() && args[3]->IsNumber()
             && args[4]->IsInt32()) {
-        BOX *box = boxCreate(args[0]->ToInt32()->Value(),
-                args[1]->ToInt32()->Value(),
-                args[2]->ToInt32()->Value(),
-                args[3]->ToInt32()->Value());
+        int left = floor(args[0]->ToNumber()->Value());
+        int top = floor(args[1]->ToNumber()->Value());
+        int width = ceil(args[2]->ToNumber()->Value());
+        int height = ceil(args[3]->ToNumber()->Value());
+        BOX *box = boxCreate(left, top, width, height);
         int borderWidth = args[4]->ToInt32()->Value();
         int opInt = L_SET_PIXELS;
         if (args.Length() == 6 && args[5]->IsString()) {
