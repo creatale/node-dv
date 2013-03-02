@@ -686,6 +686,7 @@ Handle<Value> Image::DrawBox(const Arguments &args)
 Handle<Value> Image::ToBuffer(const Arguments &args)
 {
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    bool encodePNG = false;
     if (args.Length() == 1 && args[0]->IsString()) {
         String::AsciiValue format(args[0]->ToString());
         if (strcmp("png", *format) != 0) {
@@ -693,54 +694,63 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
             msg << "invalid bufffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
-        std::vector<unsigned char> out;
+        encodePNG = true;
+    }
+    if (args.Length() <= 1) {
+        std::vector<unsigned char> imgData;
+        std::vector<unsigned char> pngData;
         lodepng::State state;
-        unsigned error;
+        unsigned error = 0;
         if (obj->pix_->d == 32 || obj->pix_->d == 24) {
             // Image is RGB, so create a 3 byte per pixel image.
             uint32_t *line;
-            std::vector<unsigned char> in;
-            in.reserve(obj->pix_->w * obj->pix_->h * 3);
+            imgData.reserve(obj->pix_->w * obj->pix_->h * 3);
             line = obj->pix_->data;
             for (uint32_t y = 0; y < obj->pix_->h; ++y) {
                 for (uint32_t x = 0; x < obj->pix_->w; ++x) {
                     int32_t rval, gval, bval;
                     extractRGBValues(line[x], &rval, &gval, &bval);
-                    in.push_back(rval);
-                    in.push_back(gval);
-                    in.push_back(bval);
+                    imgData.push_back(rval);
+                    imgData.push_back(gval);
+                    imgData.push_back(bval);
                 }
                 line += obj->pix_->wpl;
             }
-            state.info_png.color.colortype = LCT_RGB;
-            state.info_raw.colortype = LCT_RGB;
-            error = lodepng::encode(out, in, obj->pix_->w, obj->pix_->h, state);
+            if (encodePNG) {
+                state.info_png.color.colortype = LCT_RGB;
+                state.info_raw.colortype = LCT_RGB;
+                error = lodepng::encode(pngData, imgData, obj->pix_->w, obj->pix_->h, state);
+            }
         } else if (obj->pix_->d <= 8) {
             PIX *pix8 = pixConvertTo8(obj->pix_, 0);
             // Image is Grayscale, so create a 1 byte per pixel image.
             uint32_t *line;
-            std::vector<unsigned char> in;
-            in.reserve(pix8->w * pix8->h);
+            imgData.reserve(pix8->w * pix8->h);
             line = pix8->data;
             for (uint32_t y = 0; y < pix8->h; ++y) {
                 for (uint32_t x = 0; x < pix8->w; ++x) {
-                    in.push_back(GET_DATA_BYTE(line, x));
+                    imgData.push_back(GET_DATA_BYTE(line, x));
                 }
                 line += pix8->wpl;
             }
-            state.info_png.color.colortype = LCT_GREY;
-            state.info_raw.colortype = LCT_GREY;
-            error = lodepng::encode(out, in, pix8->w, pix8->h, state);
+            if (encodePNG) {
+                state.info_png.color.colortype = LCT_GREY;
+                state.info_raw.colortype = LCT_GREY;
+                error = lodepng::encode(pngData, imgData, pix8->w, pix8->h, state);
+            }
             pixDestroy(&pix8);
         } else {
-            return THROW(Error, "wront image format");
+            return THROW(Error, "wrong image format");
         }
         if (error) {
             std::stringstream msg;
             msg << "error while encoding '" << lodepng_error_text(error) << "'";
             return THROW(Error, msg.str().c_str());
         }
-        return Buffer::New(reinterpret_cast<char *>(&out[0]), out.size())->handle_;
+        if (encodePNG)
+            return Buffer::New(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_;
+        else
+            return Buffer::New(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_;
     } else {
         return THROW(TypeError, "could not convert arguments");
     }

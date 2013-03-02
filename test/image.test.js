@@ -36,6 +36,12 @@ describe('Image', function(){
         writeImage('rgbaBuffer.png', new dv.Image('rgba', this.rgbaBuffer, 128, 256));
         writeImage('rgbBuffer.png', new dv.Image('rgb', this.rgbBuffer, 128, 256));
     })
+    it('should return raw image data using #toBuffer()', function(){
+        var buf = new dv.Image('rgb', this.rgbBuffer, 128, 256).toBuffer();
+        buf.length.should.equal(this.rgbBuffer.length);
+        for (var i = 0; i < 1000; i++)
+            buf[i].should.equal(this.rgbBuffer[i]);
+    })
     it('should #invert()', function(){
         writeImage('gray-invert.png', this.gray.invert());
     })
