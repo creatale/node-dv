@@ -31,6 +31,7 @@
 #include <zxing/ReaderException.h>
 #include <zxing/MultiFormatReader.h>
 #include <zxing/multi/GenericMultipleBarcodeReader.h>
+#include <cstdlib>
 #include <sstream>
 
 using namespace v8;
