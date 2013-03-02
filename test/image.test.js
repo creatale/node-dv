@@ -67,7 +67,7 @@ describe('Image', function(){
     })
     it('should #scale()', function(){
         writeImage('gray-scale2.png', this.gray.scale(2.0, 2.0));
-        writeImage('gray-scale05.png', this.gray.scale(0.5, 0.5));
+        writeImage('gray-scale05.png', this.gray.scale(0.5));
     })
     it('should #crop()', function(){
         writeImage('gray-crop.png', this.gray.crop(100, 100, 100, 100));
@@ -76,6 +76,7 @@ describe('Image', function(){
         writeImage('gray-rankfilter-median.png', this.gray.rankFilter(3, 3, 0.5));
     })
     it('should #toGray()', function(){
+        writeImage('rgba-gray.png', this.rgba.toGray());
         writeImage('rgba-gray-33.png', this.rgba.toGray(0.33, 0.33, 0.34));
         writeImage('rgba-gray-min.png', this.rgba.toGray('min'));
         writeImage('rgba-gray-max.png', this.rgba.toGray('max'));
@@ -113,5 +114,24 @@ describe('Image', function(){
         .drawBox(100, 100, 100, 100, 5, 'clear')
         .drawBox(150, 150, 100, 100, 5, 'flip');
         writeImage('gray-box.png', canvas);
+    })
+    it('should #threshold', function() {
+        writeImage('gray-threshold-64', this.gray.threshold(64));
+        writeImage('gray-threshold-196', this.gray.threshold(196));
+    })
+    it('should return histograms', function() {
+        var result = this.gray.histogram()
+        result.length.should.equal(256);
+        result[0].should.equal(0);
+        result[128].should.be.within(0.00, 0.01);
+        result[255].should.be.within(0.44, 0.45);
+    })
+    it('should apply curves with masks', function() {
+        var curve = new Array(256);
+        for (var i = 0; i < 256; i++)
+            curve[i] = i / 2;
+        curve[255] = 200;
+        var mask = new dv.Image(this.gray).threshold(48).invert().clearBox(50, 50, 200, 100);
+        writeImage('gray-curve', new dv.Image(this.gray).applyCurve(curve, mask));
     })
 })

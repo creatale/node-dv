@@ -321,16 +321,16 @@ Handle<Value> Image::Scale(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (args.Length() == 2 && args[0]->IsNumber() && args[1]->IsNumber()) {
+    if ((args.Length() >= 1 && args[0]->IsNumber()) || (args.Length() == 2 && args[1]->IsNumber())) {
         float scaleX = args[0]->ToNumber()->Value();
-        float scaleY = args[1]->ToNumber()->Value();
+        float scaleY = args.Length() == 2 ? args[1]->ToNumber()->Value() : scaleX;
         Pix *pixd = pixScale(obj->pix_, scaleX, scaleY);
         if (pixd == NULL) {
             return THROW(TypeError, "error while scaling");
         }
         return scope.Close(Image::New(pixd));
     } else {
-        return THROW(TypeError, "expected (float, float) signature");
+        return THROW(TypeError, "expected (float, [float]) signature");
     }
 }
 
