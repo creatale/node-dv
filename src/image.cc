@@ -21,6 +21,7 @@
  */
 #include "image.h"
 #include "util.h"
+#include <cmath>
 #include <node_buffer.h>
 #include <lodepng.h>
 #include <sstream>
@@ -98,8 +99,14 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Scale)->GetFunction());
     proto->Set(String::NewSymbol("crop"),
                FunctionTemplate::New(Crop)->GetFunction());
+    proto->Set(String::NewSymbol("histogram"),
+               FunctionTemplate::New(GetHistogram)->GetFunction());
+    proto->Set(String::NewSymbol("applyCurve"),
+               FunctionTemplate::New(ApplyCurve)->GetFunction());
     proto->Set(String::NewSymbol("rankFilter"),
                FunctionTemplate::New(RankFilter)->GetFunction());
+    proto->Set(String::NewSymbol("threshold"),
+               FunctionTemplate::New(Threshold)->GetFunction());
     proto->Set(String::NewSymbol("toGray"),
                FunctionTemplate::New(ToGray)->GetFunction());
     proto->Set(String::NewSymbol("erode"),
@@ -344,6 +351,62 @@ Handle<Value> Image::Crop(const Arguments &args)
     }
 }
 
+Handle<Value> Image::GetHistogram(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 0) {
+        PIX *mask = NULL;
+        if (args.Length() >= 1 && Image::HasInstance(args[0]))
+            mask = Image::Pixels(args[1]->ToObject());
+
+        NUMA *hist = pixGetGrayHistogramMasked(obj->pix_, mask, 0, 0, obj->pix_->h > 400 ? 2 : 1);
+        
+        if (!hist)
+            return THROW(TypeError, "pixGetGrayHistogram failed");
+
+        int len = numaGetCount(hist);
+        unsigned int count = 0;
+        for (int i = 0; i < len; i++) {
+            count += hist->array[i];
+        }
+        
+        Local<Array> result = Array::New(len);
+        for (int i = 0; i < len; i++)
+            result->Set(i, Number::New(hist->array[i] / count));
+        
+        numaDestroy(&hist);
+        
+        return scope.Close(result);
+    } else {
+        return THROW(TypeError, "expected no arguments");
+    }
+}
+
+Handle<Value> Image::ApplyCurve(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() >= 1 && args[0]->IsArray() && args[0]->ToObject()->Get(String::New("length"))->Uint32Value() == 256) {
+      
+        NUMA *numa = numaCreate(256);
+        for (int i = 0; i < 256; i++)
+            numaAddNumber(numa, args[0]->ToObject()->Get(i)->ToInt32()->Value());
+
+        PIX *mask = NULL;
+        if (args.Length() >= 2 && Image::HasInstance(args[1]))
+            mask = Image::Pixels(args[1]->ToObject());
+
+        int result = pixTRCMap(obj->pix_, mask, numa);
+        if (result != 0) {
+            return THROW(TypeError, "error while applying value mapping");
+        }
+        return args.This();
+    } else {
+        return THROW(TypeError, "expected (array[256] of int) signature");
+    }
+}
+
 Handle<Value> Image::RankFilter(const Arguments &args)
 {
     HandleScope scope;
@@ -363,14 +426,41 @@ Handle<Value> Image::RankFilter(const Arguments &args)
     }
 }
 
+Handle<Value> Image::Threshold(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 0 || args[0]->IsInt32()) {
+        int value = 128;
+        if (args.Length() >= 1)
+            value = args[0]->ToInt32()->Value();
+
+        PIX *pixd = pixConvertTo1(obj->pix_, value);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while thresholding");
+        }
+
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int, int, float) signature");
+    }
+}
+
 Handle<Value> Image::ToGray(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (obj->pix_->d <= 8) {
+    if (obj->pix_->d == 8) {
         return scope.Close(Image::New(pixClone(obj->pix_)));
     }
-    if (args.Length() == 3) {
+    if (args.Length() == 0) {
+        PIX *grayPix = pixConvertTo8(obj->pix_, 0);
+        if (grayPix != NULL) {
+            return scope.Close(Image::New(grayPix));
+        } else {
+            return THROW(Error, "error while computing grayscale image");
+        }
+    } else if (args.Length() == 3) {
         if (args[0]->IsNumber() && args[1]->IsNumber() && args[2]->IsNumber()) {
             float rwt = args[0]->ToNumber()->Value();
             float gwt = args[1]->ToNumber()->Value();
