@@ -187,7 +187,8 @@ Handle<Value> Image::New(const Arguments &args)
             msg << "invalid buffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
-        if (width * height * depth != length << 3) {
+        size_t expectedLength = width * height * depth;
+        if (expectedLength != length << 3) {
             return THROW(Error, "invalid Buffer length");
         }
         pix = pixFromSource(reinterpret_cast<uint8_t*>(Buffer::Data(buffer)), width, height, depth, 32);
