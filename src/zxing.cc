@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <cstdlib>
+#include <node_buffer.h>
 
 using namespace v8;
 using namespace node;
@@ -309,8 +310,10 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
         zxing::Ref<zxing::Result> result(obj->reader_->decodeWithState(binary));
         Local<Object> object = Object::New();
+        std::string resultStr = result->getText()->getText();
         object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result->getBarcodeFormat()]));
-        object->Set(String::NewSymbol("data"), String::New(result->getText()->getText().c_str()));
+        object->Set(String::NewSymbol("data"), String::New(resultStr.c_str()));
+        object->Set(String::NewSymbol("buffer"), node::Buffer::New((char*)resultStr.data(), resultStr.length())->handle_);
         Local<Array> points = Array::New();
         for (size_t i = 0; i < result->getResultPoints().size(); ++i) {
             Local<Object> point = Object::New();
@@ -349,8 +352,10 @@ Handle<Value> ZXing::FindCodes(const Arguments &args)
         Local<Array> objects = Array::New();
         for (size_t i = 0; i < result.size(); ++i) {
             Local<Object> object = Object::New();
+            std::string resultStr = result[i]->getText()->getText();
             object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result[i]->getBarcodeFormat()]));
-            object->Set(String::NewSymbol("data"), String::New(result[i]->getText()->getText().c_str()));
+            object->Set(String::NewSymbol("data"), String::New(resultStr.c_str()));
+            object->Set(String::NewSymbol("buffer"), node::Buffer::New((char*)resultStr.data(), resultStr.length())->handle_);
             Local<Array> points = Array::New();
             for (size_t j = 0; j < result[i]->getResultPoints().size(); ++j) {
                 Local<Object> point = Object::New();
