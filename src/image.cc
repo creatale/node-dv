@@ -21,6 +21,7 @@
  */
 #include "image.h"
 #include "util.h"
+#include <cmath>
 #include <node_buffer.h>
 #include <lodepng.h>
 #include <sstream>
@@ -98,8 +99,14 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Scale)->GetFunction());
     proto->Set(String::NewSymbol("crop"),
                FunctionTemplate::New(Crop)->GetFunction());
+    proto->Set(String::NewSymbol("histogram"),
+               FunctionTemplate::New(GetHistogram)->GetFunction());
+    proto->Set(String::NewSymbol("applyCurve"),
+               FunctionTemplate::New(ApplyCurve)->GetFunction());
     proto->Set(String::NewSymbol("rankFilter"),
                FunctionTemplate::New(RankFilter)->GetFunction());
+    proto->Set(String::NewSymbol("threshold"),
+               FunctionTemplate::New(Threshold)->GetFunction());
     proto->Set(String::NewSymbol("toGray"),
                FunctionTemplate::New(ToGray)->GetFunction());
     proto->Set(String::NewSymbol("erode"),
@@ -180,7 +187,8 @@ Handle<Value> Image::New(const Arguments &args)
             msg << "invalid buffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
-        if (width * height * depth != length << 3) {
+        size_t expectedLength = width * height * depth;
+        if (expectedLength != length << 3) {
             return THROW(Error, "invalid Buffer length");
         }
         pix = pixFromSource(reinterpret_cast<uint8_t*>(Buffer::Data(buffer)), width, height, depth, 32);
@@ -275,9 +283,14 @@ Handle<Value> Image::Subtract(const Arguments &args)
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 1 && Image::HasInstance(args[0])) {
         Pix *otherPix = Image::Pixels(args[0]->ToObject());
-        Pix *pixd = pixSubtract(NULL, obj->pix_, otherPix);
+        Pix *pixd;
+        if(obj->pix_->d >= 8) {
+            pixd = pixSubtractGray(NULL, obj->pix_, otherPix);
+        } else {
+            pixd = pixSubtract(NULL, obj->pix_, otherPix);
+        }
         if (pixd == NULL) {
-            return THROW(TypeError, "error while applying SUBSTRACT");
+            return THROW(TypeError, "error while applying SUBTRACT");
         }
         return scope.Close(Image::New(pixd));
     } else {
@@ -308,16 +321,16 @@ Handle<Value> Image::Scale(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (args.Length() == 2 && args[0]->IsNumber() && args[1]->IsNumber()) {
+    if ((args.Length() >= 1 && args[0]->IsNumber()) || (args.Length() == 2 && args[1]->IsNumber())) {
         float scaleX = args[0]->ToNumber()->Value();
-        float scaleY = args[1]->ToNumber()->Value();
+        float scaleY = args.Length() == 2 ? args[1]->ToNumber()->Value() : scaleX;
         Pix *pixd = pixScale(obj->pix_, scaleX, scaleY);
         if (pixd == NULL) {
             return THROW(TypeError, "error while scaling");
         }
         return scope.Close(Image::New(pixd));
     } else {
-        return THROW(TypeError, "expected (float, float) signature");
+        return THROW(TypeError, "expected (float, [float]) signature");
     }
 }
 
@@ -325,13 +338,13 @@ Handle<Value> Image::Crop(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (args.Length() == 4 && args[0]->IsInt32()
-            && args[1]->IsInt32() && args[2]->IsInt32()
-            && args[3]->IsInt32()) {
-        int left = args[0]->ToInt32()->Value();
-        int top = args[1]->ToInt32()->Value();
-        int width = args[2]->ToInt32()->Value();
-        int height = args[3]->ToInt32()->Value();
+    if (args.Length() == 4 && args[0]->IsNumber()
+            && args[1]->IsNumber() && args[2]->IsNumber()
+            && args[3]->IsNumber()) {
+        int left = floor(args[0]->ToNumber()->Value());
+        int top = floor(args[1]->ToNumber()->Value());
+        int width = ceil(args[2]->ToNumber()->Value());
+        int height = ceil(args[3]->ToNumber()->Value());
         BOX *box = boxCreate(left, top, width, height);
         PIX *pixd = pixClipRectangle(obj->pix_, box, 0);
         boxDestroy(&box);
@@ -341,6 +354,62 @@ Handle<Value> Image::Crop(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (int, int, int, int) signature");
+    }
+}
+
+Handle<Value> Image::GetHistogram(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 0) {
+        PIX *mask = NULL;
+        if (args.Length() >= 1 && Image::HasInstance(args[0]))
+            mask = Image::Pixels(args[1]->ToObject());
+
+        NUMA *hist = pixGetGrayHistogramMasked(obj->pix_, mask, 0, 0, obj->pix_->h > 400 ? 2 : 1);
+        
+        if (!hist)
+            return THROW(TypeError, "pixGetGrayHistogram failed");
+
+        int len = numaGetCount(hist);
+        unsigned int count = 0;
+        for (int i = 0; i < len; i++) {
+            count += hist->array[i];
+        }
+        
+        Local<Array> result = Array::New(len);
+        for (int i = 0; i < len; i++)
+            result->Set(i, Number::New(hist->array[i] / count));
+        
+        numaDestroy(&hist);
+        
+        return scope.Close(result);
+    } else {
+        return THROW(TypeError, "expected no arguments");
+    }
+}
+
+Handle<Value> Image::ApplyCurve(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() >= 1 && args[0]->IsArray() && args[0]->ToObject()->Get(String::New("length"))->Uint32Value() == 256) {
+      
+        NUMA *numa = numaCreate(256);
+        for (int i = 0; i < 256; i++)
+            numaAddNumber(numa, args[0]->ToObject()->Get(i)->ToInt32()->Value());
+
+        PIX *mask = NULL;
+        if (args.Length() >= 2 && Image::HasInstance(args[1]))
+            mask = Image::Pixels(args[1]->ToObject());
+
+        int result = pixTRCMap(obj->pix_, mask, numa);
+        if (result != 0) {
+            return THROW(TypeError, "error while applying value mapping");
+        }
+        return args.This();
+    } else {
+        return THROW(TypeError, "expected (array[256] of int) signature");
     }
 }
 
@@ -363,14 +432,41 @@ Handle<Value> Image::RankFilter(const Arguments &args)
     }
 }
 
+Handle<Value> Image::Threshold(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 0 || args[0]->IsInt32()) {
+        int value = 128;
+        if (args.Length() >= 1)
+            value = args[0]->ToInt32()->Value();
+
+        PIX *pixd = pixConvertTo1(obj->pix_, value);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while thresholding");
+        }
+
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int, int, float) signature");
+    }
+}
+
 Handle<Value> Image::ToGray(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (obj->pix_->d <= 8) {
+    if (obj->pix_->d == 8) {
         return scope.Close(Image::New(pixClone(obj->pix_)));
     }
-    if (args.Length() == 3) {
+    if (args.Length() == 0) {
+        PIX *grayPix = pixConvertTo8(obj->pix_, 0);
+        if (grayPix != NULL) {
+            return scope.Close(Image::New(grayPix));
+        } else {
+            return THROW(Error, "error while computing grayscale image");
+        }
+    } else if (args.Length() == 3) {
         if (args[0]->IsNumber() && args[1]->IsNumber() && args[2]->IsNumber()) {
             float rwt = args[0]->ToNumber()->Value();
             float gwt = args[1]->ToNumber()->Value();
@@ -416,12 +512,13 @@ Handle<Value> Image::ClearBox(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 4
-            && args[0]->IsInt32() && args[1]->IsInt32()
-            && args[2]->IsInt32() && args[3]->IsInt32()) {
-        BOX *box = boxCreate(args[0]->ToInt32()->Value(),
-                args[1]->ToInt32()->Value(),
-                args[2]->ToInt32()->Value(),
-                args[3]->ToInt32()->Value());
+            && args[0]->IsNumber() && args[1]->IsNumber()
+            && args[2]->IsNumber() && args[3]->IsNumber()) {
+        int left = floor(args[0]->ToNumber()->Value());
+        int top = floor(args[1]->ToNumber()->Value());
+        int width = ceil(args[2]->ToNumber()->Value());
+        int height = ceil(args[3]->ToNumber()->Value());
+        BOX *box = boxCreate(left, top, width, height);
         int error;
         if (obj->pix_->d == 1) {
             error = pixClearInRect(obj->pix_, box);
@@ -561,13 +658,14 @@ Handle<Value> Image::DrawBox(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if ((args.Length() == 5 || args.Length() == 6)
-            && args[0]->IsInt32() && args[1]->IsInt32()
-            && args[2]->IsInt32() && args[3]->IsInt32()
+            && args[0]->IsNumber() && args[1]->IsNumber()
+            && args[2]->IsNumber() && args[3]->IsNumber()
             && args[4]->IsInt32()) {
-        BOX *box = boxCreate(args[0]->ToInt32()->Value(),
-                args[1]->ToInt32()->Value(),
-                args[2]->ToInt32()->Value(),
-                args[3]->ToInt32()->Value());
+        int left = floor(args[0]->ToNumber()->Value());
+        int top = floor(args[1]->ToNumber()->Value());
+        int width = ceil(args[2]->ToNumber()->Value());
+        int height = ceil(args[3]->ToNumber()->Value());
+        BOX *box = boxCreate(left, top, width, height);
         int borderWidth = args[4]->ToInt32()->Value();
         int opInt = L_SET_PIXELS;
         if (args.Length() == 6 && args[5]->IsString()) {
@@ -594,6 +692,7 @@ Handle<Value> Image::DrawBox(const Arguments &args)
 Handle<Value> Image::ToBuffer(const Arguments &args)
 {
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    bool encodePNG = false;
     if (args.Length() == 1 && args[0]->IsString()) {
         String::AsciiValue format(args[0]->ToString());
         if (strcmp("png", *format) != 0) {
@@ -601,54 +700,63 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
             msg << "invalid bufffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
-        std::vector<unsigned char> out;
+        encodePNG = true;
+    }
+    if (args.Length() <= 1) {
+        std::vector<unsigned char> imgData;
+        std::vector<unsigned char> pngData;
         lodepng::State state;
-        unsigned error;
+        unsigned error = 0;
         if (obj->pix_->d == 32 || obj->pix_->d == 24) {
             // Image is RGB, so create a 3 byte per pixel image.
             uint32_t *line;
-            std::vector<unsigned char> in;
-            in.reserve(obj->pix_->w * obj->pix_->h * 3);
+            imgData.reserve(obj->pix_->w * obj->pix_->h * 3);
             line = obj->pix_->data;
             for (uint32_t y = 0; y < obj->pix_->h; ++y) {
                 for (uint32_t x = 0; x < obj->pix_->w; ++x) {
                     int32_t rval, gval, bval;
                     extractRGBValues(line[x], &rval, &gval, &bval);
-                    in.push_back(rval);
-                    in.push_back(gval);
-                    in.push_back(bval);
+                    imgData.push_back(rval);
+                    imgData.push_back(gval);
+                    imgData.push_back(bval);
                 }
                 line += obj->pix_->wpl;
             }
-            state.info_png.color.colortype = LCT_RGB;
-            state.info_raw.colortype = LCT_RGB;
-            error = lodepng::encode(out, in, obj->pix_->w, obj->pix_->h, state);
+            if (encodePNG) {
+                state.info_png.color.colortype = LCT_RGB;
+                state.info_raw.colortype = LCT_RGB;
+                error = lodepng::encode(pngData, imgData, obj->pix_->w, obj->pix_->h, state);
+            }
         } else if (obj->pix_->d <= 8) {
             PIX *pix8 = pixConvertTo8(obj->pix_, 0);
             // Image is Grayscale, so create a 1 byte per pixel image.
             uint32_t *line;
-            std::vector<unsigned char> in;
-            in.reserve(pix8->w * pix8->h);
+            imgData.reserve(pix8->w * pix8->h);
             line = pix8->data;
             for (uint32_t y = 0; y < pix8->h; ++y) {
                 for (uint32_t x = 0; x < pix8->w; ++x) {
-                    in.push_back(GET_DATA_BYTE(line, x));
+                    imgData.push_back(GET_DATA_BYTE(line, x));
                 }
                 line += pix8->wpl;
             }
-            state.info_png.color.colortype = LCT_GREY;
-            state.info_raw.colortype = LCT_GREY;
-            error = lodepng::encode(out, in, pix8->w, pix8->h, state);
+            if (encodePNG) {
+                state.info_png.color.colortype = LCT_GREY;
+                state.info_raw.colortype = LCT_GREY;
+                error = lodepng::encode(pngData, imgData, pix8->w, pix8->h, state);
+            }
             pixDestroy(&pix8);
         } else {
-            return THROW(Error, "wront image format");
+            return THROW(Error, "wrong image format");
         }
         if (error) {
             std::stringstream msg;
             msg << "error while encoding '" << lodepng_error_text(error) << "'";
             return THROW(Error, msg.str().c_str());
         }
-        return Buffer::New(reinterpret_cast<char *>(&out[0]), out.size())->handle_;
+        if (encodePNG)
+            return Buffer::New(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_;
+        else
+            return Buffer::New(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_;
     } else {
         return THROW(TypeError, "could not convert arguments");
     }

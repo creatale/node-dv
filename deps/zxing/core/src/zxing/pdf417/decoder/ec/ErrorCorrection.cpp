@@ -44,7 +44,7 @@ void ErrorCorrection::decode(ArrayRef<int> received,
    Ref<ModulusPoly> poly (new ModulusPoly(field_, received));
     ArrayRef<int> S( new Array<int>(numECCodewords));
     bool error = false;
-    for (size_t i = numECCodewords; i > 0; i--) {
+    for (int i = numECCodewords; i > 0; i--) {
       int eval = poly->evaluateAt(field_.exp(i));
       S[numECCodewords - i] = eval;
       if (eval != 0) {
