@@ -39,6 +39,8 @@ private:
     // Accessors.
     static v8::Handle<v8::Value> GetImage(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
     static void SetImage(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
+    static v8::Handle<v8::Value> GetFormats(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+    static void SetFormats(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
     static v8::Handle<v8::Value> GetTryHarder(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
     static void SetTryHarder(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
 
@@ -48,6 +50,9 @@ private:
 
     ZXing();
     ~ZXing();
+
+    static const zxing::BarcodeFormat BARCODEFORMATS[];
+    static const size_t BARCODEFORMATS_LENGTH;
 
     v8::Persistent<v8::Object> image_;
     zxing::DecodeHints hints_;

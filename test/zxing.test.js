@@ -9,6 +9,9 @@ describe('ZXing', function(){
     it('should have defaults', function(){
         should.not.exist(this.zxing.image);
     })
+    it('should have formats set', function(){
+        should.exist(this.zxing.formats);
+    })
     describe('#findCode()', function(){
         it('should find nothing', function(){
             this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/textpage300.png'));

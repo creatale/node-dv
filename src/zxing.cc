@@ -39,106 +39,106 @@ using namespace node;
 class PixSource : public zxing::LuminanceSource
 {
 public:
-    PixSource(Pix* pix, bool take = false);
-    ~PixSource();
+  PixSource(Pix* pix, bool take = false);
+  ~PixSource();
 
-    int getWidth() const;
-    int getHeight() const;
-    unsigned char* getRow(int y, unsigned char* row);
-    unsigned char* getMatrix();
+  int getWidth() const;
+  int getHeight() const;
+  unsigned char* getRow(int y, unsigned char* row);
+  unsigned char* getMatrix();
 
-    bool isCropSupported() const;
-    zxing::Ref<zxing::LuminanceSource> crop(int left, int top, int width, int height);
-    bool isRotateSupported() const;
-    zxing::Ref<zxing::LuminanceSource> rotateCounterClockwise();
-    int getStraightLine(unsigned char *line, int nLengthMax, int x1,int y1,int x2,int y2);
+  bool isCropSupported() const;
+  zxing::Ref<zxing::LuminanceSource> crop(int left, int top, int width, int height);
+  bool isRotateSupported() const;
+  zxing::Ref<zxing::LuminanceSource> rotateCounterClockwise();
+  int getStraightLine(unsigned char *line, int nLengthMax, int x1,int y1,int x2,int y2);
 
 private:
-    PIX* pix_;
+  PIX* pix_;
 };
 
 PixSource::PixSource(Pix* pix, bool take)
 {
-    if (take) {
-        assert(pix->d == 8);
-        pix_ = pix;
-    } else {
-        pix_ = pixConvertTo8(pix, 0);
-    }
+  if (take) {
+    assert(pix->d == 8);
+    pix_ = pix;
+  } else {
+    pix_ = pixConvertTo8(pix, 0);
+  }
 }
 
 PixSource::~PixSource()
 {
-    pixDestroy(&pix_);
+  pixDestroy(&pix_);
 }
 
 int PixSource::getWidth() const
 {
-    return pix_->w;
+  return pix_->w;
 }
 
 int PixSource::getHeight() const
 {
-    return pix_->h;
+  return pix_->h;
 }
 
 unsigned char* PixSource::getRow(int y, unsigned char* row)
 {
-    row = row ? row : new unsigned char[pix_->w];
-    if (static_cast<uint32_t>(y) < pix_->h) {
-        uint32_t *line = pix_->data + (pix_->wpl * y);
-        unsigned char *r = row;
-        for (uint32_t x = 0; x < pix_->w; ++x) {
-            *r = GET_DATA_BYTE(line, x);
-            ++r;
-        }
+  row = row ? row : new unsigned char[pix_->w];
+  if (static_cast<uint32_t>(y) < pix_->h) {
+    uint32_t *line = pix_->data + (pix_->wpl * y);
+    unsigned char *r = row;
+    for (uint32_t x = 0; x < pix_->w; ++x) {
+      *r = GET_DATA_BYTE(line, x);
+      ++r;
     }
-    return row;
+  }
+  return row;
 }
 
 unsigned char* PixSource::getMatrix()
 {
-    unsigned char* matrix = new unsigned char[pix_->w * pix_->h];
-    unsigned char* m = matrix;
-    uint32_t *line = pix_->data;
-    for (uint32_t y = 0; y < pix_->h; ++y) {
-        for (uint32_t x = 0; x < pix_->w; ++x) {
-            *m = GET_DATA_BYTE(line, x);
-            ++m;
-        }
-        line += pix_->wpl;
+  unsigned char* matrix = new unsigned char[pix_->w * pix_->h];
+  unsigned char* m = matrix;
+  uint32_t *line = pix_->data;
+  for (uint32_t y = 0; y < pix_->h; ++y) {
+    for (uint32_t x = 0; x < pix_->w; ++x) {
+      *m = GET_DATA_BYTE(line, x);
+      ++m;
     }
-    return matrix;
+    line += pix_->wpl;
+  }
+  return matrix;
 }
 
 
 bool PixSource::isRotateSupported() const
 {
-    return true;
+  return true;
 }
 
 zxing::Ref<zxing::LuminanceSource> PixSource::rotateCounterClockwise()
 {
-    // Rotate 90 degree counterclockwise.
-    if (pix_->w != 0 && pix_->h != 0) {
-        Pix *rotatedPix = pixRotate90(pix_, -1);
-        return zxing::Ref<PixSource>(new PixSource(rotatedPix, true));
-    } else {
-        return zxing::Ref<PixSource>(new PixSource(pix_));
-    }
+  // Rotate 90 degree counterclockwise.
+  if (pix_->w != 0 && pix_->h != 0) {
+    Pix *rotatedPix = pixRotate90(pix_, -1);
+    return zxing::Ref<PixSource>(new PixSource(rotatedPix, true));
+  } else {
+    return zxing::Ref<PixSource>(new PixSource(pix_));
+  }
 }
 
 bool PixSource::isCropSupported() const
 {
-    return true;
+  return true;
 }
 
 zxing::Ref<zxing::LuminanceSource> PixSource::crop(int left, int top, int width, int height)
 {
-    BOX *box = boxCreate(left, top, width, height);
-    PIX *croppedPix = pixClipRectangle(pix_, box, 0);
-    boxDestroy(&box);
-    return zxing::Ref<PixSource>(new PixSource(croppedPix, true));
+  BOX *box = boxCreate(left, top, width, height);
+  PIX *croppedPix = pixClipRectangle(pix_, box, 0);
+  boxDestroy(&box);
+  return zxing::Ref<PixSource>(new PixSource(croppedPix, true));
 }
 
 //TODO: clean this code someday (more or less copied).
@@ -226,164 +226,208 @@ int PixSource::getStraightLine(unsigned char *line, int nLengthMax, int x1,int y
   return cnt;
 }
 
+const zxing::BarcodeFormat ZXing::BARCODEFORMATS[] = {
+  zxing::BarcodeFormat_QR_CODE,
+  zxing::BarcodeFormat_DATA_MATRIX,
+  zxing::BarcodeFormat_PDF_417,
+  zxing::BarcodeFormat_UPC_E,
+  zxing::BarcodeFormat_UPC_A,
+  zxing::BarcodeFormat_EAN_8,
+  zxing::BarcodeFormat_EAN_13,
+  zxing::BarcodeFormat_CODE_128,
+  zxing::BarcodeFormat_CODE_39,
+  zxing::BarcodeFormat_ITF,
+  zxing::BarcodeFormat_AZTEC
+};
+
+const size_t ZXing::BARCODEFORMATS_LENGTH = 11;
+
 void ZXing::Init(Handle<Object> target)
 {
-    Local<FunctionTemplate> constructor_template = FunctionTemplate::New(New);
-    constructor_template->SetClassName(String::NewSymbol("ZXing"));
-    constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
-    Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
-    proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
-    proto->SetAccessor(String::NewSymbol("tryHarder"), GetTryHarder, SetTryHarder);
-    proto->Set(String::NewSymbol("findCode"),
-               FunctionTemplate::New(FindCode)->GetFunction());
-    proto->Set(String::NewSymbol("findCodes"),
-               FunctionTemplate::New(FindCodes)->GetFunction());
-    target->Set(String::NewSymbol("ZXing"),
-                Persistent<Function>::New(constructor_template->GetFunction()));
+  Local<FunctionTemplate> constructor_template = FunctionTemplate::New(New);
+  constructor_template->SetClassName(String::NewSymbol("ZXing"));
+  constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
+  Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
+  proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
+  proto->SetAccessor(String::NewSymbol("formats"), GetFormats, SetFormats);
+  proto->SetAccessor(String::NewSymbol("tryHarder"), GetTryHarder, SetTryHarder);
+  proto->Set(String::NewSymbol("findCode"),
+             FunctionTemplate::New(FindCode)->GetFunction());
+  proto->Set(String::NewSymbol("findCodes"),
+             FunctionTemplate::New(FindCodes)->GetFunction());
+  target->Set(String::NewSymbol("ZXing"),
+              Persistent<Function>::New(constructor_template->GetFunction()));
 }
 
 Handle<Value> ZXing::New(const Arguments &args)
 {
-    HandleScope scope;
-    Local<Object> image;
-    if (args.Length() == 1 && Image::HasInstance(args[0])) {
-        image = args[0]->ToObject();
-    } else if (args.Length() != 0) {
-        return THROW(TypeError, "cannot convert argument list to "
-                     "() or "
-                     "(image: Image)");
-    }
-    ZXing* obj = new ZXing();
-    if (!image.IsEmpty()) {
-        obj->image_ = Persistent<Object>::New(image->ToObject());
-    }
-    obj->Wrap(args.This());
-    return args.This();
+  HandleScope scope;
+  Local<Object> image;
+  if (args.Length() == 1 && Image::HasInstance(args[0])) {
+    image = args[0]->ToObject();
+  } else if (args.Length() != 0) {
+    return THROW(TypeError, "cannot convert argument list to "
+                 "() or "
+                 "(image: Image)");
+  }
+  ZXing* obj = new ZXing();
+  if (!image.IsEmpty()) {
+    obj->image_ = Persistent<Object>::New(image->ToObject());
+  }
+  obj->Wrap(args.This());
+  return args.This();
 }
 
 Handle<Value> ZXing::GetImage(Local<String> prop, const AccessorInfo &info)
 {
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    return obj->image_;
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+  return obj->image_;
 }
 
 void ZXing::SetImage(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    if (Image::HasInstance(value)) {
-        if (!obj->image_.IsEmpty()) {
-            obj->image_.Dispose();
-            obj->image_.Clear();
-        }
-        obj->image_ = Persistent<Object>::New(value->ToObject());
-    } else {
-        THROW(TypeError, "value must be of type Image");
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+  if (Image::HasInstance(value)) {
+    if (!obj->image_.IsEmpty()) {
+      obj->image_.Dispose();
+      obj->image_.Clear();
     }
+    obj->image_ = Persistent<Object>::New(value->ToObject());
+  } else {
+    THROW(TypeError, "value must be of type Image");
+  }
+}
+
+Handle<Value> ZXing::GetFormats(Local<String> prop, const AccessorInfo &info)
+{
+  HandleScope scope;
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+  Local<Object> format = Object::New();
+  for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
+    format->Set(String::NewSymbol(zxing::barcodeFormatNames[BARCODEFORMATS[i]]),
+        Boolean::New(obj->hints_.containsFormat(BARCODEFORMATS[i])));
+  }
+  return scope.Close(format);
+}
+
+void ZXing::SetFormats(Local<String> prop, Local<Value> value, const AccessorInfo &info)
+{
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+  if (value->IsObject()) {
+    Local<Object> format = value->ToObject();
+    obj->hints_.clear();
+    for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
+      if (format->Get(String::NewSymbol(zxing::barcodeFormatNames[BARCODEFORMATS[i]]))->BooleanValue()) {
+        obj->hints_.addFormat(BARCODEFORMATS[i]);
+      }
+    }
+    obj->reader_->setHints(obj->hints_);
+  } else {
+    THROW(TypeError, "value must be of type object");
+  }
 }
 
 Handle<Value> ZXing::GetTryHarder(Local<String> prop, const AccessorInfo &info)
 {
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    return Boolean::New(obj->hints_.getTryHarder());
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+  return Boolean::New(obj->hints_.getTryHarder());
 }
 
 void ZXing::SetTryHarder(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    if (value->IsBoolean()) {
-        obj->hints_.setTryHarder(value->BooleanValue());
-    } else {
-        THROW(TypeError, "value must be of type bool");
-    }
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+  if (value->IsBoolean()) {
+    obj->hints_.setTryHarder(value->BooleanValue());
+  } else {
+    THROW(TypeError, "value must be of type bool");
+  }
 }
 
 Handle<Value> ZXing::FindCode(const Arguments &args)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
-    try {
-        zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
-        zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
-        zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
-        zxing::Ref<zxing::Result> result(obj->reader_->decodeWithState(binary));
-        Local<Object> object = Object::New();
-        object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result->getBarcodeFormat()]));
-        object->Set(String::NewSymbol("data"), String::New(result->getText()->getText().c_str()));
-        Local<Array> points = Array::New();
-        for (size_t i = 0; i < result->getResultPoints().size(); ++i) {
-            Local<Object> point = Object::New();
-            point->Set(String::NewSymbol("x"), Number::New(result->getResultPoints()[i]->getX()));
-            point->Set(String::NewSymbol("y"), Number::New(result->getResultPoints()[i]->getY()));
-            points->Set(i, point);
-        }
-        object->Set(String::NewSymbol("points"), points);
-        return scope.Close(object);
-    } catch (const zxing::ReaderException& e) {
-        if (strcmp(e.what(), "No code detected") == 0) {
-            return scope.Close(Null());
-        } else {
-            return THROW(Error, e.what());
-        }
-    } catch (const zxing::IllegalArgumentException& e) {
-        return THROW(Error, e.what());
-    } catch (const zxing::Exception& e) {
-        return THROW(Error, e.what());
-    } catch (const std::exception& e) {
-        return THROW(Error, e.what());
-    } catch (...) {
-        return THROW(Error, "Uncaught exception");
+  HandleScope scope;
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+  try {
+    zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
+    zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
+    zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
+    zxing::Ref<zxing::Result> result(obj->reader_->decodeWithState(binary));
+    Local<Object> object = Object::New();
+    object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result->getBarcodeFormat()]));
+    object->Set(String::NewSymbol("data"), String::New(result->getText()->getText().c_str()));
+    Local<Array> points = Array::New();
+    for (size_t i = 0; i < result->getResultPoints().size(); ++i) {
+      Local<Object> point = Object::New();
+      point->Set(String::NewSymbol("x"), Number::New(result->getResultPoints()[i]->getX()));
+      point->Set(String::NewSymbol("y"), Number::New(result->getResultPoints()[i]->getY()));
+      points->Set(i, point);
     }
+    object->Set(String::NewSymbol("points"), points);
+    return scope.Close(object);
+  } catch (const zxing::ReaderException& e) {
+    if (strcmp(e.what(), "No code detected") == 0) {
+      return scope.Close(Null());
+    } else {
+      return THROW(Error, e.what());
+    }
+  } catch (const zxing::IllegalArgumentException& e) {
+    return THROW(Error, e.what());
+  } catch (const zxing::Exception& e) {
+    return THROW(Error, e.what());
+  } catch (const std::exception& e) {
+    return THROW(Error, e.what());
+  } catch (...) {
+    return THROW(Error, "Uncaught exception");
+  }
 }
 
 Handle<Value> ZXing::FindCodes(const Arguments &args)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
-    try {
-        zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
-        zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
-        zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
-        std::vector< zxing::Ref<zxing::Result> > result = obj->multiReader_->decodeMultiple(binary, obj->hints_);
-        Local<Array> objects = Array::New();
-        for (size_t i = 0; i < result.size(); ++i) {
-            Local<Object> object = Object::New();
-            object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result[i]->getBarcodeFormat()]));
-            object->Set(String::NewSymbol("data"), String::New(result[i]->getText()->getText().c_str()));
-            Local<Array> points = Array::New();
-            for (size_t j = 0; j < result[i]->getResultPoints().size(); ++j) {
-                Local<Object> point = Object::New();
-                point->Set(String::NewSymbol("x"), Number::New(result[i]->getResultPoints()[j]->getX()));
-                point->Set(String::NewSymbol("y"), Number::New(result[i]->getResultPoints()[j]->getY()));
-                points->Set(j, point);
-            }
-            object->Set(String::NewSymbol("points"), points);
-            objects->Set(i, object);
-        }
-        return scope.Close(objects);
-    } catch (const zxing::ReaderException& e) {
-        if (strcmp(e.what(), "No code detected") == 0) {
-            return scope.Close(Array::New());
-        } else {
-            return THROW(Error, e.what());
-        }
-    } catch (const zxing::IllegalArgumentException& e) {
-        return THROW(Error, e.what());
-    } catch (const zxing::Exception& e) {
-        return THROW(Error, e.what());
-    } catch (const std::exception& e) {
-        return THROW(Error, e.what());
-    } catch (...) {
-        return THROW(Error, "Uncaught exception");
+  HandleScope scope;
+  ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+  try {
+    zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
+    zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
+    zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
+    std::vector< zxing::Ref<zxing::Result> > result = obj->multiReader_->decodeMultiple(binary, obj->hints_);
+    Local<Array> objects = Array::New();
+    for (size_t i = 0; i < result.size(); ++i) {
+      Local<Object> object = Object::New();
+      object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result[i]->getBarcodeFormat()]));
+      object->Set(String::NewSymbol("data"), String::New(result[i]->getText()->getText().c_str()));
+      Local<Array> points = Array::New();
+      for (size_t j = 0; j < result[i]->getResultPoints().size(); ++j) {
+        Local<Object> point = Object::New();
+        point->Set(String::NewSymbol("x"), Number::New(result[i]->getResultPoints()[j]->getX()));
+        point->Set(String::NewSymbol("y"), Number::New(result[i]->getResultPoints()[j]->getY()));
+        points->Set(j, point);
+      }
+      object->Set(String::NewSymbol("points"), points);
+      objects->Set(i, object);
     }
+    return scope.Close(objects);
+  } catch (const zxing::ReaderException& e) {
+    if (strcmp(e.what(), "No code detected") == 0) {
+      return scope.Close(Array::New());
+    } else {
+      return THROW(Error, e.what());
+    }
+  } catch (const zxing::IllegalArgumentException& e) {
+    return THROW(Error, e.what());
+  } catch (const zxing::Exception& e) {
+    return THROW(Error, e.what());
+  } catch (const std::exception& e) {
+    return THROW(Error, e.what());
+  } catch (...) {
+    return THROW(Error, "Uncaught exception");
+  }
 }
 
 ZXing::ZXing()
-    : hints_(zxing::DecodeHints::DEFAULT_HINT), reader_(new zxing::MultiFormatReader),
-      multiReader_(new zxing::multi::GenericMultipleBarcodeReader(*reader_))
+  : hints_(zxing::DecodeHints::DEFAULT_HINT), reader_(new zxing::MultiFormatReader),
+    multiReader_(new zxing::multi::GenericMultipleBarcodeReader(*reader_))
 {
-    //TODO: implement getters/setters for hints
-    //hints_.addFormat(...)
-    reader_->setHints(hints_);
+  reader_->setHints(hints_);
 }
 
 ZXing::~ZXing()
