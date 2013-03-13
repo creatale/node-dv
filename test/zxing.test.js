@@ -39,11 +39,5 @@ describe('ZXing', function(){
             code.data.should.equal('This PDF417 barcode has error correction level 4');
             should.exist(code.points);
         })
-        it('should find multiple barcodes', function(){
-            this.zxing.image = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcodes.png'));
-            var codes = this.zxing.findCodes();
-            codes[0].data.should.equal('Hello World!');
-            codes[1].data.should.equal('Hello World');
-        })
     })
 })

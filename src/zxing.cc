@@ -256,8 +256,6 @@ void ZXing::Init(Handle<Object> target)
     proto->SetAccessor(String::NewSymbol("tryHarder"), GetTryHarder, SetTryHarder);
     proto->Set(String::NewSymbol("findCode"),
                FunctionTemplate::New(FindCode)->GetFunction());
-    proto->Set(String::NewSymbol("findCodes"),
-               FunctionTemplate::New(FindCodes)->GetFunction());
     target->Set(String::NewSymbol("ZXing"),
                 Persistent<Function>::New(constructor_template->GetFunction()));
 }
@@ -386,53 +384,8 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
     }
 }
 
-Handle<Value> ZXing::FindCodes(const Arguments &args)
-{
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
-    try {
-        zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
-        zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
-        zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
-        std::vector< zxing::Ref<zxing::Result> > result = obj->multiReader_->decodeMultiple(binary, obj->hints_);
-        Local<Array> objects = Array::New();
-        for (size_t i = 0; i < result.size(); ++i) {
-            Local<Object> object = Object::New();
-            std::string resultStr = result[i]->getText()->getText();
-            object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result[i]->getBarcodeFormat()]));
-            object->Set(String::NewSymbol("data"), String::New(resultStr.c_str()));
-            object->Set(String::NewSymbol("buffer"), node::Buffer::New((char*)resultStr.data(), resultStr.length())->handle_);
-            Local<Array> points = Array::New();
-            for (size_t j = 0; j < result[i]->getResultPoints().size(); ++j) {
-                Local<Object> point = Object::New();
-                point->Set(String::NewSymbol("x"), Number::New(result[i]->getResultPoints()[j]->getX()));
-                point->Set(String::NewSymbol("y"), Number::New(result[i]->getResultPoints()[j]->getY()));
-                points->Set(j, point);
-            }
-            object->Set(String::NewSymbol("points"), points);
-            objects->Set(i, object);
-        }
-        return scope.Close(objects);
-    } catch (const zxing::ReaderException& e) {
-        if (strcmp(e.what(), "No code detected") == 0) {
-            return scope.Close(Array::New());
-        } else {
-            return THROW(Error, e.what());
-        }
-    } catch (const zxing::IllegalArgumentException& e) {
-        return THROW(Error, e.what());
-    } catch (const zxing::Exception& e) {
-        return THROW(Error, e.what());
-    } catch (const std::exception& e) {
-        return THROW(Error, e.what());
-    } catch (...) {
-        return THROW(Error, "Uncaught exception");
-    }
-}
-
 ZXing::ZXing()
-    : hints_(zxing::DecodeHints::DEFAULT_HINT), reader_(new zxing::MultiFormatReader),
-      multiReader_(new zxing::multi::GenericMultipleBarcodeReader(*reader_))
+    : hints_(zxing::DecodeHints::DEFAULT_HINT), reader_(new zxing::MultiFormatReader)
 {
     reader_->setHints(hints_);
 }
