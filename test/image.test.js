@@ -88,6 +88,9 @@ describe('Image', function(){
     it('should #dilate()', function(){
         writeImage('gray-dilate.png', this.gray.dilate(3, 3));
     })
+    it('should #thin()', function(){
+        writeImage('gray-thin.png', this.gray.thin('fg', 4, 3));
+    })
     it('should #otsuAdaptiveThreshold(), #findSkew()', function(){
         var threshold = this.gray.otsuAdaptiveThreshold(16, 16, 0, 0, 0.1);
         writeImage('gray-threshold-values.png', threshold.thresholdValues);
@@ -108,6 +111,27 @@ describe('Image', function(){
         }
         writeImage('textpage-components.png', canvas);
     })
+    it('should #distanceFunction() and #maxDynamicRange', function(){
+        var barcodes = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/barcodes.png'));
+        var distanceMap = barcodes.distanceFunction(4);
+        writeImage('distance-map.png', distanceMap.maxDynamicRange('log'));
+    })
+    it('should isolate barcodes', function(){
+        var barcodes = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/barcodes.png'));
+        var open = barcodes.thin('bg', 8, 5).dilate(3, 3);
+        var openMap = open.distanceFunction(8);
+        var openMask = openMap.threshold(10).erode(11*2, 11*2);
+        writeImage('barcodes-open.png', open);
+        writeImage('barcodes-openMap.png', openMap.maxDynamicRange('log'));
+        writeImage('barcodes-openMask.png', openMask);
+        var boxes = openMask.invert().connectedComponents(8);
+        for (var i in boxes) {
+            barcodes.drawBox(boxes[i].x, boxes[i].y,
+                             boxes[i].width, boxes[i].height,
+                             2, 'flip');
+        }
+        writeImage('barcodes-isolated.png', barcodes);
+    })
     it('should #drawBox()', function(){
         var canvas = new dv.Image(this.gray)
         .drawBox(50, 50, 100, 100, 5)
@@ -116,22 +140,23 @@ describe('Image', function(){
         writeImage('gray-box.png', canvas);
     })
     it('should #threshold', function() {
-        writeImage('gray-threshold-64', this.gray.threshold(64));
-        writeImage('gray-threshold-196', this.gray.threshold(196));
+        writeImage('gray-threshold-64.png', this.gray.threshold(64));
+        writeImage('gray-threshold-196.png', this.gray.threshold(196));
     })
-    it('should return histograms', function() {
+    it('should #histogram', function() {
         var result = this.gray.histogram()
         result.length.should.equal(256);
         result[0].should.equal(0);
         result[128].should.be.within(0.00, 0.01);
         result[255].should.be.within(0.44, 0.45);
     })
-    it('should apply curves with masks', function() {
+    it('should #applyCurve and #setMasked', function() {
         var curve = new Array(256);
         for (var i = 0; i < 256; i++)
             curve[i] = i / 2;
         curve[255] = 200;
         var mask = new dv.Image(this.gray).threshold(48).invert().clearBox(50, 50, 200, 100);
-        writeImage('gray-curve', new dv.Image(this.gray).applyCurve(curve, mask));
+        writeImage('gray-curve.png', new dv.Image(this.gray).applyCurve(curve, mask));
+        writeImage('gray-setmasked.png', new dv.Image(this.gray).setMasked(mask, 255));
     })
 })

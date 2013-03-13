@@ -100,7 +100,9 @@ void Image::Init(Handle<Object> target)
     proto->Set(String::NewSymbol("crop"),
                FunctionTemplate::New(Crop)->GetFunction());
     proto->Set(String::NewSymbol("histogram"),
-               FunctionTemplate::New(GetHistogram)->GetFunction());
+               FunctionTemplate::New(Histogram)->GetFunction());
+    proto->Set(String::NewSymbol("setMasked"),
+               FunctionTemplate::New(SetMasked)->GetFunction());
     proto->Set(String::NewSymbol("applyCurve"),
                FunctionTemplate::New(ApplyCurve)->GetFunction());
     proto->Set(String::NewSymbol("rankFilter"),
@@ -113,12 +115,18 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Erode)->GetFunction());
     proto->Set(String::NewSymbol("dilate"),
                FunctionTemplate::New(Dilate)->GetFunction());
+    proto->Set(String::NewSymbol("thin"),
+               FunctionTemplate::New(Thin)->GetFunction());
+    proto->Set(String::NewSymbol("maxDynamicRange"),
+               FunctionTemplate::New(MaxDynamicRange)->GetFunction());
     proto->Set(String::NewSymbol("otsuAdaptiveThreshold"),
                FunctionTemplate::New(OtsuAdaptiveThreshold)->GetFunction());
     proto->Set(String::NewSymbol("findSkew"),
                FunctionTemplate::New(FindSkew)->GetFunction());
     proto->Set(String::NewSymbol("connectedComponents"),
                FunctionTemplate::New(ConnectedComponents)->GetFunction());
+    proto->Set(String::NewSymbol("distanceFunction"),
+               FunctionTemplate::New(DistanceFunction)->GetFunction());
     proto->Set(String::NewSymbol("clearBox"),
                FunctionTemplate::New(ClearBox)->GetFunction());
     proto->Set(String::NewSymbol("drawBox"),
@@ -357,7 +365,7 @@ Handle<Value> Image::Crop(const Arguments &args)
     }
 }
 
-Handle<Value> Image::GetHistogram(const Arguments &args)
+Handle<Value> Image::Histogram(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
@@ -389,20 +397,35 @@ Handle<Value> Image::GetHistogram(const Arguments &args)
     }
 }
 
+Handle<Value> Image::SetMasked(const Arguments &args)
+{
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 2 && Image::HasInstance(args[0]) &&
+            args[1]->IsNumber()) {
+        Pix *mask = Image::Pixels(args[0]->ToObject());
+        int value = floor(args[1]->ToNumber()->Value());
+        if (pixSetMasked(obj->pix_, mask, value) == 1) {
+            return THROW(TypeError, "error while cropping");
+        }
+        return args.This();
+    } else {
+        return THROW(TypeError, "expected (int, image) signature");
+    }
+}
+
 Handle<Value> Image::ApplyCurve(const Arguments &args)
 {
-    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (args.Length() >= 1 && args[0]->IsArray() && args[0]->ToObject()->Get(String::New("length"))->Uint32Value() == 256) {
-      
+    if (args.Length() >= 1 && args[0]->IsArray() &&
+            args[0]->ToObject()->Get(String::New("length"))->Uint32Value() == 256) {
         NUMA *numa = numaCreate(256);
-        for (int i = 0; i < 256; i++)
+        for (int i = 0; i < 256; i++) {
             numaAddNumber(numa, args[0]->ToObject()->Get(i)->ToInt32()->Value());
-
+        }
         PIX *mask = NULL;
-        if (args.Length() >= 2 && Image::HasInstance(args[1]))
+        if (args.Length() >= 2 && Image::HasInstance(args[1])) {
             mask = Image::Pixels(args[1]->ToObject());
-
+        }
         int result = pixTRCMap(obj->pix_, mask, numa);
         if (result != 0) {
             return THROW(TypeError, "error while applying value mapping");
@@ -542,7 +565,12 @@ Handle<Value> Image::Erode(const Arguments &args)
     if (args.Length() == 2 && args[0]->IsInt32() && args[1]->IsInt32()) {
         int width = args[0]->ToInt32()->Value();
         int height = args[1]->ToInt32()->Value();
-        PIX *pixd = pixErodeGray(obj->pix_, width, height);
+        PIX *pixd = 0;
+        if (obj->pix_->d == 1) {
+            pixd = pixErodeBrick(NULL, obj->pix_, width, height);
+        } else {
+            pixd = pixErodeGray(obj->pix_, width, height);
+        }
         if (pixd == NULL) {
             return THROW(TypeError, "error while eroding");
         }
@@ -559,13 +587,73 @@ Handle<Value> Image::Dilate(const Arguments &args)
     if (args.Length() == 2 && args[0]->IsInt32() && args[1]->IsInt32()) {
         int width = args[0]->ToInt32()->Value();
         int height = args[1]->ToInt32()->Value();
-        PIX *pixd = pixDilateGray(obj->pix_, width, height);
+        PIX *pixd = 0;
+        if (obj->pix_->d == 1) {
+            pixd = pixDilateBrick(NULL, obj->pix_, width, height);
+        } else {
+            pixd = pixDilateGray(obj->pix_, width, height);
+        }
         if (pixd == NULL) {
             return THROW(TypeError, "error while dilating");
         }
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (int, int) signature");
+    }
+}
+
+Handle<Value> Image::Thin(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 3 && args[0]->IsString() &&
+            args[1]->IsInt32() && args[2]->IsInt32()) {
+        int typeInt = 0;
+        String::AsciiValue type(args[0]->ToString());
+        if (strcmp("fg", *type) == 0) {
+            typeInt = L_THIN_FG;
+        } else if (strcmp("bg", *type) == 0) {
+            typeInt = L_THIN_BG;
+        }
+        int connectivity = args[1]->ToInt32()->Value();
+        int maxIters = args[2]->ToInt32()->Value();
+        PIX *pix = obj->pix_;
+        // If image is grayscale, binarize with fixed threshold
+        if (pix->d != 1) {
+            pix = pixConvertTo1(pix, 128);
+        }
+        Pix *pixd = pixThin(pix, typeInt, connectivity, maxIters);
+        if (pix != obj->pix_) {
+            pixDestroy(&pix);
+        }
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while thinning");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (string, int, int) signature");
+    }
+}
+
+Handle<Value> Image::MaxDynamicRange(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && args[0]->IsString()) {
+        int typeInt = 0;
+        String::AsciiValue type(args[0]->ToString());
+        if (strcmp("linear", *type) == 0) {
+            typeInt = L_SET_PIXELS;
+        } else if (strcmp("log", *type) == 0) {
+            typeInt = L_LOG_SCALE;
+        }
+        PIX *pixd = pixMaxDynamicRange(obj->pix_, typeInt);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while computing max. dynamic range");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (string) signature");
     }
 }
 
@@ -635,7 +723,7 @@ Handle<Value> Image::ConnectedComponents(const Arguments &args)
         if (pix->d != 1) {
             pix = pixConvertTo1(pix, 128);
         }
-        BOXA *boxa = pixConnComp(pix, NULL, connectivity);
+        BOXA *boxa = pixConnCompBB(pix, connectivity);
         if (pix != obj->pix_) {
             pixDestroy(&pix);
         }
@@ -648,6 +736,30 @@ Handle<Value> Image::ConnectedComponents(const Arguments &args)
         }
         boxaDestroy(&boxa);
         return scope.Close(boxes);
+    } else {
+        return THROW(TypeError, "expected (int) signature");
+    }
+}
+
+Handle<Value> Image::DistanceFunction(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && args[0]->IsInt32()) {
+        int connectivity = args[0]->ToInt32()->Value();
+        PIX *pix = obj->pix_;
+        // If image is grayscale, binarize with fixed threshold
+        if (pix->d != 1) {
+            pix = pixConvertTo1(pix, 128);
+        }
+        Pix *pixDistance = pixDistanceFunction(pix, connectivity, 8, L_BOUNDARY_BG);
+        if (pix != obj->pix_) {
+            pixDestroy(&pix);
+        }
+        if (pixDistance == NULL) {
+            return THROW(TypeError, "error while computing distance function");
+        }
+        return scope.Close(Image::New(pixDistance));
     } else {
         return THROW(TypeError, "expected (int) signature");
     }
