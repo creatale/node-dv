@@ -47,6 +47,7 @@ private:
     static v8::Handle<v8::Value> ClearAdaptiveClassifier(const v8::Arguments& args);
     static v8::Handle<v8::Value> ThresholdImage(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindRegions(const v8::Arguments& args);
+    static v8::Handle<v8::Value> FindParagraphs(const v8::Arguments &args);
     static v8::Handle<v8::Value> FindTextLines(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindWords(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindSymbols(const v8::Arguments& args);
@@ -54,6 +55,8 @@ private:
 
     Tesseract(const char *datapath, const char *language);
     ~Tesseract();
+
+    v8::Handle<v8::Value> GetResultArray(tesseract::PageIteratorLevel level);
 
     tesseract::TessBaseAPI api_;
     v8::Persistent<v8::Object> image_;

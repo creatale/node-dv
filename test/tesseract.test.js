@@ -1,6 +1,7 @@
 global.should = require('chai').should();
 var dv = require('../lib/dv');
 var fs = require('fs');
+var util = require('util')
 
 var textParagraph =
         ('Mr do raising article general norland my hastily. Its companions say uncommonly pianoforte ' +
@@ -9,12 +10,13 @@ var textParagraph =
          'Norland an by minuter enquire it general on towards forming. Adapted mrs totally company ' +
          'two yet conduct men.').replace(/\s/g, '').toLowerCase();
 
-var writeImageBoxes = function(basename, image, boxes){
+var writeImageBoxes = function(basename, image, array){
+    //console.log(util.inspect(array, false, 100));
     var canvas = new dv.Image(image);
-    for (var i in boxes) {
-        canvas.drawBox(boxes[i].x, boxes[i].y,
-                       boxes[i].width, boxes[i].height,
-                       2, 'clear')
+    for (var i in array) {
+        canvas.drawBox(array[i].box.x, array[i].box.y,
+                       array[i].box.width, array[i].box.height,
+                       2, 'flip')
     }
     fs.writeFileSync(__dirname + '/fixtures_out/' + basename, canvas.toBuffer('png'));
 }
@@ -35,8 +37,9 @@ describe('Tesseract', function(){
         this.tesseract.image = this.textPage300;
         writeImageBoxes('textpage300-regions.png', this.textPage300, this.tesseract.findRegions());
         writeImageBoxes('textpage300-lines.png', this.textPage300, this.tesseract.findTextLines());
+        writeImageBoxes('textpage300-para.png', this.textPage300, this.tesseract.findParagraphs());
         writeImageBoxes('textpage300-words.png', this.textPage300, this.tesseract.findWords());
-        this.tesseract.findSymbols();
+        writeImageBoxes('textpage300-symbols.png', this.textPage300, this.tesseract.findSymbols());
         this.tesseract.clear();
         this.tesseract.clearAdaptiveClassifier();
     })

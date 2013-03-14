@@ -46,6 +46,8 @@ void Tesseract::Init(Handle<Object> target)
                FunctionTemplate::New(ThresholdImage)->GetFunction());
     proto->Set(String::NewSymbol("findRegions"),
                FunctionTemplate::New(FindRegions)->GetFunction());
+    proto->Set(String::NewSymbol("findParagraphs"),
+               FunctionTemplate::New(FindParagraphs)->GetFunction());
     proto->Set(String::NewSymbol("findTextLines"),
                FunctionTemplate::New(FindTextLines)->GetFunction());
     proto->Set(String::NewSymbol("findWords"),
@@ -239,88 +241,35 @@ Handle<Value> Tesseract::FindRegions(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    Local<Object> boxes = Array::New();
-    Boxa* boxa = obj->api_.GetRegions(NULL);
-    if (boxa) {
-        for (int i = 0; i < boxa->n; ++i) {
-            boxes->Set(i, createBox(boxa->box[i]));
-        }
-        boxaDestroy(&boxa);
-    }
-    return scope.Close(boxes);
+    return scope.Close(obj->GetResultArray(tesseract::RIL_BLOCK));
+}
+
+Handle<Value> Tesseract::FindParagraphs(const Arguments &args)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
+    return scope.Close(obj->GetResultArray(tesseract::RIL_PARA));
 }
 
 Handle<Value> Tesseract::FindTextLines(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    Local<Object> boxes = Array::New();
-    Boxa* boxa = obj->api_.GetTextlines(NULL, NULL);
-    if (boxa) {
-        for (int i = 0; i < boxa->n; ++i) {
-            boxes->Set(i, createBox(boxa->box[i]));
-        }
-        boxaDestroy(&boxa);
-    }
-    return scope.Close(boxes);
+    return scope.Close(obj->GetResultArray(tesseract::RIL_TEXTLINE));
 }
 
 Handle<Value> Tesseract::FindWords(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    Local<Object> boxes = Array::New();
-    Boxa* boxa = obj->api_.GetWords(NULL);
-    if (boxa) {
-        for (int i = 0; i < boxa->n; ++i) {
-            boxes->Set(i, createBox(boxa->box[i]));
-        }
-        boxaDestroy(&boxa);
-    }
-    return scope.Close(boxes);
+    return scope.Close(obj->GetResultArray(tesseract::RIL_WORD));
 }
 
 Handle<Value> Tesseract::FindSymbols(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    if (obj->api_.Recognize(NULL) != 0) {
-        return THROW(Error, "Internal tesseract error");
-    }
-    tesseract::ResultIterator* resultIter = obj->api_.GetIterator();
-    Local<Array> symbols = Array::New();
-    int symbolIndex = 0;
-    if (resultIter && !resultIter->Empty(tesseract::RIL_WORD)) {
-        do {
-            tesseract::ChoiceIterator choiceIter = tesseract::ChoiceIterator(*resultIter);
-            Local<Array> choices = Array::New();
-            int choiceIndex = 0;
-            do {
-                const char* text = choiceIter.GetUTF8Text();
-                if (!text) {
-                    break;
-                }
-                // Transform choice to object.
-                Local<Object> choice = Object::New();
-                choice->Set(String::NewSymbol("text"),
-                            String::New(text));
-                choice->Set(String::NewSymbol("confidence"),
-                            Number::New(choiceIter.Confidence()));
-                // Append choice to choices list and cleanup.
-                choices->Set(choiceIndex, choice);
-                ++choiceIndex;
-                // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
-            } while (choiceIter.Next());
-            // Append choices to symbols list.
-            if (choices->Length() > 0) {
-                symbols->Set(symbolIndex, choices);
-                ++symbolIndex;
-            }
-        } while (resultIter->Next(tesseract::RIL_SYMBOL));
-        // Cleanup.
-        delete resultIter;
-    }
-    return scope.Close(symbols);
+    return scope.Close(obj->GetResultArray(tesseract::RIL_SYMBOL));
 }
 
 Handle<Value> Tesseract::FindText(const Arguments &args)
@@ -363,4 +312,65 @@ Tesseract::Tesseract(const char *datapath, const char *language)
 Tesseract::~Tesseract()
 {
     api_.End();
+}
+
+Handle<Value> Tesseract::GetResultArray(tesseract::PageIteratorLevel level)
+{
+    if (api_.Recognize(NULL) != 0) {
+        return THROW(Error, "Internal tesseract error");
+    }
+    tesseract::ResultIterator* it = api_.GetIterator();
+    if (it == NULL) {
+        return THROW(Error, "ResultIterator == null");
+    }
+    Local<Array> results = Array::New();
+    int index = 0;
+    do {
+        if (it->Empty(level)) {
+            continue;
+        }
+        Handle<Object> result = Object::New();
+        int left, top, right, bottom;
+        if (it->BoundingBoxInternal(level, &left, &top, &right, &bottom)) {
+            // Extract image coordiante box.
+            Handle<Object> box = Object::New();
+            box->Set(String::NewSymbol("x"), Int32::New(left));
+            box->Set(String::NewSymbol("y"), Int32::New(top));
+            box->Set(String::NewSymbol("width"), Int32::New(right - left));
+            box->Set(String::NewSymbol("height"), Int32::New(bottom - top));
+            result->Set(String::NewSymbol("box"), box);
+        }
+        if (level != tesseract::RIL_TEXTLINE) {
+            // Extract text.
+            char *text = it->GetUTF8Text(level);
+            result->Set(String::NewSymbol("text"), String::New(text));
+            delete[] text;
+        }
+        if (level == tesseract::RIL_SYMBOL) {
+            // Extract choices
+            tesseract::ChoiceIterator choiceIt = tesseract::ChoiceIterator(*it);
+            Handle<Array> choices = Array::New();
+            int choiceIndex = 0;
+            do {
+                const char* text = choiceIt.GetUTF8Text();
+                if (!text) {
+                    break;
+                }
+                // Transform choice to object.
+                Local<Object> choice = Object::New();
+                choice->Set(String::NewSymbol("text"),
+                            String::New(text));
+                choice->Set(String::NewSymbol("confidence"),
+                            Number::New(choiceIt.Confidence()));
+                // Append choice to choices list and cleanup.
+                choices->Set(choiceIndex++, choice);
+                // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
+            } while (choiceIt.Next());
+            result->Set(String::NewSymbol("choices"), choices);
+        }
+        // Append result.
+        results->Set(index++, result);
+    } while (it->Next(level));
+    delete it;
+    return results;
 }
