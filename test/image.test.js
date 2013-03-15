@@ -9,6 +9,7 @@ var writeImage = function(basename, image){
 describe('Image', function(){
     before(function(){
         this.gray = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/dave.png'));
+        this.rgb = new dv.Image('jpg', fs.readFileSync(__dirname + '/fixtures/rgb.jpg'));
         this.rgba = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/rgba.png'));
         this.rgbaBuffer = new Buffer(128 * 256 * 4);
         for (var y = 0; y < 256; y++) {
@@ -32,6 +33,7 @@ describe('Image', function(){
     })
     it('should save using #toBuffer()', function(){
         writeImage('gray.png', this.gray);
+        writeImage('rgb.png', this.rgb);
         writeImage('rgba.png', this.rgba);
         writeImage('rgbaBuffer.png', new dv.Image('rgba', this.rgbaBuffer, 128, 256));
         writeImage('rgbBuffer.png', new dv.Image('rgb', this.rgbBuffer, 128, 256));

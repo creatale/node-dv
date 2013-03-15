@@ -4,10 +4,11 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 ## Features
 
-- Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69) and [LodePNG](http://lodev.org/lodepng/) (Version 20121027)
+- Image loading using [jpgd](http://code.google.com/p/jpeg-compressor/), [LodePNG](http://lodev.org/lodepng/) and pixel buffers.
+- Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69)
 - OCR using [Tesseract](http://code.google.com/p/tesseract-ocr/) (Version 3.02)
-- OMR using [ZXing](http://code.google.com/p/zxing/) (Version 2.10 with PDF417 patches applied) for Barcodes 
-- OMR using TickReader for checkboxes (custom)
+- OMR using [ZXing](http://code.google.com/p/zxing/) (Version 2.10 with PDF417 patches applied) for Barcodes
+- OMR using TickReader for checkboxes
 
 ## Installation
 
@@ -29,7 +30,7 @@ console.log(tesseract.findText('plain'));
 
 Here are some quick links to help you get started:
 
-- [Introduction to Computer Vision](https://github.com/schulzch/node-dv/wiki/Introduction)
+- [Introduction](https://github.com/schulzch/node-dv/wiki/Introduction)
 - [API Reference](https://github.com/schulzch/node-dv/wiki/API)
 - [Bug Tracker](https://github.com/schulzch/node-dv/issues)
 

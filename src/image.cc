@@ -23,6 +23,7 @@
 #include "util.h"
 #include <cmath>
 #include <node_buffer.h>
+#include <jpgd.h>
 #include <lodepng.h>
 #include <sstream>
 
@@ -39,21 +40,11 @@ Pix* pixFromSource(uint8_t *pixSource, int32_t width, int32_t height, int32_t de
     for (uint32_t y = 0; y < pix->h; ++y) {
         for (uint32_t x = 0; x < pix->w; ++x) {
             if (pix->d == 8) {
-                // Fetch Gray = Red = Green = Blue.
-                SET_DATA_BYTE(line, x, *pixSource);
-                // Skip Green, Blue and Alpha.
-                ++pixSource; ++pixSource; ++pixSource; ++pixSource;
+                SET_DATA_BYTE(line, x, pixSource[0]);
             } else {
-                // Fetch RGB.
-                int rval = *pixSource; ++pixSource;
-                int gval = *pixSource; ++pixSource;
-                int bval = *pixSource; ++pixSource;
-                composeRGBPixel(rval, gval, bval, &line[x]);
-                if (depth == 32) {
-                    // Skip Alpha.
-                    ++pixSource;
-                }
+                composeRGBPixel(pixSource[0], pixSource[1], pixSource[2], &line[x]);
             }
+            pixSource += depth / 8;
         }
         line += pix->wpl;
     }
@@ -157,27 +148,39 @@ Handle<Value> Image::New(const Arguments &args)
     } else if (args.Length() == 2 && Buffer::HasInstance(args[1])) {
         String::AsciiValue format(args[0]->ToString());
         Local<Object> buffer = args[1]->ToObject();
-        if (strcmp("png", *format) != 0) {
+        unsigned char *in = reinterpret_cast<unsigned char*>(Buffer::Data(buffer));
+        size_t inLength = Buffer::Length(buffer);
+        if (strcmp("png", *format) == 0) {
+            std::vector<unsigned char> out;
+            unsigned int width;
+            unsigned int height;
+            lodepng::State state;
+            unsigned error = lodepng::decode(out, width, height, state, in, inLength);
+            if (error) {
+                std::stringstream msg;
+                msg << "error while decoding '" << lodepng_error_text(error) << "'";
+                return THROW(Error, msg.str().c_str());
+            }
+            if (state.info_png.color.colortype == LCT_GREY || state.info_png.color.colortype == LCT_GREY_ALPHA) {
+                pix = pixFromSource(&out[0], width, height, 32, 8);
+            } else {
+                pix = pixFromSource(&out[0], width, height, 32, 32);
+            }
+        } else if (strcmp("jpg", *format) == 0) {
+            int width;
+            int height;
+            int comps;
+            unsigned char *out = jpgd::decompress_jpeg_image_from_memory(
+                        in, static_cast<int>(inLength), &width, &height, &comps, 4);
+            if (!out) {
+                return THROW(Error, "error while decoding jpg");
+            }
+            pix = pixFromSource(out, width, height, 32, comps == 1 ? 8 : 32);
+            free(out);
+        } else {
             std::stringstream msg;
             msg << "invalid bufffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
-        }
-        std::vector<unsigned char> out;
-        unsigned int width;
-        unsigned int height;
-        lodepng::State state;
-        unsigned char *in = reinterpret_cast<unsigned char*>(Buffer::Data(buffer));
-        size_t length = Buffer::Length(buffer);
-        unsigned error = lodepng::decode(out, width, height, state, in, length);
-        if (error) {
-            std::stringstream msg;
-            msg << "error while decoding '" << lodepng_error_text(error) << "'";
-            return THROW(Error, msg.str().c_str());
-        }
-        if (state.info_png.color.colortype == LCT_GREY || state.info_png.color.colortype == LCT_GREY_ALPHA) {
-            pix = pixFromSource(&out[0], width, height, 8, 8);
-        } else {
-            pix = pixFromSource(&out[0], width, height, 32, 32);
         }
     } else if (args.Length() == 4 && Buffer::HasInstance(args[1])) {
         String::AsciiValue format(args[0]->ToString());
