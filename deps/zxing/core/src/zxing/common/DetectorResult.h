@@ -24,7 +24,6 @@
 #include <zxing/common/Counted.h>
 #include <zxing/common/Array.h>
 #include <zxing/common/BitMatrix.h>
-#include <zxing/common/PerspectiveTransform.h>
 #include <zxing/ResultPoint.h>
 
 namespace zxing {
@@ -33,16 +32,11 @@ class DetectorResult : public Counted {
 private:
   Ref<BitMatrix> bits_;
   std::vector<Ref<ResultPoint> > points_;
-  zxing::Ref<zxing::PerspectiveTransform> perspectiveTransform_;
 
 public:
-        DetectorResult(Ref<BitMatrix> bits, std::vector<Ref<ResultPoint> > points,
-          zxing::Ref<zxing::PerspectiveTransform> perspectiveTransform);
-
         DetectorResult(Ref<BitMatrix> bits, std::vector<Ref<ResultPoint> > points);
   Ref<BitMatrix> getBits();
   std::vector<Ref<ResultPoint> > getPoints();
-  zxing::Ref<zxing::PerspectiveTransform> getPerspectiveTransform();
 };
 }
 

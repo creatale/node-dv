@@ -89,7 +89,7 @@ Ref<DecoderResult> DecodedBitStreamParser::decode(ArrayRef<unsigned char> bytes)
   }
   ArrayRef<unsigned char> rawBytes(bytes);
   Ref<String> text(new String(result.str()));
-  return Ref<DecoderResult>(new DecoderResult(rawBytes, text, ArrayRef<ArrayRef<unsigned char> >(), Ref<String>()));
+  return Ref<DecoderResult>(new DecoderResult(rawBytes, text));
 }
 
 int DecodedBitStreamParser::decodeAsciiSegment(Ref<BitSource> bits, ostringstream & result,

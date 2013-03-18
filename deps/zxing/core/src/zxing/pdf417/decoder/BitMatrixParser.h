@@ -69,13 +69,13 @@ public:
   int getECLevel() const {return ecLevel_;};
   int getEraseCount() const {return eraseCount_;};
   ArrayRef<int> readCodewords(DecodeHints const &hints); /* throw(FormatException) */
-  
+  static int getCodeword(int64_t symbol, int *pi = NULL);
+
 private:
   bool VerifyOuterColumns(int rownumber);
   static ArrayRef<int> trimArray(ArrayRef<int> array, int size);
-  static int getCodeword(int64_t symbol, int *pi);
   static int findCodewordIndex(int64_t symbol);
-  
+
   
   int processRow(
 				int rowNumber, int rowHeight,

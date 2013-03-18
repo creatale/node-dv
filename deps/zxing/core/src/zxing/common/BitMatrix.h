@@ -33,7 +33,7 @@ private:
   size_t width_;
   size_t height_;
   size_t words_;
-  size_t rowSize_; /* added from java */
+  size_t rowSize_;
   unsigned int* bits_;
 
 #define ZX_LOG_DIGITS(digits) \
@@ -44,16 +44,9 @@ private:
         ((digits == 128) ? 7 : \
          (-1))))))
 
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
-  static const unsigned int bitsPerWord =
-	  std::numeric_limits<unsigned int>::digits;
-  static const unsigned int logBits = ZX_LOG_DIGITS(bitsPerWord);
-  static const unsigned int bitsMask = (1 << logBits) - 1;
-#else
   static const unsigned int bitsPerWord;
   static const unsigned int logBits;
   static const unsigned int bitsMask;
-#endif
 
 public:
   BitMatrix(size_t dimension);
@@ -87,9 +80,7 @@ public:
   ArrayRef<int> getBottomRightOnBit();
   
 
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
   friend std::ostream& operator<<(std::ostream &out, const BitMatrix &bm);
-#endif
   const char *description();
   const char *descriptionROW(int row);
 

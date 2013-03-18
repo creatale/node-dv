@@ -1,3 +1,4 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 #ifndef __BARCODE_FORMAT_H__
 #define __BARCODE_FORMAT_H__
 
@@ -26,7 +27,7 @@ namespace zxing {
 		BarcodeFormat_None = 0, 
 		BarcodeFormat_QR_CODE,
 		BarcodeFormat_DATA_MATRIX,
-		BarcodeFormat_PDF_417,		//* added 2012-05-29 HFN
+		BarcodeFormat_PDF_417,
 		BarcodeFormat_UPC_E,
 		BarcodeFormat_UPC_A,
 		BarcodeFormat_EAN_8,
@@ -34,7 +35,7 @@ namespace zxing {
 		BarcodeFormat_CODE_128,
 		BarcodeFormat_CODE_39,
 		BarcodeFormat_ITF,
-        BarcodeFormat_AZTEC       //* added 2012-10-10 zxing
+        BarcodeFormat_AZTEC
 	} BarcodeFormat;
 
 	/* if you update the enum, please update the name in BarcodeFormat.cpp */

@@ -28,8 +28,6 @@ using namespace std;
 namespace zxing {
 namespace EdgeDetector {
 
-//* 2012-05-08 hfn "INFINITY": s. NaNny.h
-
 void findEdgePoints(std::vector<Point>& points, const BitMatrix& image, Point start, Point end, bool invert, int skip, float deviation) {
   float xdist = end.x - start.x;
   float ydist = end.y - start.y;
@@ -38,13 +36,12 @@ void findEdgePoints(std::vector<Point>& points, const BitMatrix& image, Point st
 
   int var;
 
-  //* 2012-04-08 hfn fabs statt abs
-  if (fabs(xdist) > fabs(ydist)) {
+  if (abs(xdist) > abs(ydist)) {
     // Horizontal
     if (xdist < 0)
       skip = -skip;
 
-    var = int(fabs(deviation * length / xdist));
+    var = int(abs(deviation * length / xdist));
 
     float dy = ydist / xdist * skip;
     bool left = (skip < 0) ^ invert;
@@ -56,8 +53,8 @@ void findEdgePoints(std::vector<Point>& points, const BitMatrix& image, Point st
       if (x < 0 || x >= (int)image.getWidth())
         continue; // In case we start off the edge
       int my = int(start.y + dy * i);
-      int ey = Minimum(my + var + 1, (int)image.getHeight() - 1);
-      int sy = Maximum(my - var, 0);
+      int ey = min(my + var + 1, (int)image.getHeight() - 1);
+      int sy = max(my - var, 0);
       for (int y = sy + 1; y < ey; y++) {
         if (left) {
           if (image.get(x, y) && !image.get(x, y + 1)) {
@@ -75,7 +72,7 @@ void findEdgePoints(std::vector<Point>& points, const BitMatrix& image, Point st
     if (ydist < 0)
       skip = -skip;
 
-    var = int(fabs(deviation * length / ydist));
+    var = int(abs(deviation * length / ydist));
 
     float dx = xdist / ydist * skip;
     bool down = (skip > 0) ^ invert;
@@ -87,17 +84,17 @@ void findEdgePoints(std::vector<Point>& points, const BitMatrix& image, Point st
       if (y < 0 || y >= (int)image.getHeight())
         continue; // In case we start off the edge
       int mx = int(start.x + dx * i);
-      int ex = Minimum(mx + var + 1, (int)image.getWidth() - 1);
-      int sx = Maximum(mx - var, 0);
+      int ex = min(mx + var + 1, (int)image.getWidth() - 1);
+      int sx = max(mx - var, 0);
       for (int x = sx + 1; x < ex; x++) {
         if (down) {
           if (image.get(x, y) && !image.get(x + 1, y)) {
-            points.push_back(Point(x + 0.5f, y + 0.0f));
+            points.push_back(Point(x + 0.5f, y));
           }
 
         } else {
           if (!image.get(x, y) && image.get(x + 1, y)) {
-            points.push_back(Point(x + 0.5f, y + 0.0f));
+            points.push_back(Point(x + 0.5f, y));
           }
         }
 
@@ -122,7 +119,7 @@ Line findLine(const BitMatrix& image, Line estimate, bool invert, int deviation,
   float xdist = end.x - start.x;
   float ydist = end.y - start.y;
 
-  bool horizontal = fabs(xdist) > fabs(ydist);
+  bool horizontal = abs(xdist) > abs(ydist);
 
   float max = 0;
   Line bestLine(start, end);  // prepopulate with the given line, in case we can't find any line for some reason
@@ -182,7 +179,7 @@ Point intersection(Line a, Line b) {
   float p = a.start.x * a.end.y - a.start.y * a.end.x;
   float q = b.start.x * b.end.y - b.start.y * b.end.x;
   float denom = dxa * dyb - dya * dxb;
-  if(fabs(denom) < 1e-12)  // Lines don't intersect (2012-10-10 hfn replaces "denom == 0")
+  if(fabs(denom) < 1e-12)  // Lines don't intersect (replaces "denom == 0")
     return Point(INFINITY, INFINITY);
 
   float x = (p * dxb - dxa * q) / denom;
@@ -192,6 +189,4 @@ Point intersection(Line a, Line b) {
 }
 
 } // namespace EdgeDetector
-
-
 } // namespace zxing

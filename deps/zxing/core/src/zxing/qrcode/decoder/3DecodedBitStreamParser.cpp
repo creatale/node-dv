@@ -406,6 +406,6 @@ DecodedBitStreamParser::decode(ArrayRef<unsigned char> bytes,
     }
   } while (mode != &Mode::TERMINATOR);
 
-  return Ref<DecoderResult>(new DecoderResult(bytes, Ref<String>(new String(result)), byteSegments, Ref<String>(new String(ecLevel))));
+  return Ref<DecoderResult>(new DecoderResult(bytes, Ref<String>(new String(result)), byteSegments, (string)ecLevel));
 }
 

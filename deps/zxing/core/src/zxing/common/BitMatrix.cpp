@@ -25,10 +25,8 @@
 #include <sstream>
 #include <string>
 
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
 using std::ostream;
 using std::ostringstream;
-#endif
 
 using zxing::BitMatrix;
 using zxing::BitArray;
@@ -47,11 +45,9 @@ namespace {
   }
 }
 
-#if (defined _MSC_VER) && (_MSC_VER<1300)      //* hfn for eMbedded c++ compiler
 const unsigned int BitMatrix::bitsPerWord = std::numeric_limits<unsigned int>::digits;
 const unsigned int BitMatrix::logBits = ZX_LOG_DIGITS(bitsPerWord);
 const unsigned int BitMatrix::bitsMask = (1 << logBits) - 1;
-#endif
 
 BitMatrix::BitMatrix(size_t dimension) :
   width_(dimension), height_(dimension), words_(0), bits_(NULL) {
@@ -207,7 +203,6 @@ unsigned int* BitMatrix::getBits() const {
   return bits_;
 }
 
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
 namespace zxing {
   ostream& operator<<(ostream &out, const BitMatrix &bm) {
     for (size_t y = 0; y < bm.height_; y++) {
@@ -219,21 +214,10 @@ namespace zxing {
     return out;
   }
 }
-#endif
-
 
 const char* BitMatrix::description() {
-  std::stringstream out;
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
+  ostringstream out;
   out << *this;
-#else					//* 2012-05-07 hfn den Teil von "operator<<(ostream &out, const BitMatrix &bm)" kopiert:
-    for (size_t y = 0; y < height_; y++) {
-      for (size_t x = 0; x < width_; x++) {
-        out << (get(x, y) ? "X" : " ");
-      }
-      out << "\n";
-    }
-#endif
   return out.str().c_str();
 }
 

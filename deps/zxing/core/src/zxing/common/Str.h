@@ -34,38 +34,8 @@ public:
   const std::string &getText() const;
   void append(const std::string &tail);
   void append(char c);
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
   friend std::ostream &operator<<(std::ostream &out, const String &s);
-#endif
 };
-
-#if (defined _MSC_VER) && (_MSC_VER<1300)      //* hfn for eMbedded c++ compiler
-		//* 2012-05-07 hfn class StringComposer, that uses the operator "<<" similarly
-		//* as the stream classes. For eMbedded VC++ only because stream classes are not
-		//* defined there.
-namespace hfn {
-
-class StringComposer: public String {
-public:
-	StringComposer();
-	virtual ~StringComposer();
-	StringComposer(const String &s);
-	StringComposer& operator<< (char c);
-	StringComposer& operator<< (const std::string src);
-	StringComposer& operator<< (int n);
-	operator const char*() const;
-	const std::string &str() const;
-};
-
-}
-
-#endif
-
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
-#define _STRING_RESULT		std::ostringstream
-#else
-#define _STRING_RESULT		hfn::StringComposer
-#endif
 
 }
 

@@ -87,12 +87,6 @@ ArrayRef<int> BitMatrixParser::readCodewords(DecodeHints const &hints)
 
   tryHarder_ = hints.getTryHarder() ? 1 : 0;
 
-  /* if "try harder", the matrix contains two parts: upper: the first priority bit masks,
-   * lower: the second bit masks
-   */
-  if(tryHarder_ != 0)
-    height /= 2;
-
 
   
 #if (defined _WIN32 && defined DEBUG && 0)

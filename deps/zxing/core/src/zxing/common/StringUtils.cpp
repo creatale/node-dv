@@ -36,7 +36,8 @@ char const* const StringUtils::ISO88591 = "ISO8859-1";
 const bool StringUtils::ASSUME_SHIFT_JIS = false;
 
 string
-StringUtils::guessEncoding(unsigned char* bytes, int length, Hashtable const& hints) {
+StringUtils::guessEncoding(unsigned char* bytes, int length,
+                           Hashtable const& hints) {
   Hashtable::const_iterator i = hints.find(DecodeHints::CHARACTER_SET);
   if (i != hints.end()) {
     return i->second;

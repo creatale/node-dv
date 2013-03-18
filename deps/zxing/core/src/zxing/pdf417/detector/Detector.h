@@ -51,6 +51,7 @@ private:
   static const size_t SIZEOF_STOP_PATTERN_REVERSE_;
   static const size_t COUNT_VERTICES_;
   static const float RATIOS_TABLE[];
+  static const size_t BARCODE_START_OFFSET;
 
   Ref<BinaryBitmap> image_;
   
@@ -60,7 +61,7 @@ private:
   static void correctVertices(Ref<BitMatrix> matrix,
                               std::vector<Ref<ResultPoint> > &vertices,
                               bool upsideDown);
-  static void searchWideBarTopBottom(Ref<BitMatrix> matrix,
+  static void findWideBarTopBottom(Ref<BitMatrix> matrix,
                                      std::vector<Ref<ResultPoint> > &vertices,
                                      int offsetVertice,
                                      int startWideBar,
@@ -83,6 +84,8 @@ private:
                         Ref<ResultPoint> bottomLeft,
                         Ref<ResultPoint> bottomRight,
                         float moduleWidth);
+  static void codewordsToBitMatrix(std::vector<std::vector<unsigned int> > &codewords, Ref<BitMatrix> &matrix);
+  static int calculateClusterNumber(unsigned int codeword);
   static Ref<BitMatrix> sampleGrid(Ref<BitMatrix> image,
                                    int dimension);
   static unsigned int computeCodeword

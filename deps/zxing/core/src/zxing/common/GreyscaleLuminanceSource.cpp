@@ -34,13 +34,9 @@ GreyscaleLuminanceSource::GreyscaleLuminanceSource(unsigned char* greyData, int 
   }
 }
 
-/* (2012-06-13 hfn) Attention: If, for the first call, "row" is NULL, then a sufficient space
- * for the row is allocated. In this case, after the last call, when "row" is not needed anymore,
- * the calling function should "delete[]" this array.
- */
 unsigned char* GreyscaleLuminanceSource::getRow(int y, unsigned char* row) {
   if (y < 0 || y >= this->getHeight()) {
-    throw IllegalArgumentException("Requested row is outside the image: " + y);
+    throw IllegalArgumentException("Requested row is outside the image.");
   }
   int width = getWidth();
   // TODO(flyashi): determine if row has enough size.

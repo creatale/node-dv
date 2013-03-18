@@ -126,7 +126,7 @@ Ref<BitMatrix> Delta2Binarizer::createLinesMatrix(
 #endif
   
   LuminanceSource& source = *getLuminanceSource();
-  nWidth_ = Maximum(std::abs(xTopRight-xTopLeft),std::abs(xBottomRight-xBottomLeft))+1;
+  nWidth_ = (std::max(std::abs(xTopRight-xTopLeft),std::abs(xBottomRight-xBottomLeft))+1) * 2;
   nHeight_ = nLines;
   
   InitArrays(nWidth_);
@@ -445,7 +445,7 @@ void Delta2Binarizer::CreateBarWidths()
     ausBars_[cnt]=(unsigned short)anChangePoints_[0];
     cnt++;
   }
-  cntMax=Minimum(nMaxBars_,nMinMax_-1);
+  cntMax=std::min(nMaxBars_,nMinMax_-1);
   for(;cnt<cntMax;cnt++,cnt2++) {
     ausBars_[cnt] = (unsigned short) (anChangePoints_[cnt2+1] - anChangePoints_[cnt2]);
   }

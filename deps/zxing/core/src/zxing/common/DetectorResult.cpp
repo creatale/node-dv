@@ -23,11 +23,6 @@
 
 namespace zxing {
 
-DetectorResult::DetectorResult(Ref<BitMatrix> bits, std::vector<Ref<ResultPoint> > points, 
-	zxing::Ref<zxing::PerspectiveTransform> perspectiveTransform) :
-  bits_(bits), points_(points), perspectiveTransform_(perspectiveTransform) {
-}
-
 DetectorResult::DetectorResult(Ref<BitMatrix> bits, std::vector<Ref<ResultPoint> > points) :
   bits_(bits), points_(points) {
 }
@@ -39,11 +34,5 @@ Ref<BitMatrix> DetectorResult::getBits() {
 std::vector<Ref<ResultPoint> > DetectorResult::getPoints() {
   return points_;
 }
-
-
-zxing::Ref<zxing::PerspectiveTransform> DetectorResult::getPerspectiveTransform() {
-	return perspectiveTransform_;
-}
-
 
 }

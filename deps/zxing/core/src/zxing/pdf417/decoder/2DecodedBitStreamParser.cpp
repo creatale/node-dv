@@ -130,8 +130,8 @@ Ref<DecoderResult> DecodedBitStreamParser::decode(ArrayRef<int> codewords)
   }
   ArrayRef<unsigned char> dummybuf(1);
   dummybuf[0]= '\0';
-  
-  return Ref<DecoderResult>(new DecoderResult(dummybuf, result, ArrayRef<ArrayRef<unsigned char> >(), Ref<String>()));
+
+  return Ref<DecoderResult>(new DecoderResult(dummybuf, result));
 }
 
 /**

@@ -2,8 +2,7 @@
  *  Detector.cpp
  *  zxing
  *
- *  Created by Hartmut Neubauer 2012-05-25
- *  Copyright 2010,2012 ZXing authors All rights reserved.
+ *  Copyright 2010 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +15,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/*
- * 2012-09-?? HFN many changes:
- * - calculation of vertices changed
- * - new: counting the number of codeword rows
- * - using Delta2Binarizer to analyze every horizontal row
  */
 
 #include <zxing/ResultPoint.h>
@@ -44,7 +36,7 @@
  * PDF417 Code is rotated or skewed, or partially obscured.</p>
  *
  * @author SITA Lab (kevin.osullivan@sita.aero)
- * @author dswitkin@google.com (Daniel Switkin)
+ * @author Daniel Switkin (dswitkin@google.com)
  * @author Schweers Informationstechnologie GmbH (hartmut.neubauer@schweers.de)
  * @author creatale GmbH (christoph.schulz@creatale.de)
  */
@@ -77,6 +69,7 @@ const size_t Detector::SIZEOF_START_PATTERN_REVERSE_ = sizeof(START_PATTERN_REVE
 const size_t Detector::SIZEOF_STOP_PATTERN_ = sizeof(STOP_PATTERN_) / sizeof(int);
 const size_t Detector::SIZEOF_STOP_PATTERN_REVERSE_ = sizeof(STOP_PATTERN_REVERSE_) / sizeof(int);
 const size_t Detector::COUNT_VERTICES_ = 16;
+const size_t Detector::BARCODE_START_OFFSET = 2;
 
 Detector::Detector(Ref<BinaryBitmap> image)
   : image_(image) {
@@ -131,83 +124,64 @@ Ref<DetectorResult> Detector::detect() {
  * @throws NotFoundException if no PDF417 Code can be found
  */
 Ref<DetectorResult> Detector::detect(DecodeHints const& hints) {
-  //TODO: if "try harder", try 16, then 24
-  Ref<Delta2Binarizer> d2Bin(new Delta2Binarizer(image_->getLuminanceSource(), 24));
-
   // Fetch the 1 bit matrix once up front.
   Ref<BitMatrix> matrix = image_->getBlackMatrix();
-  Ref<BitMatrix> guardMatrix;
-  int rowStep;
-  if (hints.getTryHarder()) {
-    // Use an extra Delta2Binarizer constructed matrix to locate the guard patterns.
-    int matrixHeight = (matrix->getHeight() - 1) / 16;
-    int width = matrix->getWidth() - 1;
-    int height = matrixHeight * 16;
-    guardMatrix = d2Bin->createLinesMatrix(0, 0, width, 0,
-                                           0, height, width, height,
-                                           matrixHeight);
-    rowStep = 1;
-  } else {
-    guardMatrix = matrix;
-    rowStep = 8;
-  }
 #if PDF417_DIAG
   {
     static int __cnt__ = 0;
     std::stringstream ss;
-    ss << "pdf417-guardMatrix" << __cnt__ << ".png";
-    guardMatrix->writePng(ss.str().c_str(), 2, 16);
+    ss << "pdf417-matrix" << __cnt__++ << ".png";
+    matrix->writePng(ss.str().c_str(), 1, 1);
   }
 #endif
 
   // Try to find the vertices assuming the image is upright.
+  const int rowStep = 8;
   std::vector<Ref<ResultPoint> > vertices;
-  vertices = findVertices(guardMatrix, rowStep);
+  vertices = findVertices(matrix, rowStep);
   if (vertices.empty()) {
     // Maybe the image is rotated 180 degrees?
-    vertices = findVertices180(guardMatrix, rowStep);
+    vertices = findVertices180(matrix, rowStep);
     if (!vertices.empty()) {
-      if (rowStep == 1) {
-        RepositionVertices(vertices);
-      }
       correctVertices(matrix, vertices, true);
     }
   } else {
-    if (rowStep == 1) {
-      RepositionVertices(vertices);
-    }
     correctVertices(matrix, vertices, false);
   }
 
   if (vertices.empty()) {
-    throw NotFoundException("No vertices found!");
+    throw NotFoundException("No vertices found.");
   }
   
   float moduleWidth = computeModuleWidth(vertices);
   if (moduleWidth < 1.0f) {
-    throw NotFoundException("Bad PDF417 module width!");
+    throw NotFoundException("Bad module width.");
   }
   
   int dimension = computeDimension(vertices[12], vertices[14],
       vertices[13], vertices[15], moduleWidth);
   if (dimension < 1) {
-    throw NotFoundException("PDF:Detector: Bad dimension!");
+    throw NotFoundException("Bad dimension.");
   }
 
   int dimensionY = std::max(computeYDimension(vertices[12], vertices[14],
       vertices[13], vertices[15], moduleWidth), dimension);
 
-  // Build lines matrix from the (greyscale) luminance source using the Delta2Binarizer.
-  d2Bin->ResetMatrix();
-  Ref<BitMatrix> linesMatrix = d2Bin->createLinesMatrix(round(vertices[12]->getX()),
-      round(vertices[12]->getY()),
-      round(vertices[14]->getX()),
-      round(vertices[14]->getY()),
-      round(vertices[13]->getX()),
-      round(vertices[13]->getY()),
-      round(vertices[15]->getX()),
-      round(vertices[15]->getY()),
-      dimensionY * 2);
+  // Deskew and sample image.
+  const int sampleDimensionX = dimension * 8;
+  const int sampleDimensionY = dimensionY * 4;
+  Ref<PerspectiveTransform> transform(
+        PerspectiveTransform::quadrilateralToQuadrilateral(
+          0.0f, 0.0f,
+          (float)sampleDimensionX, 0.0f,
+          0.0f, (float)sampleDimensionY,
+          (float)sampleDimensionX, (float)sampleDimensionY,
+          vertices[12]->getX(), vertices[12]->getY(),
+          vertices[14]->getX(), vertices[14]->getY(),
+          vertices[13]->getX(), vertices[13]->getY(),
+          vertices[15]->getX(), vertices[15]->getY()));
+  Ref<BitMatrix> linesMatrix = GridSampler::getInstance().sampleGrid(
+        image_->getBlackMatrix(), sampleDimensionX, sampleDimensionY, transform);
 #if PDF417_DIAG
   {
     static int __cnt__ = 0;
@@ -217,6 +191,7 @@ Ref<DetectorResult> Detector::detect(DecodeHints const& hints) {
   }
 #endif
   
+  // Sample grid for the decoder.
   Ref<BitMatrix> bits(sampleGrid(linesMatrix, dimension));
 #if PDF417_DIAG
   {
@@ -227,6 +202,7 @@ Ref<DetectorResult> Detector::detect(DecodeHints const& hints) {
   }
 #endif
   
+  //TODO: verify points (was vertices 5 4 6 7).
   std::vector<Ref<ResultPoint> > points(4);
   points[0] = new ResultPoint(0.0f, (float)linesMatrix->getHeight());
   points[1] = new ResultPoint(0.0f, 0.0f);
@@ -334,6 +310,7 @@ std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, siz
  * TODO: Change assumption about barcode location.
  *
  * @param matrix the scanned barcode image.
+ * @param rowStep the step size for iterating rows (every n-th row).
  * @return an array containing the vertices:
  *           vertices[0] x, y top left barcode
  *           vertices[1] x, y bottom left barcode
@@ -421,24 +398,111 @@ std::vector<Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, 
 }
 
 /**
- * RepositionVertices
- * recalculates vertice positions from Delta2Binarizer-created lines matrix (for guard pattern
- * location) to HybridBinarizer-created original matrix co-ordinates.
+ * @param matrix row of black/white values to search
+ * @param column x position to start search
+ * @param row y position to start search
+ * @param width the number of pixels to search on this row
+ * @param pattern pattern of counts of number of black and white pixels that are
+ *                 being searched for as a pattern
+ * @param counters array of counters, as long as pattern, to re-use
+ * @return start/end horizontal offset of guard pattern, as an array of two ints.
  */
-void Detector::RepositionVertices(std::vector<Ref<ResultPoint> > &vertices)
-{
-  for(int i = 0; i < 8; i++) {
-    vertices[i].reset(new ResultPoint(vertices[i]->getX() / 2.0f,
-                                      vertices[i]->getY() * 16.0f + 8.0f));
+ArrayRef<int> Detector::findGuardPattern(Ref<BitMatrix> matrix,
+                                         size_t column,
+                                         size_t row,
+                                         size_t width,
+                                         bool whiteFirst,
+                                         const int pattern[],
+                                         size_t patternSize,
+                                         ArrayRef<int> counters) {
+  counters->values().assign(counters.size(), 0);
+  size_t patternLength = patternSize;
+  bool isWhite = whiteFirst;
+
+  size_t counterPosition = 0;
+  size_t patternStart = column;
+  for (size_t x = column; x < column + width; x++) {
+    bool pixel = matrix->get(x, row);
+    if (pixel ^ isWhite) {
+      counters[counterPosition]++;
+    } else {
+      if (counterPosition == patternLength - 1) {
+        if (patternMatchVariance(counters, pattern,
+                                 MAX_INDIVIDUAL_VARIANCE) < MAX_AVG_VARIANCE) {
+          ArrayRef<int> result = new Array<int>(2);
+          result[0] = patternStart;
+          result[1] = x;
+          return result;
+        }
+        patternStart += counters[0] + counters[1];
+        for(size_t i = 0; i < patternLength - 2; ++i)
+          counters[i] = counters[ i + 2];
+        counters[patternLength - 2] = 0;
+        counters[patternLength - 1] = 0;
+        counterPosition--;
+      } else {
+        counterPosition++;
+      }
+      counters[counterPosition] = 1;
+      isWhite = !isWhite;
+    }
   }
+  return ArrayRef<int>();
 }
 
 /**
- *(NEW 2012-09-12 HFN)
- * <p>Correct the vertices. The "old" way using "patchVerticePosThinBars" and "correctCodeWordVertices"
- * only if the distances between upper and lower vertices are too low.
- * Otherwise, look for the top and bottom points for the wide bars and find the intersections between
- * the upper/lower horizontal line and the inner vertices vertical lines.</p>
+ * Determines how closely a set of observed counts of runs of black/white
+ * values matches a given target pattern. This is reported as the ratio of
+ * the total variance from the expected pattern proportions across all
+ * pattern elements, to the length of the pattern.
+ *
+ * @param counters observed counters
+ * @param pattern expected pattern
+ * @param maxIndividualVariance The most any counter can differ before we give up
+ * @return ratio of total variance between counters and pattern compared to
+ *         total pattern size, where the ratio has been multiplied by 256.
+ *         So, 0 means no variance (perfect match); 256 means the total
+ *         variance between counters and patterns equals the pattern length,
+ *         higher values mean even more variance
+ */
+int Detector::patternMatchVariance(ArrayRef<int> counters, const int pattern[],
+                                   int maxIndividualVariance)
+{
+  size_t numCounters = counters.size();
+  size_t total = 0;
+  size_t patternLength = 0;
+  for (size_t i = 0; i < numCounters; i++) {
+    total += counters[i];
+    patternLength += pattern[i];
+  }
+  if (total < patternLength) {
+    // If we don't even have one pixel per unit of bar width, assume this
+    // is too small to reliably match, so fail:
+    return std::numeric_limits<int>::max();
+  }
+  // We're going to fake floating-point math in integers. We just need to use more bits.
+  // Scale up patternLength so that intermediate values below like scaledCounter will have
+  // more "significant digits".
+  int unitBarWidth = (total << 8) / patternLength;
+  maxIndividualVariance = (maxIndividualVariance * unitBarWidth) >> 8;
+
+  int totalVariance = 0;
+  for (size_t x = 0; x < numCounters; x++) {
+    int counter = counters[x] << 8;
+    int scaledPattern = pattern[x] * unitBarWidth;
+    int variance = counter > scaledPattern ? counter - scaledPattern : scaledPattern - counter;
+    if (variance > maxIndividualVariance) {
+      return std::numeric_limits<int>::max();
+    }
+    totalVariance += variance;
+  }
+  return totalVariance / total;
+}
+
+/**
+ * <p>Correct the vertices by searching for top and bottom vertices of wide
+ * bars, then locate the intersections between the upper and lower horizontal
+ * line and the inner vertices vertical lines.</p>
  *
  * @param matrix the scanned barcode image.
  * @param vertices the vertices vector is extended and the new members are:
@@ -461,10 +525,10 @@ void Detector::correctVertices(Ref<BitMatrix> matrix,
   if (isLowLeft || isLowRight) {
     throw NotFoundException("Cannot find enough PDF417 guard patterns!");
   } else {
-    searchWideBarTopBottom(matrix, vertices, 0, 0,  8, 17, upsideDown ? 1 : -1);
-    searchWideBarTopBottom(matrix, vertices, 1, 0,  8, 17, upsideDown ? -1 : 1);
-    searchWideBarTopBottom(matrix, vertices, 2, 11, 7, 18, upsideDown ? 1 : -1);
-    searchWideBarTopBottom(matrix, vertices, 3, 11, 7, 18, upsideDown ? -1 : 1);
+    findWideBarTopBottom(matrix, vertices, 0, 0,  8, 17, upsideDown ? 1 : -1);
+    findWideBarTopBottom(matrix, vertices, 1, 0,  8, 17, upsideDown ? -1 : 1);
+    findWideBarTopBottom(matrix, vertices, 2, 11, 7, 18, upsideDown ? 1 : -1);
+    findWideBarTopBottom(matrix, vertices, 3, 11, 7, 18, upsideDown ? -1 : 1);
     findCrossingPoint(vertices, 12, 4, 5, 8, 10, matrix);
     findCrossingPoint(vertices, 13, 4, 5, 9, 11, matrix);
     findCrossingPoint(vertices, 14, 6, 7, 8, 10, matrix);
@@ -473,26 +537,22 @@ void Detector::correctVertices(Ref<BitMatrix> matrix,
 }
 
 /**
- * <p>Searches the top or bottom of one of the two wide black bars.</p>
+ * <p>Locate the top or bottom of one of the two wide black bars of a guard pattern.</p>
  *
  * <p>Warning: it only searches along the y axis, so the return points would not be
  * right if the barcode is too curved.</p>
  *
- * TODO: update documentation below.
  * @param matrix The bit matrix.
- * @param vertices The 16 vertices located by findVertices(); The result points are stored into
- * vertices[8], ... , vertices[11].
- * @param upsideDown true if rotated by 180 degree.
-
- * searchWideBarTopBottom (NEW 2012-09-12 HFN)
- * See searchWideBarsTopBottom.
- * int offsetVertice: The offset of the outer vertice and the inner vertice (+ 4) to be corrected
- * and (+ 8) where the result is stored.
- * int startWideBar, lenWideBar: start and length of wide bar in the guard pattern.
- * int lenPattern: length of the pattern.
- * int rowStep: +1 if corner should be exceeded towards the bottom, -1 towards the top.
+ * @param vertices The 16 vertices located by findVertices(); the result
+ *           points are stored into vertices[8], ... , vertices[11].
+ * @param offsetVertice The offset of the outer vertice and the inner
+ *           vertice (+ 4) to be corrected and (+ 8) where the result is stored.
+ * @param startWideBar start of a wide bar.
+ * @param lenWideBar length of wide bar.
+ * @param lenPattern length of the pattern.
+ * @param rowStep +1 if corner should be exceeded towards the bottom, -1 towards the top.
  */
-void Detector::searchWideBarTopBottom(Ref<BitMatrix> matrix,
+void Detector::findWideBarTopBottom(Ref<BitMatrix> matrix,
                                       std::vector<Ref<ResultPoint> > &vertices,
                                       int offsetVertice,
                                       int startWideBar,
@@ -514,9 +574,17 @@ void Detector::searchWideBarTopBottom(Ref<BitMatrix> matrix,
   int yStart = round(verticeStart->getY());
   int y = yStart;
 
+  // Find offset of thin bar to the right as additional safeguard.
+  int nextBarX = std::max(barStart, barEnd) + 1;
+  for (; nextBarX < matrix->getWidth(); nextBarX++)
+    if (!matrix->get(nextBarX - 1, y) && matrix->get(nextBarX, y)) break;
+  nextBarX -= x;
+
   bool isEnd = false;
   while (!isEnd) {
     if (matrix->get(x, y)) {
+      // If the thin bar to the right ended, stop as well
+      isEnd = !matrix->get(x + nextBarX, y) && !matrix->get(x + nextBarX + 1, y);
       y += rowStep;
       if (y <= 0 || y >= (int)matrix->getHeight() - 1) {
         // End of barcode image reached.
@@ -651,6 +719,91 @@ int Detector::computeYDimension(Ref<ResultPoint> topLeft,
 }
 
 /**
+ *
+ */
+template <class KeyType>
+KeyType getValueWithMaxVotes(std::map<KeyType, unsigned int> &votes, bool &indecisive) {
+  KeyType maxValue = 0;
+  unsigned int maxVotes = 0;
+  indecisive = false;
+  for (typename std::map<KeyType, unsigned int>::iterator i = votes.begin(); i != votes.end(); i++) {
+    if (i->second > maxVotes) {
+      maxVotes = i->second;
+      maxValue = i->first;
+      indecisive = false;
+    } else if (i->second == maxVotes) {
+      indecisive = true;
+    }
+  }
+  return maxValue;
+}
+
+/**
+ *
+ */
+template <class KeyType>
+KeyType getValueWithMaxVotes(std::map<KeyType, unsigned int> &votes) {
+  bool indecisive = false;
+  return getValueWithMaxVotes(votes, indecisive);
+}
+
+/**
+ * @brief Detector::codewordsToBitMatrix
+ * @param codewords
+ * @param matrix
+ */
+void Detector::codewordsToBitMatrix(std::vector<std::vector<unsigned int> > &codewords, Ref<BitMatrix> &matrix) {
+  for (size_t i = 0; i < codewords.size(); i++) {
+    for (size_t j = 0; j < codewords[i].size(); j++) {
+      size_t moduleOffset = j * MODULES_IN_SYMBOL;
+      for (size_t k = 0; k < MODULES_IN_SYMBOL; k++) {
+        if ((codewords[i][j] & (1 << (MODULES_IN_SYMBOL - k - 1))) > 0) {
+          matrix->set(moduleOffset + k, i);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * @brief Detector::calculateClusterNumber
+ * @param codeword
+ * @return
+ */
+int Detector::calculateClusterNumber(unsigned int codeword) {
+  if (codeword == 0) {
+    return -1;
+  }
+  unsigned int barNumber = 0;
+  bool blackBar = true;
+  int clusterNumber = 0;
+  for (size_t i = 0; i < MODULES_IN_SYMBOL; i++) {
+    if ((codeword & (1 << i)) > 0) {
+      if (!blackBar) {
+        blackBar = true;
+        barNumber++;
+      }
+      if (barNumber % 2 == 0) {
+        clusterNumber++;
+      } else {
+        clusterNumber--;
+      }
+    } else {
+      if (blackBar) {
+        blackBar = false;
+      }
+    }
+  }
+  return (clusterNumber + 9) % 9;
+}
+
+//#define OUTPUT_SYMBOL_WIDTH 1
+//#define OUTPUT_BAR_WIDTH 1
+//#define OUTPUT_CW_STARTS 1
+//#define OUTPUT_CLUSTER_NUMBERS 1
+//#define OUTPUT_EC_LEVEL 1
+
+/**
  * Samples a decodable grid from a lines matrix.
  *
  * To sample the grid several properties of PDF417 are used:
@@ -660,33 +813,105 @@ int Detector::computeYDimension(Ref<ResultPoint> topLeft,
  *   - all valid codewords are known (obviously).
  *
  * @param linesMatrix unprojected bit matrix without guard patterns
- * @param dimension   the number of modules in a row
+ * @param dimension the number of modules in a row
  * @return the potentially decodable bit matrix.
  */
 Ref<BitMatrix> Detector::sampleGrid(Ref<BitMatrix> linesMatrix,
                                     int dimension)
 {
+  //TODO: sampel codewords
+
   const size_t symbolsPerLine = dimension / MODULES_IN_SYMBOL;
   std::vector<std::vector<unsigned int> > codewords(linesMatrix->getHeight());
+  std::vector<std::vector<int> > clusterNumbers(linesMatrix->getHeight());
+  int symbolStart = 0;
+  bool lastWasSymbolStart = true;
+  const float symbolWidth = symbolsPerLine > 0 ? (float)linesMatrix->getWidth() / (float)symbolsPerLine : (float)linesMatrix->getWidth();
+  std::vector<float> symbolWidths;
+
+  // Use the following property of PDF417 barcodes to detect symbols:
+  // Every symbol starts with a black module and every symbol is 17 modules wide,
+  // therefore there have to be columns in the line matrix that are completely composed of black pixels.
+  std::vector<unsigned int> blackCount(linesMatrix->getWidth(), 0);
+  for (size_t x = BARCODE_START_OFFSET; x < linesMatrix->getWidth(); x++) {
+    for (size_t y = 0; y < linesMatrix->getHeight(); y++) {
+      if (linesMatrix->get(x, y)) {
+        blackCount[x]++;
+      }
+    }
+    if (blackCount[x] == linesMatrix->getHeight()) {
+      if (!lastWasSymbolStart) {
+        float currentWidth = (float)(x - symbolStart);
+        // Make sure we really found a symbol by asserting a minimal size of 75% of the expected symbol width.
+        // This might break highly distorted barcodes, but fixes an issue with barcodes where there is a
+        // full black column from top to bottom within a symbol.
+        if (currentWidth > 0.75 * symbolWidth) {
+          // The actual symbol width might be slightly bigger than the expected symbol width,
+          // but if we are more than half an expected symbol width bigger, we assume that
+          // we missed one or more symbols and assume that they were the expected symbol width.
+          while (currentWidth > 1.5 * symbolWidth) {
+            symbolWidths.push_back(symbolWidth);
+            currentWidth -= symbolWidth;
+          }
+          symbolWidths.push_back(currentWidth);
+          lastWasSymbolStart = true;
+          symbolStart = x;
+        }
+      }
+    } else {
+      if (lastWasSymbolStart) {
+        lastWasSymbolStart = false;
+      }
+    }
+  }
+
+  // The last symbol ends at the right edge of the matrix, where there usually is no black bar.
+  float currentWidth = (float)(linesMatrix->getWidth() - symbolStart);
+  while (currentWidth > 1.5 * symbolWidth) {
+    symbolWidths.push_back(symbolWidth);
+    currentWidth -= symbolWidth;
+  }
+  symbolWidths.push_back(currentWidth);
+
+
+#if PDF417_DIAG && OUTPUT_SYMBOL_WIDTH
+  {
+    std::cout << "symbols per line: " << symbolsPerLine << std::endl;
+    std::cout << "symbol width (" << symbolWidths.size() << "): ";
+    for (size_t i = 0; i < symbolWidths.size(); i++) {
+      std::cout << symbolWidths[i] << ", ";
+    }
+    std::cout << std::endl;
+  }
+#endif
+
+
+  ///////////////////////////////////////////////
 
   for (size_t y = 0; y < linesMatrix->getHeight(); y++) {
     codewords[y].resize(symbolsPerLine, 0);
+    clusterNumbers[y].resize(symbolsPerLine, -1);
     size_t line = y;
-    std::vector<size_t> barWidths(linesMatrix->getWidth(), 0);
+    std::vector<size_t> barWidths(1, 0);
     size_t barCount = 0;
-    bool isSetBar = true; // linesMatrix->get(1, line);
-    // Delta2Binarizer::UNIT = 2
-    barWidths[0] += 2;
-    for (size_t x = 2; x < linesMatrix->getWidth(); x++) {
+    // Runlength encode the bars in the scanned linesMatrix.
+    // We assume that the first bar is black, as determined by the PDF417 standard.
+    bool isSetBar = true;
+    // Filter small white bars at the beginning of the barcode.
+    // Small white bars may occur due to small deviations in scan line sampling.
+    barWidths[0] += BARCODE_START_OFFSET;
+    for (size_t x = BARCODE_START_OFFSET; x < linesMatrix->getWidth(); x++) {
       if (linesMatrix->get(x, line)) {
         if (!isSetBar) {
           isSetBar = true;
           barCount++;
+          barWidths.resize(barWidths.size() + 1);
         }
       } else {
         if (isSetBar) {
           isSetBar = false;
           barCount++;
+          barWidths.resize(barWidths.size() + 1);
         }
 
       }
@@ -694,8 +919,23 @@ Ref<BitMatrix> Detector::sampleGrid(Ref<BitMatrix> linesMatrix,
     }
     // Don't forget the last bar.
     barCount++;
+    barWidths.resize(barWidths.size() + 1);
 
-    const float symbolWidth = symbolsPerLine > 0 ? (float)linesMatrix->getWidth() / (float)symbolsPerLine : (float)linesMatrix->getWidth();
+#if PDF417_DIAG && OUTPUT_BAR_WIDTH
+    {
+      for (size_t i = 0; i < barWidths.size(); i++) {
+        std::cout << barWidths[i] << ", ";
+      }
+      std::cout << std::endl;
+    }
+#endif
+
+    //////////////////////////////////////////////////
+
+    // Find the symbols in the line by counting bar lengths until we reach symbolWidth.
+    // We make sure, that the last bar of a symbol is always white, as determined by the PDF417 standard.
+    // This helps to reduce the amount of errors done during the symbol recognition.
+    // The symbolWidth usually is not constant over the width of the barcode.
     size_t cwWidth = 0;
     size_t cwCount = 0;
     std::vector<size_t> cwStarts(symbolsPerLine, 0);
@@ -703,7 +943,7 @@ Ref<BitMatrix> Detector::sampleGrid(Ref<BitMatrix> linesMatrix,
     cwCount++;
     for (size_t i = 0; i < barCount && cwCount < symbolsPerLine; i++) {
       cwWidth += barWidths[i];
-      if ((float)cwWidth >= symbolWidth) {
+      if ((float)cwWidth > symbolWidths[cwCount - 1]) {
         if ((i % 2) == 1) { // check if bar is white
           i++;
         }
@@ -712,36 +952,61 @@ Ref<BitMatrix> Detector::sampleGrid(Ref<BitMatrix> linesMatrix,
         cwCount++;
       }
     }
-    std::vector<float> cwRatios(BARS_IN_SYMBOL, 0.0f);
+
+#if PDF417_DIAG && OUTPUT_CW_STARTS
+    {
+      for (size_t i = 0; i < cwStarts.size(); i++) {
+        std::cout << cwStarts[i] << ", ";
+      }
+      std::cout << std::endl;
+    }
+#endif
+
+    ///////////////////////////////////////////
+
+    std::vector<std::vector<float> > cwRatios(symbolsPerLine);
     // Distribute bar widths to modules of a codeword.
     for (size_t i = 0; i < symbolsPerLine; i++) {
+      cwRatios[i].resize(BARS_IN_SYMBOL, 0.0f);
       const size_t cwStart = cwStarts[i];
       const size_t cwEnd = (i == symbolsPerLine - 1) ? barCount : cwStarts[i + 1];
       const size_t cwLength = cwEnd - cwStart;
 
-      if (cwLength < 7 || cwLength > 9)
+      if (cwLength < 7 || cwLength > 9) {
+        // We try to recover smybols with 7 or 9 bars and spaces with heuristics, but everything else is beyond repair.
         continue;
+      }
 
       float cwWidth = 0;
-      for (size_t j = 0; j < cwLength; ++j) {
+
+      // For symbols with 9 bar length simply ignore the last bar.
+      for (size_t j = 0; j < std::min(BARS_IN_SYMBOL, cwLength); ++j) {
         cwWidth += (float)barWidths[cwStart + j];
       }
 
-      for (size_t j = 0; j < cwRatios.size(); ++j) {
-        if (j < cwLength) {
-          cwRatios[j] = (float)barWidths[cwStart + j] / cwWidth;
-        } else {
-          cwRatios[j] = 0.0f;
+      // If there were only 7 bars and spaces detected use the following heuristic:
+      // Assume the length of the symbol is symbolWidth and the last (unrecognized) bar uses all remaining space.
+      if (cwLength == 7) {
+        for (size_t j = 0; j < cwLength; ++j) {
+          cwRatios[i][j] = (float)barWidths[cwStart + j] / symbolWidths[i];
+        }
+        cwRatios[i][7] = (symbolWidths[i] - cwWidth) / symbolWidths[i];
+      } else {
+        for (size_t j = 0; j < cwRatios[i].size(); ++j) {
+          cwRatios[i][j] = (float)barWidths[cwStart + j] / cwWidth;
         }
       }
 
       float bestMatchError = FLT_MAX;
       unsigned int bestMatch = 0;
 
+      // Search for the most possible codeword by comparing the ratios of bar size to symbol width.
+      // The sum of the squared differences is used as similarity metric.
+      // (Picture it as the square euclidian distance in the space of eight tuples where a tuple represents the bar ratios.)
       for (size_t j = 0; j < POSSIBLE_SYMBOLS; j++) {
         float error = 0.0f;
         for (size_t k = 0; k < BARS_IN_SYMBOL; k++) {
-          error += pow(RATIOS_TABLE[j * BARS_IN_SYMBOL + k] - cwRatios[k], 2);
+          error += pow(RATIOS_TABLE[j * BARS_IN_SYMBOL + k] - cwRatios[i][k], 2);
         }
         if (error < bestMatchError) {
           bestMatchError = error;
@@ -749,188 +1014,274 @@ Ref<BitMatrix> Detector::sampleGrid(Ref<BitMatrix> linesMatrix,
         }
       }
       codewords[y][i] = bestMatch;
+      clusterNumbers[y][i] = calculateClusterNumber(bestMatch);
     }
   }
 
-  std::vector<std::vector<unsigned int> > detectedCodeWords(1);
-  detectedCodeWords[0].resize(symbolsPerLine);
+  ////////////////////////////////////////
+
+#if PDF417_DIAG && OUTPUT_CLUSTER_NUMBERS
+  {
+    for (size_t i = 0; i < clusterNumbers.size(); i++) {
+      for (size_t j = 0; j < clusterNumbers[i].size(); j++) {
+        std::cout << clusterNumbers[i][j] << ", ";
+      }
+      std::cout << std::endl;
+    }
+  }
+#endif
+
+#if PDF417_DIAG
+  {
+    Ref<BitMatrix> bits(new BitMatrix(symbolsPerLine * MODULES_IN_SYMBOL, codewords.size()));
+    codewordsToBitMatrix(codewords, bits);
+    static int __cnt__ = 0;
+    std::stringstream ss;
+    ss << "pdf417-detectedRaw" << __cnt__++ << ".png";
+    bits->writePng(ss.str().c_str(), 8, 16);
+  }
+#endif
+
+  // Matrix of votes for codewords which are possible at this position.
+  std::vector<std::vector<std::map<unsigned int, unsigned int> > > votes(1);
+  votes[0].resize(symbolsPerLine);
 
   size_t currentRow = 0;
-  size_t lastLine = 0;
-  std::vector<std::map<unsigned int, unsigned int> > votes(symbolsPerLine);
-  for (size_t y = 0; y < codewords.size(); y++) {
-    bool garbageLine = false;
+  std::map<int, unsigned int> clusterNumberVotes;
+  int lastLineClusterNumber = -1;
 
-    for (size_t i = 0; i < symbolsPerLine; i++) {
-      garbageLine = (garbageLine || (codewords[y][i] == 0));
+  for (size_t y = 0; y < codewords.size(); y++) {
+    // Vote for the most probable cluster number for this row.
+    clusterNumberVotes.clear();
+    for (size_t i = 0; i < codewords[y].size(); i++) {
+      if (clusterNumbers[y][i] != -1) {
+        clusterNumberVotes[clusterNumbers[y][i]] = clusterNumberVotes[clusterNumbers[y][i]] + 1;
+      }
     }
 
-    if (!garbageLine) {
-      unsigned int diff = 0;
-      for (size_t i = 0; i < symbolsPerLine; i++) {
-        if (codewords[lastLine][i] != codewords[y][i]) {
-          diff++;
-        }
+    // Ignore lines where no codeword could be read.
+    if (!clusterNumberVotes.empty()) {
+      bool lineClusterNumberIsIndecisive = false;
+      int lineClusterNumber = getValueWithMaxVotes<int>(clusterNumberVotes, lineClusterNumberIsIndecisive);
+
+      // If there are to few votes on the lines cluster number, we keep the old one.
+      // This avoids switching lines because of damaged inter line readings, but
+      // may cause problems for barcodes with four or less rows.
+      if (lineClusterNumberIsIndecisive) {
+        lineClusterNumber = lastLineClusterNumber;
       }
 
-      if (diff == symbolsPerLine) {
-        // Zeile berechnen
-        for (size_t i = 0; i < symbolsPerLine; i++) {
-          unsigned int maxValue = 0;
-          unsigned int maxVotes = 0;
-          for (std::map<unsigned int, unsigned int>::iterator l = votes[i].begin(); l != votes[i].end(); l++) {
-            if (l->second > maxVotes) {
-              maxVotes = l->second;
-              maxValue = l->first;
+      if ((lineClusterNumber != ((lastLineClusterNumber + 3) % 9)) && (lastLineClusterNumber != -1)) {
+        lineClusterNumber = lastLineClusterNumber;
+      }
+
+      // Ignore broken lines at the beginning of the barcode.
+      if ((lineClusterNumber == 0 && lastLineClusterNumber == -1) || (lastLineClusterNumber != -1)) {
+        if ((lineClusterNumber == ((lastLineClusterNumber + 3) % 9)) && (lastLineClusterNumber != -1)) {
+          currentRow++;
+          if (votes.size() < currentRow + 1) {
+            votes.resize(currentRow + 1);
+            votes[currentRow].resize(symbolsPerLine);
+          }
+        }
+
+        if ((lineClusterNumber == ((lastLineClusterNumber + 6) % 9)) && (lastLineClusterNumber != -1)) {
+          currentRow += 2;
+          if (votes.size() < currentRow + 1) {
+            votes.resize(currentRow + 1);
+            votes[currentRow].resize(symbolsPerLine);
+          }
+        }
+
+        for (size_t i = 0; i < codewords[y].size(); i++) {
+          if (clusterNumbers[y][i] != -1) {
+            if (clusterNumbers[y][i] == lineClusterNumber) {
+              votes[currentRow][i][codewords[y][i]] = votes[currentRow][i][codewords[y][i]] + 1;
+            } else if (clusterNumbers[y][i] == ((lineClusterNumber + 3) % 9)) {
+              if (votes.size() < currentRow + 2) {
+                votes.resize(currentRow + 2);
+                votes[currentRow + 1].resize(symbolsPerLine);
+              }
+              votes[currentRow + 1][i][codewords[y][i]] = votes[currentRow + 1][i][codewords[y][i]] + 1;
+            } else if ((clusterNumbers[y][i] == ((lineClusterNumber + 6) % 9)) && (currentRow > 0)) {
+              votes[currentRow - 1][i][codewords[y][i]] = votes[currentRow - 1][i][codewords[y][i]] + 1;
             }
           }
-          detectedCodeWords[currentRow][i] = maxValue;
         }
-        currentRow++;
-        detectedCodeWords.resize(detectedCodeWords.size() + 1);
-        detectedCodeWords[currentRow].resize(symbolsPerLine);
-        for (size_t i = 0; i < symbolsPerLine; i++) {
-          votes[i].clear();
-        }
+        lastLineClusterNumber = lineClusterNumber;
       }
-      for (size_t i = 0; i < symbolsPerLine; i++) {
-        if (codewords[y][i] == 0) {
-          std::cout << "aaaaaaaaaaaaaaa" << std::endl;
-        }
-        votes[i][codewords[y][i]] = votes[i][codewords[y][i]] + 1;
-      }
-      lastLine = y;
     }
   }
 
-  for (size_t i = 0; i < symbolsPerLine; i++) {
-    unsigned int maxValue = 0;
-    unsigned int maxVotes = 0;
-    for (std::map<unsigned int, unsigned int>::iterator l = votes[i].begin(); l != votes[i].end(); l++) {
-      if (l->second > maxVotes) {
-        maxVotes = l->second;
-        maxValue = l->first;
+  //////////////////////////
+
+  std::vector<std::vector<unsigned int> > detectedCodeWords(votes.size());
+
+  for (size_t i = 0; i < votes.size(); i++) {
+    detectedCodeWords[i].resize(votes[i].size(), 0);
+    for (size_t j = 0; j < votes[i].size(); j++) {
+      if (!votes[i][j].empty()) {
+        detectedCodeWords[i][j] = getValueWithMaxVotes<unsigned int>(votes[i][j]);
       }
     }
-    detectedCodeWords[currentRow][i] = maxValue;
   }
+
+  //////////////////////////
+
+  std::vector<size_t> insertLinesAt;
+  if (detectedCodeWords.size() > 1) {
+    for (size_t i = 0; i < detectedCodeWords.size() - 1; i++) {
+      int clusterNumberRow = -1;
+      for (size_t j = 0; j < detectedCodeWords[i].size() && clusterNumberRow == -1; j++) {
+        int clusterNumber = calculateClusterNumber(detectedCodeWords[i][j]);
+        if (clusterNumber != -1) {
+          clusterNumberRow = clusterNumber;
+        }
+      }
+      if (i == 0) {
+        // The first line must have the cluster number 0. Insert empty lines to match this.
+        if (clusterNumberRow > 0) {
+          insertLinesAt.push_back(0);
+          if (clusterNumberRow > 3) {
+            insertLinesAt.push_back(0);
+          }
+        }
+      }
+      int clusterNumberNextRow = -1;
+      for (size_t j = 0; j < detectedCodeWords[i + 1].size() && clusterNumberNextRow == -1; j++) {
+        int clusterNumber = calculateClusterNumber(detectedCodeWords[i + 1][j]);
+        if (clusterNumber != -1) {
+          clusterNumberNextRow = clusterNumber;
+        }
+      }
+      if ((clusterNumberRow + 3) % 9 != clusterNumberNextRow
+          && clusterNumberRow != -1
+          && clusterNumberNextRow != -1) {
+        // The cluster numbers are not consecutive. Insert an empty line between them.
+        insertLinesAt.push_back(i + 1);
+        if (clusterNumberRow == clusterNumberNextRow) {
+          // There may be two lines missing. This is detected when two consecutive lines have the same cluster number.
+          insertLinesAt.push_back(i + 1);
+        }
+      }
+    }
+  }
+
+  for (size_t i = 0; i < insertLinesAt.size(); i++) {
+    detectedCodeWords.insert(detectedCodeWords.begin() + insertLinesAt[i] + i, std::vector<unsigned int>(symbolsPerLine, 0));
+  }
+
+  ///////////////////////////////////
+
+  // Use the information in the first and last column to determin the number of rows and find more missing rows.
+  // For missing rows insert blank space, so the error correction can try to fill them in.
+  std::map<unsigned int, unsigned int> rowCountVotes;
+  std::map<unsigned int, unsigned int> ecLevelVotes;
+  std::map<int, unsigned int> rowNumberVotes;
+  int lastRowNumber = -1;
+  insertLinesAt.clear();
+
+  for (size_t i = 0; i + 2 < detectedCodeWords.size(); i += 3) {
+    rowNumberVotes.clear();
+    int firstCodewordDecodedLeft = -1;
+    int secondCodewordDecodedLeft = -1;
+    int thirdCodewordDecodedLeft = -1;
+    int firstCodewordDecodedRight = -1;
+    int secondCodewordDecodedRight = -1;
+    int thirdCodewordDecodedRight = -1;
+
+    if (detectedCodeWords[i][0] != 0) {
+      firstCodewordDecodedLeft = BitMatrixParser::getCodeword(detectedCodeWords[i][0]);
+    }
+    if (detectedCodeWords[i + 1][0] != 0) {
+      secondCodewordDecodedLeft = BitMatrixParser::getCodeword(detectedCodeWords[i + 1][0]);
+    }
+    if (detectedCodeWords[i + 2][0] != 0) {
+      thirdCodewordDecodedLeft = BitMatrixParser::getCodeword(detectedCodeWords[i + 2][0]);
+    }
+
+    if (detectedCodeWords[i][detectedCodeWords[i].size() - 1] != 0) {
+      firstCodewordDecodedRight = BitMatrixParser::getCodeword(detectedCodeWords[i][detectedCodeWords[i].size() - 1]);
+    }
+    if (detectedCodeWords[i + 1][detectedCodeWords[i + 1].size() - 1] != 0) {
+      secondCodewordDecodedRight = BitMatrixParser::getCodeword(detectedCodeWords[i + 1][detectedCodeWords[i + 1].size() - 1]);
+    }
+    if (detectedCodeWords[i + 2][detectedCodeWords[i + 2].size() - 1] != 0) {
+      thirdCodewordDecodedRight = BitMatrixParser::getCodeword(detectedCodeWords[i + 2][detectedCodeWords[i + 2].size() - 1]);
+    }
+
+    if (firstCodewordDecodedLeft != -1 && secondCodewordDecodedLeft != -1) {
+      unsigned int leftRowCount = ((firstCodewordDecodedLeft % 30) * 3) + ((secondCodewordDecodedLeft % 30) % 3);
+      unsigned int leftECLevel = (secondCodewordDecodedLeft % 30) / 3;
+
+      rowCountVotes[leftRowCount] = rowCountVotes[leftRowCount] + 1;
+      ecLevelVotes[leftECLevel] = ecLevelVotes[leftECLevel] + 1;
+    }
+
+    if (secondCodewordDecodedRight != -1 && thirdCodewordDecodedRight != -1) {
+      unsigned int rightRowCount = ((secondCodewordDecodedRight % 30) * 3) + ((thirdCodewordDecodedRight % 30) % 3);
+      unsigned int rightECLevel = (thirdCodewordDecodedRight % 30) / 3;
+
+      rowCountVotes[rightRowCount] = rowCountVotes[rightRowCount] + 1;
+      ecLevelVotes[rightECLevel] = ecLevelVotes[rightECLevel] + 1;
+    }
+
+    if (firstCodewordDecodedLeft != -1) {
+      int rowNumber = firstCodewordDecodedLeft / 30;
+      rowNumberVotes[rowNumber] = rowNumberVotes[rowNumber] + 1;
+    }
+    if (secondCodewordDecodedLeft != -1) {
+      int rowNumber = secondCodewordDecodedLeft / 30;
+      rowNumberVotes[rowNumber] = rowNumberVotes[rowNumber] + 1;
+    }
+    if (thirdCodewordDecodedLeft != -1) {
+      int rowNumber = thirdCodewordDecodedLeft / 30;
+      rowNumberVotes[rowNumber] = rowNumberVotes[rowNumber] + 1;
+    }
+    if (firstCodewordDecodedRight != -1) {
+      int rowNumber = firstCodewordDecodedRight / 30;
+      rowNumberVotes[rowNumber] = rowNumberVotes[rowNumber] + 1;
+    }
+    if (secondCodewordDecodedRight != -1) {
+      int rowNumber = secondCodewordDecodedRight / 30;
+      rowNumberVotes[rowNumber] = rowNumberVotes[rowNumber] + 1;
+    }
+    if (thirdCodewordDecodedRight != -1) {
+      int rowNumber = thirdCodewordDecodedRight / 30;
+      rowNumberVotes[rowNumber] = rowNumberVotes[rowNumber] + 1;
+    }
+    int rowNumber = getValueWithMaxVotes<int>(rowNumberVotes);
+    if (lastRowNumber + 1 < rowNumber) {
+      for (unsigned int j = lastRowNumber + 1; j < rowNumber; j++) {
+        insertLinesAt.push_back(i);
+        insertLinesAt.push_back(i);
+        insertLinesAt.push_back(i);
+      }
+    }
+    lastRowNumber = rowNumber;
+  }
+
+  for (size_t i = 0; i < insertLinesAt.size(); i++) {
+    detectedCodeWords.insert(detectedCodeWords.begin() + insertLinesAt[i] + i, std::vector<unsigned int>(symbolsPerLine, 0));
+  }
+
+  unsigned int rowCount = getValueWithMaxVotes<unsigned int>(rowCountVotes);
+  unsigned int ecLevel = getValueWithMaxVotes<unsigned int>(ecLevelVotes);
+
+#if PDF417_DIAG && OUTPUT_EC_LEVEL
+  {
+    std::cout << "EC Level: " << ecLevel << " (" << ((1 << (ecLevel + 1)) - 2) << " EC Codewords)" << std::endl;
+  }
+#endif
+  rowCount += 1;
+
+  detectedCodeWords.resize(rowCount);
 
   Ref<BitMatrix> grid(new BitMatrix(dimension, detectedCodeWords.size()));
 
-  for (size_t i = 0; i < detectedCodeWords.size(); i++) {
-    for (size_t j = 0; j < symbolsPerLine; j++) {
-      size_t moduleOffset = j * MODULES_IN_SYMBOL;
-      for (size_t k = 0; k < MODULES_IN_SYMBOL; k++) {
-        if ((detectedCodeWords[i][j] & (1 << (MODULES_IN_SYMBOL - k - 1))) > 0) {
-          grid->set(moduleOffset + k, i);
-        }
-      }
-    }
-  }
+  codewordsToBitMatrix(detectedCodeWords, grid);
 
   return grid;
-}
-
-/**
- * @param matrix row of black/white values to search
- * @param column x position to start search
- * @param row y position to start search
- * @param width the number of pixels to search on this row
- * @param pattern pattern of counts of number of black and white pixels that are
- *                 being searched for as a pattern
- * @param counters array of counters, as long as pattern, to re-use
- * @return start/end horizontal offset of guard pattern, as an array of two ints.
- */
-ArrayRef<int> Detector::findGuardPattern(Ref<BitMatrix> matrix,
-                                         size_t column,
-                                         size_t row,
-                                         size_t width,
-                                         bool whiteFirst,
-                                         const int pattern[],
-                                         size_t patternSize,
-                                         ArrayRef<int> counters) {
-  counters->values().assign(counters.size(), 0);
-  size_t patternLength = patternSize;
-  bool isWhite = whiteFirst;
-
-  size_t counterPosition = 0;
-  size_t patternStart = column;
-  for (size_t x = column; x < column + width; x++) {
-    bool pixel = matrix->get(x, row);
-    if (pixel ^ isWhite) {
-      counters[counterPosition]++;
-    } else {
-      if (counterPosition == patternLength - 1) {
-        if (patternMatchVariance(counters, pattern,
-                                 MAX_INDIVIDUAL_VARIANCE) < MAX_AVG_VARIANCE) {
-          ArrayRef<int> result = new Array<int>(2);
-          result[0] = patternStart;
-          result[1] = x;
-          return result;
-        }
-        patternStart += counters[0] + counters[1];
-        for(size_t i = 0; i < patternLength - 2; ++i)
-          counters[i] = counters[ i + 2];
-        counters[patternLength - 2] = 0;
-        counters[patternLength - 1] = 0;
-        counterPosition--;
-      } else {
-        counterPosition++;
-      }
-      counters[counterPosition] = 1;
-      isWhite = !isWhite;
-    }
-  }
-  return ArrayRef<int>();
-}
-
-/**
- * Determines how closely a set of observed counts of runs of black/white
- * values matches a given target pattern. This is reported as the ratio of
- * the total variance from the expected pattern proportions across all
- * pattern elements, to the length of the pattern.
- *
- * @param counters observed counters
- * @param pattern expected pattern
- * @param maxIndividualVariance The most any counter can differ before we give up
- * @return ratio of total variance between counters and pattern compared to
- *         total pattern size, where the ratio has been multiplied by 256.
- *         So, 0 means no variance (perfect match); 256 means the total
- *         variance between counters and patterns equals the pattern length,
- *         higher values mean even more variance
- */
-int Detector::patternMatchVariance(ArrayRef<int> counters, const int pattern[],
-                                   int maxIndividualVariance)
-{
-  size_t numCounters = counters.size();
-  size_t total = 0;
-  size_t patternLength = 0;
-  for (size_t i = 0; i < numCounters; i++) {
-    total += counters[i];
-    patternLength += pattern[i];
-  }
-  if (total < patternLength) {
-    // If we don't even have one pixel per unit of bar width, assume this
-    // is too small to reliably match, so fail:
-    return std::numeric_limits<int>::max();
-  }
-  // We're going to fake floating-point math in integers. We just need to use more bits.
-  // Scale up patternLength so that intermediate values below like scaledCounter will have
-  // more "significant digits".
-  int unitBarWidth = (total << 8) / patternLength;
-  maxIndividualVariance = (maxIndividualVariance * unitBarWidth) >> 8;
-  
-  int totalVariance = 0;
-  for (size_t x = 0; x < numCounters; x++) {
-    int counter = counters[x] << 8;
-    int scaledPattern = pattern[x] * unitBarWidth;
-    int variance = counter > scaledPattern ? counter - scaledPattern : scaledPattern - counter;
-    if (variance > maxIndividualVariance) {
-      return std::numeric_limits<int>::max();
-    }
-    totalVariance += variance;
-  }
-  return totalVariance / total;
 }
 
 /**

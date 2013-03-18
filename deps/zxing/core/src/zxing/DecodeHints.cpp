@@ -41,7 +41,6 @@ const DecodeHints DecodeHints::ONED_HINT(
     BARCODEFORMAT_ITF_HINT);
 
 const DecodeHints DecodeHints::DEFAULT_HINT(
-#if !NO_ONED_READER
     BARCODEFORMAT_UPC_E_HINT |
     BARCODEFORMAT_UPC_A_HINT |
     BARCODEFORMAT_EAN_8_HINT |
@@ -49,7 +48,6 @@ const DecodeHints DecodeHints::DEFAULT_HINT(
     BARCODEFORMAT_CODE_128_HINT |
     BARCODEFORMAT_CODE_39_HINT |
     BARCODEFORMAT_ITF_HINT |
-#endif
     BARCODEFORMAT_DATA_MATRIX_HINT |
     BARCODEFORMAT_AZTEC_HINT |
     BARCODEFORMAT_QR_CODE_HINT |
@@ -65,10 +63,10 @@ DecodeHints::DecodeHints(DecodeHintType init) {
 
 void DecodeHints::addFormat(BarcodeFormat toadd) {
   switch (toadd) {
+    case BarcodeFormat_AZTEC: hints |= BARCODEFORMAT_AZTEC_HINT; break;
     case BarcodeFormat_QR_CODE: hints |= BARCODEFORMAT_QR_CODE_HINT; break;
     case BarcodeFormat_DATA_MATRIX: hints |= BARCODEFORMAT_DATA_MATRIX_HINT; break;
     case BarcodeFormat_PDF_417: hints |= BARCODEFORMAT_PDF_417_HINT; break;
-    case BarcodeFormat_AZTEC: hints |= BARCODEFORMAT_AZTEC_HINT; break;
     case BarcodeFormat_UPC_E: hints |= BARCODEFORMAT_UPC_E_HINT; break;
     case BarcodeFormat_UPC_A: hints |= BARCODEFORMAT_UPC_A_HINT; break;
     case BarcodeFormat_EAN_8: hints |= BARCODEFORMAT_EAN_8_HINT; break;
@@ -83,10 +81,10 @@ void DecodeHints::addFormat(BarcodeFormat toadd) {
 bool DecodeHints::containsFormat(BarcodeFormat tocheck) const {
   DecodeHintType checkAgainst;
   switch (tocheck) {
+    case BarcodeFormat_AZTEC: checkAgainst = BARCODEFORMAT_AZTEC_HINT; break;
     case BarcodeFormat_QR_CODE: checkAgainst = BARCODEFORMAT_QR_CODE_HINT; break;
     case BarcodeFormat_DATA_MATRIX: checkAgainst = BARCODEFORMAT_DATA_MATRIX_HINT; break;
     case BarcodeFormat_PDF_417: checkAgainst = BARCODEFORMAT_PDF_417_HINT; break;
-    case BarcodeFormat_AZTEC: checkAgainst = BARCODEFORMAT_AZTEC_HINT; break;
     case BarcodeFormat_UPC_E: checkAgainst = BARCODEFORMAT_UPC_E_HINT; break;
     case BarcodeFormat_UPC_A: checkAgainst = BARCODEFORMAT_UPC_A_HINT; break;
     case BarcodeFormat_EAN_8: checkAgainst = BARCODEFORMAT_EAN_8_HINT; break;
@@ -96,7 +94,7 @@ bool DecodeHints::containsFormat(BarcodeFormat tocheck) const {
     case BarcodeFormat_ITF: checkAgainst = BARCODEFORMAT_ITF_HINT; break;
     default: throw IllegalArgumentException("Unrecognizd barcode format");
   }
-  return ((hints & checkAgainst) != 0);
+  return (hints & checkAgainst) != 0;
 }
 
 void DecodeHints::setTryHarder(bool toset) {
@@ -108,7 +106,7 @@ void DecodeHints::setTryHarder(bool toset) {
 }
 
 bool DecodeHints::getTryHarder() const {
-  return ((hints & TRYHARDER_HINT) != 0);
+  return (hints & TRYHARDER_HINT) != 0;
 }
 
 void DecodeHints::setResultPointCallback(Ref<ResultPointCallback> const& _callback) {
