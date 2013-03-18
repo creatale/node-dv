@@ -56,7 +56,7 @@ private:
     Tesseract(const char *datapath, const char *language);
     ~Tesseract();
 
-    v8::Handle<v8::Value> GetResultArray(tesseract::PageIteratorLevel level);
+    v8::Handle<v8::Value> TransformResult(tesseract::PageIteratorLevel level, const v8::Arguments &args);
 
     tesseract::TessBaseAPI api_;
     v8::Persistent<v8::Object> image_;

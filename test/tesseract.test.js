@@ -23,34 +23,55 @@ var writeImageBoxes = function(basename, image, array){
 
 describe('Tesseract', function(){
     before(function(){
-        this.tesseract = new dv.Tesseract();
         this.textPage300 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
+        this.tesseract = new dv.Tesseract();
         fs.writeFileSync(__dirname + '/fixtures_out/textpage300.png', this.textPage300.toBuffer('png'));
     })
-    it('should have defaults', function(){
-        should.not.exist(this.tesseract.image);
-        should.not.exist(this.tesseract.rectangle);
-        this.tesseract.pageSegMode.should.equal('single_block');
-    })
-    it('should not crash', function(){
-        //XXX: tests could be better.
-        this.tesseract.image = this.textPage300;
-        writeImageBoxes('textpage300-regions.png', this.textPage300, this.tesseract.findRegions());
-        writeImageBoxes('textpage300-lines.png', this.textPage300, this.tesseract.findTextLines());
-        writeImageBoxes('textpage300-para.png', this.textPage300, this.tesseract.findParagraphs());
-        writeImageBoxes('textpage300-words.png', this.textPage300, this.tesseract.findWords());
-        writeImageBoxes('textpage300-symbols.png', this.textPage300, this.tesseract.findSymbols());
-        this.tesseract.clear();
+    it('should #clear()', function(){
         this.tesseract.clearAdaptiveClassifier();
     })
-    describe('#findText()', function(){
-        it('should find plain text', function(){
-            this.tesseract.image = this.textPage300;
-            var plainText = this.tesseract.findText('plain').replace(/\s/g, '').toLowerCase();
-            for (var i = 0; i < 6; ++i) {
-                var paragraph = plainText.substr(i * textParagraph.length, textParagraph.length);
-                paragraph.should.equal(textParagraph, 'Paragraph ' + i);
-            }
-        })
+    it('should #clearAdaptiveClassifier()', function(){
+        this.tesseract.clearAdaptiveClassifier();
+    })
+    it('should set #image', function(){
+        this.tesseract.image = this.textPage300;
+    })
+    it('should #findRegions()', function(){
+        writeImageBoxes('textpage300-regions.png', this.textPage300, this.tesseract.findRegions());
+    })
+    it('should #findRegions(false)', function(){
+        writeImageBoxes('textpage300-regions.png', this.textPage300, this.tesseract.findRegions(false));
+    })
+    it('should #findTextLines()', function(){
+        writeImageBoxes('textpage300-lines.png', this.textPage300, this.tesseract.findTextLines());
+    })
+    it('should #findTextLines(false)', function(){
+        writeImageBoxes('textpage300-lines.png', this.textPage300, this.tesseract.findTextLines(false));
+    })
+    it('should #findParagraphs()', function(){
+        writeImageBoxes('textpage300-para.png', this.textPage300, this.tesseract.findParagraphs());
+    })
+    it('should #findParagraphs(false)', function(){
+        writeImageBoxes('textpage300-para.png', this.textPage300, this.tesseract.findParagraphs(false));
+    })
+    it('should #findWords()', function(){
+        writeImageBoxes('textpage300-words.png', this.textPage300, this.tesseract.findWords());
+    })
+    it('should #findWords(false)', function(){
+        writeImageBoxes('textpage300-words.png', this.textPage300, this.tesseract.findWords(false));
+    })
+    it('should #findSymbols()', function(){
+        writeImageBoxes('textpage300-symbols.png', this.textPage300, this.tesseract.findSymbols());
+    })
+    it('should #findSymbols(false)', function(){
+        writeImageBoxes('textpage300-symbols.png', this.textPage300, this.tesseract.findSymbols(false));
+    })
+    it('should #findText(\'plain\')', function(){
+        this.tesseract.image = this.textPage300;
+        var plainText = this.tesseract.findText('plain').replace(/\s/g, '').toLowerCase();
+        for (var i = 0; i < 6; ++i) {
+            var paragraph = plainText.substr(i * textParagraph.length, textParagraph.length);
+            paragraph.should.equal(textParagraph, 'Paragraph ' + i);
+        }
     })
 })

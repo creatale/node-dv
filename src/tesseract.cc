@@ -241,35 +241,35 @@ Handle<Value> Tesseract::FindRegions(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    return scope.Close(obj->GetResultArray(tesseract::RIL_BLOCK));
+    return scope.Close(obj->TransformResult(tesseract::RIL_BLOCK, args));
 }
 
 Handle<Value> Tesseract::FindParagraphs(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    return scope.Close(obj->GetResultArray(tesseract::RIL_PARA));
+    return scope.Close(obj->TransformResult(tesseract::RIL_PARA, args));
 }
 
 Handle<Value> Tesseract::FindTextLines(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    return scope.Close(obj->GetResultArray(tesseract::RIL_TEXTLINE));
+    return scope.Close(obj->TransformResult(tesseract::RIL_TEXTLINE, args));
 }
 
 Handle<Value> Tesseract::FindWords(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    return scope.Close(obj->GetResultArray(tesseract::RIL_WORD));
+    return scope.Close(obj->TransformResult(tesseract::RIL_WORD, args));
 }
 
 Handle<Value> Tesseract::FindSymbols(const Arguments &args)
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    return scope.Close(obj->GetResultArray(tesseract::RIL_SYMBOL));
+    return scope.Close(obj->TransformResult(tesseract::RIL_SYMBOL, args));
 }
 
 Handle<Value> Tesseract::FindText(const Arguments &args)
@@ -314,12 +314,21 @@ Tesseract::~Tesseract()
     api_.End();
 }
 
-Handle<Value> Tesseract::GetResultArray(tesseract::PageIteratorLevel level)
+Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, const Arguments &args)
 {
-    if (api_.Recognize(NULL) != 0) {
-        return THROW(Error, "Internal tesseract error");
+    bool recognize = true;
+    if (args.Length() >= 1 && args[0]->IsBoolean()) {
+        recognize = args[0]->BooleanValue();
     }
-    tesseract::ResultIterator* it = api_.GetIterator();
+    tesseract::PageIterator *it = 0;
+    if (recognize) {
+        if (api_.Recognize(NULL) != 0) {
+            return THROW(Error, "Internal tesseract error");
+        }
+        it = api_.GetIterator();
+    } else {
+        it = api_.AnalyseLayout();
+    }
     if (it == NULL) {
         return THROW(Error, "ResultIterator == null");
     }
@@ -340,15 +349,16 @@ Handle<Value> Tesseract::GetResultArray(tesseract::PageIteratorLevel level)
             box->Set(String::NewSymbol("height"), Int32::New(bottom - top));
             result->Set(String::NewSymbol("box"), box);
         }
-        if (level != tesseract::RIL_TEXTLINE) {
+        if (level != tesseract::RIL_TEXTLINE && recognize) {
             // Extract text.
-            char *text = it->GetUTF8Text(level);
+            char *text = static_cast<tesseract::ResultIterator *>(it)->GetUTF8Text(level);
             result->Set(String::NewSymbol("text"), String::New(text));
             delete[] text;
         }
-        if (level == tesseract::RIL_SYMBOL) {
+        if (level == tesseract::RIL_SYMBOL && recognize) {
             // Extract choices
-            tesseract::ChoiceIterator choiceIt = tesseract::ChoiceIterator(*it);
+            tesseract::ChoiceIterator choiceIt = tesseract::ChoiceIterator(
+                        *static_cast<tesseract::ResultIterator *>(it));
             Handle<Array> choices = Array::New();
             int choiceIndex = 0;
             do {
