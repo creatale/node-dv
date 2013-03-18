@@ -16,7 +16,7 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 ## Quick Start
 
-Once you've installed, download [that image](https://github.com/schulzch/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snipped to recognize text from your image:
+Once you've installed, download [that image](https://github.com/creatale/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snipped to recognize text from your image:
 
 ```javascript
 var dv = require('dv');
@@ -30,9 +30,9 @@ console.log(tesseract.findText('plain'));
 
 Here are some quick links to help you get started:
 
-- [Introduction](https://github.com/schulzch/node-dv/wiki/Introduction)
-- [API Reference](https://github.com/schulzch/node-dv/wiki/API)
-- [Bug Tracker](https://github.com/schulzch/node-dv/issues)
+- [Introduction](https://github.com/creatale/node-dv/wiki/Introduction)
+- [API Reference](https://github.com/creatale/node-dv/wiki/API)
+- [Bug Tracker](https://github.com/creatale/node-dv/issues)
 
 ## License
 
