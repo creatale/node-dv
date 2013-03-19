@@ -84,6 +84,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Xor)->GetFunction());
     proto->Set(String::NewSymbol("subtract"),
                FunctionTemplate::New(Subtract)->GetFunction());
+    proto->Set(String::NewSymbol("convolve"),
+               FunctionTemplate::New(Convolve)->GetFunction());
     proto->Set(String::NewSymbol("rotate"),
                FunctionTemplate::New(Rotate)->GetFunction());
     proto->Set(String::NewSymbol("scale"),
@@ -306,6 +308,30 @@ Handle<Value> Image::Subtract(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected image as first argument");
+    }
+}
+
+Handle<Value> Image::Convolve(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 2 && args[0]->IsInt32() && args[1]->IsInt32()) {
+        int width = args[0]->Int32Value();
+        int height = args[1]->Int32Value();
+        Pix *pixs;
+        if(obj->pix_->d == 1) {
+            pixs = pixConvert1To8(NULL, obj->pix_, 0, 255);
+        } else {
+            pixs = pixClone(obj->pix_);
+        }
+        Pix *pixd = pixBlockconv(pixs, width, height);
+        pixDestroy(&pixs);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying convolve");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int, int) signature");
     }
 }
 

@@ -63,6 +63,10 @@ describe('Image', function(){
         this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
         writeImage('gray-arith-subtract.png', red.subtract(cyan));
     })
+    it('should #convolve()', function(){
+        writeImage('gray-convolve.png', this.gray.convolve(15, 15));
+    })
+
     it('should #rotate()', function(){
         writeImage('gray-rotate.png', this.gray.rotate(-0.703125));
         writeImage('gray-rotate45.png', this.gray.rotate(45));

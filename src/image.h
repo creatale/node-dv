@@ -52,6 +52,7 @@ private:
     static v8::Handle<v8::Value> And(const v8::Arguments& args);
     static v8::Handle<v8::Value> Xor(const v8::Arguments& args);
     static v8::Handle<v8::Value> Subtract(const v8::Arguments& args);
+    static v8::Handle<v8::Value> Convolve(const v8::Arguments& args);
     static v8::Handle<v8::Value> Rotate(const v8::Arguments& args);
     static v8::Handle<v8::Value> Scale(const v8::Arguments& args);
     static v8::Handle<v8::Value> Crop(const v8::Arguments& args);
