@@ -567,15 +567,12 @@ Handle<Value> TickReader::CheckboxIsChecked(const Arguments &args) {
                         debugs);
             pixDestroy(&pix8);
 
-            Local<Array> results = Array::New();
-            for (size_t i = 0; i < 1; i++) {
-                Local<Object> object = Object::New();
-                object->Set(String::NewSymbol("checked"), Boolean::New(checked));
-                object->Set(String::NewSymbol("confidence"), Number::New(checkedConfidence));
-                object->Set(String::NewSymbol("debug"), debugs[i]);
-                results->Set(i, object);
-            }
-            return scope.Close(results);
+            Local<Object> object = Object::New();
+            object->Set(String::NewSymbol("checked"), Boolean::New(checked));
+            object->Set(String::NewSymbol("confidence"), Number::New(checkedConfidence));
+            object->Set(String::NewSymbol("debug"), debugs[0]);
+
+            return scope.Close(object);
         } else {
             return THROW(Error, "color depth of 8 bits or less expected");
         }
