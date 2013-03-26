@@ -394,4 +394,24 @@ describe('TickReader', function(){
         //console.log(util.inspect(horizontalProjection));
         //console.log(util.inspect(verticalProjection));
     })*/
+    it('should be checked (checkbox_scan_gender1.png)', function(){
+        var checkboxImage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/checkbox_scan_gender1.png'));
+        var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
+        var expectedResult = [{'checked': true, 'confidence': 1.0}];
+        //console.log(util.inspect(boxes, false, 5));
+        for (var i = 0; i < expectedResult.length; i++) {
+            boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
+            //boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
+        }
+    })
+    it('should be checked (checkbox_scan_gender2.png)', function(){
+        var checkboxImage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/checkbox_scan_gender2.png'));
+        var boxes = this.tickReader.checkboxIsChecked(checkboxImage);
+        var expectedResult = [{'checked': false, 'confidence': 1.0}];
+        //console.log(util.inspect(boxes, false, 5));
+        for (var i = 0; i < expectedResult.length; i++) {
+            boxes[i].checked.should.equal(expectedResult[i].checked, i + ', checked');
+            //boxes[i].confidence.should.equal(expectedResult[i].confidence, i + ', confidence');
+        }
+    })
 })
