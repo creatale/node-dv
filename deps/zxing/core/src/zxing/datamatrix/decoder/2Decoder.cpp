@@ -24,19 +24,19 @@
 #include <zxing/datamatrix/decoder/DecodedBitStreamParser.h>
 #include <zxing/datamatrix/Version.h>
 #include <zxing/ReaderException.h>
+#include <zxing/ChecksumException.h>
 #include <zxing/common/reedsolomon/ReedSolomonException.h>
 
-namespace zxing {
-namespace datamatrix {
+using zxing::Ref;
+using zxing::DecoderResult;
+using zxing::datamatrix::Decoder;
+using zxing::ArrayRef;
+using zxing::DecoderResult;
+using zxing::BitMatrix;
 
-using namespace std;
+Decoder::Decoder() : rsDecoder_(GenericGF::DATA_MATRIX_FIELD_256) {}
 
-Decoder::Decoder() :
-    rsDecoder_(GenericGF::DATA_MATRIX_FIELD_256) {
-}
-
-
-void Decoder::correctErrors(ArrayRef<unsigned char> codewordBytes, int numDataCodewords) {
+void Decoder::correctErrors(ArrayRef<char> codewordBytes, int numDataCodewords) {
   int numCodewords = codewordBytes->size();
   ArrayRef<int> codewordInts(numCodewords);
   for (int i = 0; i < numCodewords; i++) {
@@ -45,14 +45,13 @@ void Decoder::correctErrors(ArrayRef<unsigned char> codewordBytes, int numDataCo
   int numECCodewords = numCodewords - numDataCodewords;
   try {
     rsDecoder_.decode(codewordInts, numECCodewords);
-  } catch (ReedSolomonException const& ex) {
-    ReaderException rex(ex.what());
-    throw rex;
+  } catch (ReedSolomonException const& ignored) {
+    throw ChecksumException();
   }
   // Copy back into array of bytes -- only need to worry about the bytes that were data
   // We don't care about errors in the error-correction codewords
   for (int i = 0; i < numDataCodewords; i++) {
-    codewordBytes[i] = (unsigned char)codewordInts[i];
+    codewordBytes[i] = (char)codewordInts[i];
   }
 }
 
@@ -62,7 +61,7 @@ Ref<DecoderResult> Decoder::decode(Ref<BitMatrix> bits) {
   Version *version = parser.readVersion(bits);
 
   // Read codewords
-  ArrayRef<unsigned char> codewords(parser.readCodewords());
+  ArrayRef<char> codewords(parser.readCodewords());
   // Separate into data blocks
   std::vector<Ref<DataBlock> > dataBlocks = DataBlock::getDataBlocks(codewords, version);
 
@@ -73,12 +72,12 @@ Ref<DecoderResult> Decoder::decode(Ref<BitMatrix> bits) {
   for (int i = 0; i < dataBlocksCount; i++) {
     totalBytes += dataBlocks[i]->getNumDataCodewords();
   }
-  ArrayRef<unsigned char> resultBytes(totalBytes);
+  ArrayRef<char> resultBytes(totalBytes);
 
   // Error-correct and copy data blocks together into a stream of bytes
   for (int j = 0; j < dataBlocksCount; j++) {
     Ref<DataBlock> dataBlock(dataBlocks[j]);
-    ArrayRef<unsigned char> codewordBytes = dataBlock->getCodewords();
+    ArrayRef<char> codewordBytes = dataBlock->getCodewords();
     int numDataCodewords = dataBlock->getNumDataCodewords();
     correctErrors(codewordBytes, numDataCodewords);
     for (int i = 0; i < numDataCodewords; i++) {
@@ -89,6 +88,4 @@ Ref<DecoderResult> Decoder::decode(Ref<BitMatrix> bits) {
   // Decode the contents of that stream of bytes
   DecodedBitStreamParser decodedBSParser;
   return Ref<DecoderResult> (decodedBSParser.decode(resultBytes));
-}
-}
 }

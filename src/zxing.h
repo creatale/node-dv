@@ -49,7 +49,7 @@ private:
     ZXing();
     ~ZXing();
 
-    static const zxing::BarcodeFormat BARCODEFORMATS[];
+    static const zxing::BarcodeFormat::Value BARCODEFORMATS[];
     static const size_t BARCODEFORMATS_LENGTH;
 
     v8::Persistent<v8::Object> image_;

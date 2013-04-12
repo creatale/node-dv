@@ -1,3 +1,4 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
  *  String.cpp
  *  zxing
@@ -20,30 +21,37 @@
 
 #include <zxing/common/Str.h>
 
-namespace zxing {
-using namespace std;
+using std::string;
+using zxing::String;
+using zxing::Ref;
 
 String::String(const std::string &text) :
-    text_(text) {
+  text_(text) {
 }
 
 const std::string& String::getText() const {
   return text_;
 }
 
-void String::append(const std::string &tail)
-{
-	text_.append(tail);
+char String::charAt(int i) const { return text_[i]; }
+
+int String::size() const { return text_.size(); }
+
+int String::length() const { return text_.size(); }
+
+Ref<String> String::substring(int i) const {
+  return Ref<String>(new String(text_.substr(i)));
 }
 
-void String::append(char c)
-{
-	text_.append(1,c);
+void String::append(const std::string &tail) {
+  text_.append(tail);
 }
 
-ostream &operator<<(ostream &out, const String &s) {
+void String::append(char c) {
+  text_.append(1,c);
+}
+
+std::ostream& zxing::operator << (std::ostream& out, String const& s) {
   out << s.text_;
   return out;
-}
-
 }

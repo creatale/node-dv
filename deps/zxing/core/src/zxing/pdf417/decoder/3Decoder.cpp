@@ -45,21 +45,30 @@ const int Decoder::MAX_EC_CODEWORDS = 512;
 Ref<DecoderResult> Decoder::decode(Ref<BitMatrix> bits, DecodeHints const &hints) {
   // Construct a parser to read the data codewords and error-correction level
   BitMatrixParser parser(bits);
-  size_t cwsize;
-  ArrayRef<int> codewords(parser.readCodewords(hints));
-  cwsize = codewords.size();
-  if (cwsize == 0) {
+  ArrayRef<int> codewords(parser.readCodewords());
+  if (codewords.size() == 0) {
     throw FormatException("PDF:Decoder:decode: cannot read codewords");
   }
+
+//  std::cout << "Pre EC" << std::endl;
+//  for (size_t i = 0; i < codewords.size(); i++) {
+//    std::cout << codewords[i] << ", ";
+//  }
+//  std::cout << std::endl;
   
   int ecLevel = parser.getECLevel();
   int numECCodewords = 1 << (ecLevel + 1);
-  
-  ArrayRef<int> erasures = parser.getErasures(); // also possible when parser.getEraseCount() = 0!
+  ArrayRef<int> erasures = parser.getErasures();
+
   correctErrors(codewords, erasures, numECCodewords);
-  
   verifyCodewordCount(codewords, numECCodewords);
-  
+
+//  std::cout << "Post EC" << std::endl;
+//  for (size_t i = 0; i < codewords.size(); i++) {
+//    std::cout << codewords[i] << ", ";
+//  }
+//  std::cout << std::endl;
+
   // Decode the codewords
   return DecodedBitStreamParser::decode(codewords);
 }
@@ -103,39 +112,24 @@ void Decoder::verifyCodewordCount(ArrayRef<int> codewords, int numECCodewords)
 * @return 0.
 * @throws FormatException
 */
-int Decoder::correctErrors(ArrayRef<int> codewords, 
-  ArrayRef<int> erasures, int numECCodewords) {
-#if (defined _WIN32 && defined(DEBUG))
-    {
-      WCHAR sz[256];
-      wsprintf(sz,L"Decoder::correctErrors: erasures.size=%d, numECCodewords=%d\n",erasures.size(),numECCodewords);
-      OutputDebugString(sz);
-    }
-#endif
-    int numErasures = erasures.size();
-    
-    /**
-    * 2012-09-19 HFN take Reed-Solomon error correction by ZXing authors translated from Java
-    * into C++ instead of code by Ian Goldberg:
-    **/
-    if (numErasures > numECCodewords / 2 + MAX_ERRORS ||
+void Decoder::correctErrors(ArrayRef<int> codewords,
+                           ArrayRef<int> erasures, int numECCodewords) {
+  if (erasures.size() > numECCodewords / 2 + MAX_ERRORS ||
       numECCodewords < 0 || numECCodewords > MAX_EC_CODEWORDS) {
-      throw FormatException("PDF:Decoder:correctErrors: Too many errors or EC Codewords corrupted");
+    throw FormatException("PDF:Decoder:correctErrors: Too many errors or EC Codewords corrupted");
+  }
+
+  Ref<ErrorCorrection> errorCorrection(new ErrorCorrection);
+  errorCorrection->decode(codewords, numECCodewords, erasures);
+
+  // 2012-06-27 HFN if, despite of error correction, there are still codewords with invalid
+  // value, throw an exception here:
+  for (size_t i = 0; i < codewords.size(); i++) {
+    if (codewords[i]<0) {
+      throw FormatException("PDF:Decoder:correctErrors: Error correction did not succeed!");
     }
-    
-    Ref<ErrorCorrection> ec(new ErrorCorrection);
-    ec->decode(codewords,numECCodewords,erasures);
-    
-    //* 2012-06-27 HFN if, despite of error correction, there are still codewords with invalid
-    //* value, throw an exception here:
-    for(size_t i=0;i<codewords.size();i++) {
-      if(codewords[i]<0) {
-        throw FormatException("PDF:Decoder:correctErrors: Error correction did not succeed!");
-      }
-    }
-    
-    return 0;
+  }
 }
-    
+
 } /* namespace pdf417 */
 } /* namespace zxing */

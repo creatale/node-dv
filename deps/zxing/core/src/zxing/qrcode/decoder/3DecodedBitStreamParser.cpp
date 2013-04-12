@@ -44,22 +44,22 @@ using namespace zxing::qrcode;
 using namespace zxing::common;
 
 const char DecodedBitStreamParser::ALPHANUMERIC_CHARS[] =
-{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B',
-  'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
-  'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-  'Y', 'Z', ' ', '$', '%', '*', '+', '-', '.', '/', ':'
-};
+  { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B',
+    'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
+    'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+    'Y', 'Z', ' ', '$', '%', '*', '+', '-', '.', '/', ':'
+  };
 
 namespace {int GB2312_SUBSET = 1;}
 
 void DecodedBitStreamParser::append(std::string &result,
                                     string const& in,
                                     const char *src) {
-  append(result, (unsigned char const*)in.c_str(), in.length(), src);
+  append(result, (char const*)in.c_str(), in.length(), src);
 }
 
 void DecodedBitStreamParser::append(std::string &result,
-                                    const unsigned char *bufIn,
+                                    const char *bufIn,
                                     size_t nIn,
                                     const char *src) {
 #ifndef NO_ICONV
@@ -74,7 +74,7 @@ void DecodedBitStreamParser::append(std::string &result,
   }
 
   const int maxOut = 4 * nIn + 1;
-  unsigned char* bufOut = new unsigned char[maxOut];
+  char* bufOut = new char[maxOut];
 
   ICONV_CONST char *fromPtr = (ICONV_CONST char *)bufIn;
   size_t nFrom = nIn;
@@ -103,49 +103,49 @@ void DecodedBitStreamParser::append(std::string &result,
 void DecodedBitStreamParser::decodeHanziSegment(Ref<BitSource> bits_,
                                                 string& result,
                                                 int count) {
-    BitSource& bits (*bits_);
-    // Don't crash trying to read more bits than we have available.
-    if (count * 13 > bits.available()) {
-      throw FormatException();
-    }
-
-    // Each character will require 2 bytes. Read the characters as 2-byte pairs
-    // and decode as GB2312 afterwards
-    size_t nBytes = 2 * count;
-    unsigned char* buffer = new unsigned char[nBytes];
-    int offset = 0;
-    while (count > 0) {
-      // Each 13 bits encodes a 2-byte character
-      int twoBytes = bits.readBits(13);
-      int assembledTwoBytes = ((twoBytes / 0x060) << 8) | (twoBytes % 0x060);
-      if (assembledTwoBytes < 0x003BF) {
-        // In the 0xA1A1 to 0xAAFE range
-        assembledTwoBytes += 0x0A1A1;
-      } else {
-        // In the 0xB0A1 to 0xFAFE range
-        assembledTwoBytes += 0x0A6A1;
-      }
-      buffer[offset] = (unsigned char) ((assembledTwoBytes >> 8) & 0xFF);
-      buffer[offset + 1] = (unsigned char) (assembledTwoBytes & 0xFF);
-      offset += 2;
-      count--;
-    }
-
-    try {
-      append(result, buffer, nBytes, StringUtils::GB2312);
-    } catch (ReaderException const& re) {
-      delete [] buffer;
-      throw FormatException();
-    }
-
-    delete [] buffer;
+  BitSource& bits (*bits_);
+  // Don't crash trying to read more bits than we have available.
+  if (count * 13 > bits.available()) {
+    throw FormatException();
   }
+
+  // Each character will require 2 bytes. Read the characters as 2-byte pairs
+  // and decode as GB2312 afterwards
+  size_t nBytes = 2 * count;
+  char* buffer = new char[nBytes];
+  int offset = 0;
+  while (count > 0) {
+    // Each 13 bits encodes a 2-byte character
+    int twoBytes = bits.readBits(13);
+    int assembledTwoBytes = ((twoBytes / 0x060) << 8) | (twoBytes % 0x060);
+    if (assembledTwoBytes < 0x003BF) {
+      // In the 0xA1A1 to 0xAAFE range
+      assembledTwoBytes += 0x0A1A1;
+    } else {
+      // In the 0xB0A1 to 0xFAFE range
+      assembledTwoBytes += 0x0A6A1;
+    }
+    buffer[offset] = (char) ((assembledTwoBytes >> 8) & 0xFF);
+    buffer[offset + 1] = (char) (assembledTwoBytes & 0xFF);
+    offset += 2;
+    count--;
+  }
+
+  try {
+    append(result, buffer, nBytes, StringUtils::GB2312);
+  } catch (ReaderException const& ignored) {
+    delete [] buffer;
+    throw FormatException();
+  }
+
+  delete [] buffer;
+}
 
 void DecodedBitStreamParser::decodeKanjiSegment(Ref<BitSource> bits, std::string &result, int count) {
   // Each character will require 2 bytes. Read the characters as 2-byte pairs
   // and decode as Shift_JIS afterwards
   size_t nBytes = 2 * count;
-  unsigned char* buffer = new unsigned char[nBytes];
+  char* buffer = new char[nBytes];
   int offset = 0;
   while (count > 0) {
     // Each 13 bits encodes a 2-byte character
@@ -159,13 +159,17 @@ void DecodedBitStreamParser::decodeKanjiSegment(Ref<BitSource> bits, std::string
       // In the 0xE040 to 0xEBBF range
       assembledTwoBytes += 0x0C140;
     }
-    buffer[offset] = (unsigned char)(assembledTwoBytes >> 8);
-    buffer[offset + 1] = (unsigned char)assembledTwoBytes;
+    buffer[offset] = (char)(assembledTwoBytes >> 8);
+    buffer[offset + 1] = (char)assembledTwoBytes;
     offset += 2;
     count--;
   }
-
-  append(result, buffer, nBytes, StringUtils::SHIFT_JIS);
+  try {
+    append(result, buffer, nBytes, StringUtils::SHIFT_JIS);
+  } catch (ReaderException const& ignored) {
+    delete [] buffer;
+    throw FormatException();
+  }
   delete[] buffer;
 }
 
@@ -173,7 +177,7 @@ void DecodedBitStreamParser::decodeByteSegment(Ref<BitSource> bits_,
                                                string& result,
                                                int count,
                                                CharacterSetECI* currentCharacterSetECI,
-                                               ArrayRef< ArrayRef<unsigned char> >& byteSegments,
+                                               ArrayRef< ArrayRef<char> >& byteSegments,
                                                Hashtable const& hints) {
   int nBytes = count;
   BitSource& bits (*bits_);
@@ -182,10 +186,10 @@ void DecodedBitStreamParser::decodeByteSegment(Ref<BitSource> bits_,
     throw FormatException();
   }
 
-  ArrayRef<unsigned char> bytes_ (count);
-  unsigned char* readBytes = &(*bytes_)[0];
+  ArrayRef<char> bytes_ (count);
+  char* readBytes = &(*bytes_)[0];
   for (int i = 0; i < count; i++) {
-    readBytes[i] = (unsigned char) bits.readBits(8);
+    readBytes[i] = (char) bits.readBits(8);
   }
   string encoding;
   if (currentCharacterSetECI == 0) {
@@ -200,7 +204,7 @@ void DecodedBitStreamParser::decodeByteSegment(Ref<BitSource> bits_,
   }
   try {
     append(result, readBytes, nBytes, encoding.c_str());
-  } catch (ReaderException const& re) {
+  } catch (ReaderException const& ignored) {
     throw FormatException();
   }
   byteSegments->values().push_back(bytes_);
@@ -208,7 +212,7 @@ void DecodedBitStreamParser::decodeByteSegment(Ref<BitSource> bits_,
 
 void DecodedBitStreamParser::decodeNumericSegment(Ref<BitSource> bits, std::string &result, int count) {
   int nBytes = count;
-  unsigned char* bytes = new unsigned char[nBytes];
+  char* bytes = new char[nBytes];
   int i = 0;
   // Read three digits at a time
   while (count >= 3) {
@@ -314,7 +318,7 @@ void DecodedBitStreamParser::decodeAlphanumericSegment(Ref<BitSource> bits_,
 }
 
 namespace {
-  int parseECIValue(BitSource bits) {
+  int parseECIValue(BitSource& bits) {
     int firstByte = bits.readBits(8);
     if ((firstByte & 0x80) == 0) {
       // just one byte
@@ -335,77 +339,83 @@ namespace {
 }
 
 Ref<DecoderResult>
-DecodedBitStreamParser::decode(ArrayRef<unsigned char> bytes,
+DecodedBitStreamParser::decode(ArrayRef<char> bytes,
                                Version* version,
                                ErrorCorrectionLevel const& ecLevel,
                                Hashtable const& hints) {
   Ref<BitSource> bits_ (new BitSource(bytes));
   BitSource& bits (*bits_);
   string result;
-  CharacterSetECI* currentCharacterSetECI = 0;
-  bool fc1InEffect = false;
-  ArrayRef< ArrayRef<unsigned char> > byteSegments (size_t(0));
-  Mode* mode = 0;
-  do {
-    // While still another segment to read...
-    if (bits.available() < 4) {
-      // OK, assume we're done. Really, a TERMINATOR mode should have been recorded here
-      mode = &Mode::TERMINATOR;
-    } else {
-      try {
-        mode = &Mode::forBits(bits.readBits(4)); // mode is encoded by 4 bits
-      } catch (IllegalArgumentException const& iae) {
-        throw iae;
-        // throw FormatException.getFormatInstance();
-      }
-    }
-    if (mode != &Mode::TERMINATOR) {
-      if ((mode == &Mode::FNC1_FIRST_POSITION) || (mode == &Mode::FNC1_SECOND_POSITION)) {
-        // We do little with FNC1 except alter the parsed result a bit according to the spec
-        fc1InEffect = true;
-      } else if (mode == &Mode::STRUCTURED_APPEND) {
-        if (bits.available() < 16) {
-          throw new FormatException();
-        }
-        // not really supported; all we do is ignore it
-        // Read next 8 bits (symbol sequence #) and 8 bits (parity data), then continue
-        bits.readBits(16);
-      } else if (mode == &Mode::ECI) {
-        // Count doesn't apply to ECI
-        int value = parseECIValue(bits);
-        currentCharacterSetECI = CharacterSetECI::getCharacterSetECIByValue(value);
-        if (currentCharacterSetECI == 0) {
-          throw FormatException();
-        }
+  result.reserve(50);
+  ArrayRef< ArrayRef<char> > byteSegments (0);
+  try {
+    CharacterSetECI* currentCharacterSetECI = 0;
+    bool fc1InEffect = false;
+    Mode* mode = 0;
+    do {
+      // While still another segment to read...
+      if (bits.available() < 4) {
+        // OK, assume we're done. Really, a TERMINATOR mode should have been recorded here
+        mode = &Mode::TERMINATOR;
       } else {
-        // First handle Hanzi mode which does not start with character count
-        if (mode == &Mode::HANZI) {
-          //chinese mode contains a sub set indicator right after mode indicator
-          int subset = bits.readBits(4);
-          int countHanzi = bits.readBits(mode->getCharacterCountBits(version));
-          if (subset == GB2312_SUBSET) {
-            decodeHanziSegment(bits_, result, countHanzi);
-          }
-        } else {
-          // "Normal" QR code modes:
-          // How many characters will follow, encoded in this mode?
-          int count = bits.readBits(mode->getCharacterCountBits(version));
-          if (mode == &Mode::NUMERIC) {
-            decodeNumericSegment(bits_, result, count);
-          } else if (mode == &Mode::ALPHANUMERIC) {
-            decodeAlphanumericSegment(bits_, result, count, fc1InEffect);
-          } else if (mode == &Mode::BYTE) {
-            decodeByteSegment(bits_, result, count, currentCharacterSetECI, byteSegments, hints);
-          } else if (mode == &Mode::KANJI) {
-            decodeKanjiSegment(bits_, result, count);
-          } else {
+        try {
+          mode = &Mode::forBits(bits.readBits(4)); // mode is encoded by 4 bits
+        } catch (IllegalArgumentException const& iae) {
+          throw iae;
+          // throw FormatException.getFormatInstance();
+        }
+      }
+      if (mode != &Mode::TERMINATOR) {
+        if ((mode == &Mode::FNC1_FIRST_POSITION) || (mode == &Mode::FNC1_SECOND_POSITION)) {
+          // We do little with FNC1 except alter the parsed result a bit according to the spec
+          fc1InEffect = true;
+        } else if (mode == &Mode::STRUCTURED_APPEND) {
+          if (bits.available() < 16) {
             throw FormatException();
           }
+          // not really supported; all we do is ignore it
+          // Read next 8 bits (symbol sequence #) and 8 bits (parity data), then continue
+          bits.readBits(16);
+        } else if (mode == &Mode::ECI) {
+          // Count doesn't apply to ECI
+          int value = parseECIValue(bits);
+          currentCharacterSetECI = CharacterSetECI::getCharacterSetECIByValue(value);
+          if (currentCharacterSetECI == 0) {
+            throw FormatException();
+          }
+        } else {
+          // First handle Hanzi mode which does not start with character count
+          if (mode == &Mode::HANZI) {
+            //chinese mode contains a sub set indicator right after mode indicator
+            int subset = bits.readBits(4);
+            int countHanzi = bits.readBits(mode->getCharacterCountBits(version));
+            if (subset == GB2312_SUBSET) {
+              decodeHanziSegment(bits_, result, countHanzi);
+            }
+          } else {
+            // "Normal" QR code modes:
+            // How many characters will follow, encoded in this mode?
+            int count = bits.readBits(mode->getCharacterCountBits(version));
+            if (mode == &Mode::NUMERIC) {
+              decodeNumericSegment(bits_, result, count);
+            } else if (mode == &Mode::ALPHANUMERIC) {
+              decodeAlphanumericSegment(bits_, result, count, fc1InEffect);
+            } else if (mode == &Mode::BYTE) {
+              decodeByteSegment(bits_, result, count, currentCharacterSetECI, byteSegments, hints);
+            } else if (mode == &Mode::KANJI) {
+              decodeKanjiSegment(bits_, result, count);
+            } else {
+              throw FormatException();
+            }
+          }
         }
       }
-    }
-  } while (mode != &Mode::TERMINATOR);
-
+    } while (mode != &Mode::TERMINATOR);
+  } catch (IllegalArgumentException const& iae) {
+    // from readBits() calls
+    throw FormatException();
+  }
+  
   return Ref<DecoderResult>(new DecoderResult(bytes, Ref<String>(new String(result)), byteSegments, (string)ecLevel));
 }
 

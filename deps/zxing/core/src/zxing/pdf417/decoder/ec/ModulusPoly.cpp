@@ -228,7 +228,7 @@ ModulusPoly::ModulusPoly(ModulusGF& field, ArrayRef<int> coefficients)
     }
 
     Ref<ModulusPoly> quotient (field_.getZero());
-    Ref<ModulusPoly> remainder (*this);
+    Ref<ModulusPoly> remainder (this);
 
     int denominatorLeadingTerm = other->getCoefficient(other->getDegree());
     int inverseDenominatorLeadingTerm = field_.inverse(denominatorLeadingTerm);

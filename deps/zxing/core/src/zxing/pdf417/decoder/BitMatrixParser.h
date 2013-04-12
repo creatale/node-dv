@@ -32,20 +32,11 @@ namespace pdf417 {
 
 class BitMatrixParser : public Counted {
 private:
-
-#if (!defined _MSC_VER) || (_MSC_VER>=1300)		//* hfn not for eMbedded c++ compiler
-  static const int MAX_ROW_DIFFERENCE = 6;
-  static const int MAX_ROWS = 90;
-  // Maximum Codewords (Data + Error)
-  static const int MAX_CW_CAPACITY = 929;
-  static const int MODULES_IN_SYMBOL = 17;
-#else
-  static const int MAX_ROW_DIFFERENCE;
   static const int MAX_ROWS;
   // Maximum Codewords (Data + Error)
   static const int MAX_CW_CAPACITY;
   static const int MODULES_IN_SYMBOL;
-#endif
+
   Ref<BitMatrix> bitMatrix_;
   int rows_; /* = 0 */
   int leftColumnECData_; /* = 0 */
@@ -56,7 +47,6 @@ private:
   int eraseCount_; /* = 0 */
   ArrayRef<int> erasures_;
   int ecLevel_; /* = -1 */
-  int tryHarder_;
 
 public:
   static const int SYMBOL_TABLE_[];
@@ -65,10 +55,10 @@ public:
   
 public:
   BitMatrixParser(Ref<BitMatrix> bitMatrix);
-  ArrayRef<int> getErasures() const {return erasures_;};
-  int getECLevel() const {return ecLevel_;};
-  int getEraseCount() const {return eraseCount_;};
-  ArrayRef<int> readCodewords(DecodeHints const &hints); /* throw(FormatException) */
+  ArrayRef<int> getErasures() const {return erasures_;}
+  int getECLevel() const {return ecLevel_;}
+  int getEraseCount() const {return eraseCount_;}
+  ArrayRef<int> readCodewords(); /* throw(FormatException) */
   static int getCodeword(int64_t symbol, int *pi = NULL);
 
 private:
@@ -77,10 +67,8 @@ private:
   static int findCodewordIndex(int64_t symbol);
 
   
-  int processRow(
-				int rowNumber, int rowHeight,
-                ArrayRef<int> codewords, int next, int height
-                );
+  int processRow(int rowNumber,
+                ArrayRef<int> codewords, int next);
   
   int processRow(ArrayRef<int> rowCounters, int rowNumber, int rowHeight,
     ArrayRef<int> codewords, int next); /* throw(FormatException)  */ 

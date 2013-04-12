@@ -27,7 +27,7 @@
 #include <zxing/qrcode/Version.h>
 #include <zxing/common/GridSampler.h>
 #include <zxing/DecodeHints.h>
-#include <zxing/common/detector/math_utils.h>
+#include <zxing/common/detector/MathUtils.h>
 #include <sstream>
 #include <cstdlib>
 
@@ -36,6 +36,7 @@ namespace math_utils = zxing::common::detector::math_utils;
 using std::ostringstream;
 using std::min;
 using std::max;
+using zxing::isnan;
 using zxing::qrcode::Detector;
 using zxing::Ref;
 using zxing::BitMatrix;
@@ -43,11 +44,10 @@ using zxing::ResultPointCallback;
 using zxing::DetectorResult;
 using zxing::PerspectiveTransform;
 using zxing::qrcode::AlignmentPattern;
-
-namespace zxing {
-namespace qrcode {
-
-using namespace std;
+using zxing::DetectorResult;
+using zxing::DecodeHints;
+using zxing::qrcode::FinderPatternInfo;
+using zxing::ResultPoint;
 
 Detector::Detector(Ref<BitMatrix> image) :
   image_(image) {
@@ -115,7 +115,7 @@ Ref<DetectorResult> Detector::processFinderPatternInfo(Ref<FinderPatternInfo> in
 
   Ref<PerspectiveTransform> transform = createTransform(topLeft, topRight, bottomLeft, alignmentPattern, dimension);
   Ref<BitMatrix> bits(sampleGrid(image_, dimension, transform));
-  std::vector<Ref<ResultPoint> > points(alignmentPattern == 0 ? 3 : 4);
+  ArrayRef< Ref<ResultPoint> > points(new Array< Ref<ResultPoint> >(alignmentPattern == 0 ? 3 : 4));
   points[0].reset(bottomLeft);
   points[1].reset(topLeft);
   points[2].reset(topRight);
@@ -287,7 +287,7 @@ float Detector::sizeOfBlackWhiteBlackRun(int fromX, int fromY, int toX, int toY)
     return math_utils::distance(toX + xstep, toY, fromX, fromY);
   }
   // else we didn't find even black-white-black; no estimate is really possible
-  return NAN;
+  return nan();
 }
 
 Ref<AlignmentPattern> Detector::findAlignmentInRegion(float overallEstModuleSize, int estAlignmentX, int estAlignmentY,
@@ -309,7 +309,4 @@ Ref<AlignmentPattern> Detector::findAlignmentInRegion(float overallEstModuleSize
   AlignmentPatternFinder alignmentFinder(image_, alignmentAreaLeftX, alignmentAreaTopY, alignmentAreaRightX
                                          - alignmentAreaLeftX, alignmentAreaBottomY - alignmentAreaTopY, overallEstModuleSize, callback_);
   return alignmentFinder.find();
-}
-
-}
 }

@@ -23,7 +23,7 @@
 #include <zxing/ResultPoint.h>
 #include <zxing/common/GridSampler.h>
 #include <zxing/datamatrix/detector/Detector.h>
-#include <zxing/common/detector/math_utils.h>
+#include <zxing/common/detector/MathUtils.h>
 #include <zxing/NotFoundException.h>
 #include <sstream>
 #include <cstdlib>
@@ -245,7 +245,7 @@ Ref<DetectorResult> Detector::detect() {
     bits = sampleGrid(image_, dimensionCorrected, dimensionCorrected, transform);
   }
 
-  std::vector<Ref<ResultPoint> > points(4);
+  ArrayRef< Ref<ResultPoint> > points (new Array< Ref<ResultPoint> >(4));
   points[0].reset(topLeft);
   points[1].reset(bottomLeft);
   points[2].reset(correctedTopRight);

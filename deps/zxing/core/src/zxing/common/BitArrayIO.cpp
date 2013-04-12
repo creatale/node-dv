@@ -1,10 +1,6 @@
 // -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
- *  ReaderException.cpp
- *  zxing
- *
- *  Created by Christian Brunschen on 13/05/2008.
- *  Copyright 2008-2011 ZXing authors All rights reserved.
+ *  Copyright 2010 ZXing authors. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +15,17 @@
  * limitations under the License.
  */
 
-#include <zxing/ReaderException.h>
+#include <zxing/common/BitArray.h>
 
-namespace zxing {
+using zxing::BitArray;
+using std::ostream;
 
-ReaderException::ReaderException() {}
-
-ReaderException::ReaderException(const char *msg) :
-    Exception(msg) {
-}
-
-ReaderException::~ReaderException() throw() {
-}
-
+ostream& zxing::operator << (ostream& os, BitArray const& ba) {
+  for (int i = 0, size = ba.getSize(); i < size; i++) {
+    if ((i & 0x07) == 0) {
+      os << ' ';
+    }
+    os << (ba.get(i) ? 'X' : '.');
+  }
+  return os;
 }

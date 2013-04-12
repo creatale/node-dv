@@ -17,9 +17,6 @@
 
 #include <zxing/common/BitMatrix.h>
 #include <zxing/common/IllegalArgumentException.h>
-#include <zxing/NotFoundException.h>
-#include <zxing/common/Array.h>
-#include <zxing/image/ImageWriter.h>
 
 #include <iostream>
 #include <sstream>
@@ -30,183 +27,155 @@ using std::ostringstream;
 
 using zxing::BitMatrix;
 using zxing::BitArray;
-using zxing::Ref;
-using zxing::Array;
 using zxing::ArrayRef;
+using zxing::Ref;
 
-namespace {
-  size_t wordsForSize(size_t width,
-                      size_t height,
-                      unsigned int bitsPerWord,
-                      unsigned int logBits) {
-    size_t bits = width * height;
-    int arraySize = (bits + bitsPerWord - 1) >> logBits;
-    return arraySize;
+void BitMatrix::init(int width, int height) {
+  if (width < 1 || height < 1) {
+    throw IllegalArgumentException("Both dimensions must be greater than 0");
+  }
+  this->width = width;
+  this->height = height;
+  this->rowSize = (width + bitsPerWord - 1) >> logBits;
+  bits = ArrayRef<int>(rowSize * height);
+}
+
+BitMatrix::BitMatrix(int dimension) {
+  init(dimension, dimension);
+}
+
+BitMatrix::BitMatrix(int width, int height) {
+  init(width, height);
+}
+
+BitMatrix::~BitMatrix() {}
+
+void BitMatrix::flip(int x, int y) {
+  int offset = y * rowSize + (x >> logBits);
+  bits[offset] ^= 1 << (x & bitsMask);
+}
+
+/*
+void BitMatrix::clear() {
+  std::fill(&bits[0], &bits[rowSize], 0);
+}
+*/
+
+void BitMatrix::setRegion(int left, int top, int width, int height) {
+  if (top < 0 || left < 0) {
+    throw IllegalArgumentException("Left and top must be nonnegative");
+  }
+  if (height < 1 || width < 1) {
+    throw IllegalArgumentException("Height and width must be at least 1");
+  }
+  int right = left + width;
+  int bottom = top + height;
+  if (bottom > this->height || right > this->width) {
+    throw IllegalArgumentException("The region must fit inside the matrix");
+  }
+  for (int y = top; y < bottom; y++) {
+    int offset = y * rowSize;
+    for (int x = left; x < right; x++) {
+      bits[offset + (x >> logBits)] |= 1 << (x & bitsMask);
+    }
   }
 }
 
-const unsigned int BitMatrix::bitsPerWord = std::numeric_limits<unsigned int>::digits;
-const unsigned int BitMatrix::logBits = ZX_LOG_DIGITS(bitsPerWord);
-const unsigned int BitMatrix::bitsMask = (1 << logBits) - 1;
-
-BitMatrix::BitMatrix(size_t dimension) :
-  width_(dimension), height_(dimension), words_(0), bits_(NULL) {
-  words_ = wordsForSize(width_, height_, bitsPerWord, logBits);
-  rowSize_ = (width_ + bitsPerWord - 1) >> logBits;
-  bits_ = new unsigned int[words_];
-  clear();
-}
-
-BitMatrix::BitMatrix(size_t width, size_t height) :
-  width_(width), height_(height), words_(0), bits_(NULL) {
-  words_ = wordsForSize(width_, height_, bitsPerWord, logBits);
-  rowSize_ = (width_ + bitsPerWord - 1) >> logBits;
-  bits_ = new unsigned int[words_];
-  clear();
-}
-
-BitMatrix::~BitMatrix() {
-  delete[] bits_;
-}
-
-
-void BitMatrix::flip(size_t x, size_t y) {
-  size_t offset = x + width_ * y;
-  bits_[offset >> logBits] ^= 1 << (offset & bitsMask);
-}
-
-void BitMatrix::clear() {
-  std::fill(bits_, bits_+words_, 0);
-}
-
-void BitMatrix::setRegion(size_t left, size_t top, size_t width, size_t height) {
+/*
+void BitMatrix::setRegion(int left, int top, int width, int height) {
   if ((long)top < 0 || (long)left < 0) {
     throw IllegalArgumentException("topI and leftJ must be nonnegative");
   }
   if (height < 1 || width < 1) {
     throw IllegalArgumentException("height and width must be at least 1");
   }
-  size_t right = left + width;
-  size_t bottom = top + height;
-  if (right > width_ || bottom > height_) {
+  int right = left + width;
+  int bottom = top + height;
+  if (right > this->width || bottom > this->height) {
     throw IllegalArgumentException("top + height and left + width must be <= matrix dimension");
   }
-  for (size_t y = top; y < bottom; y++) {
-    int yOffset = width_ * y;
-    for (size_t x = left; x < right; x++) {
-      size_t offset = x + yOffset;
-      bits_[offset >> logBits] |= 1 << (offset & bitsMask);
+  for (int y = top; y < bottom; y++) {
+    int offset =  y * rowSize;
+    for (int x = left; x < right; x++) {
+      int offset = x + yOffset;
+      bits[offset + (x >> 5)] |= 1 << (offset & bitsMask);
     }
   }
 }
+*/
 
 Ref<BitArray> BitMatrix::getRow(int y, Ref<BitArray> row) {
-  if (row.empty() || row->getSize() < width_) {
-    row = new BitArray(width_);
-  } else {
-    row->clear();
+  if (row.empty() || row->getSize() < width) {
+    row = new BitArray(width);
   }
-  size_t start = y * width_;
-  size_t end = start + width_ - 1; // end is inclusive
-  size_t firstWord = start >> logBits;
-  size_t lastWord = end >> logBits;
-  size_t bitOffset = start & bitsMask;
-  for (size_t i = firstWord; i <= lastWord; i++) {
-    size_t firstBit = i > firstWord ? 0 : start & bitsMask;
-    size_t lastBit = i < lastWord ? bitsPerWord - 1 : end & bitsMask;
-    unsigned int mask;
-    if (firstBit == 0 && lastBit == logBits) {
-      mask = std::numeric_limits<unsigned int>::max();
-    } else {
-      mask = 0;
-      for (size_t j = firstBit; j <= lastBit; j++) {
-        mask |= 1 << j;
-      }
-    }
-    row->setBulk((i - firstWord) << logBits, (bits_[i] & mask) >> bitOffset);
-    if (firstBit == 0 && bitOffset != 0) {
-      unsigned int prevBulk = row->getBitArray()[i - firstWord - 1];
-      prevBulk |= (bits_[i] & mask) << (bitsPerWord - bitOffset);
-      row->setBulk((i - firstWord - 1) << logBits, prevBulk);
-    }
+  int offset = y * rowSize;
+  for (int x = 0; x < rowSize; x++) {
+    row->setBulk(x << logBits, bits[offset + x]);
   }
   return row;
 }
 
-ArrayRef<int> BitMatrix::getTopLeftOnBit()
-{
-    int bitsOffset = 0;
-    while (bitsOffset < words_ /* stimmt das? Java: bits_.length */ && bits_[bitsOffset] == 0) {
-      bitsOffset++;
-    }
-    if (bitsOffset == words_) {
-	  /* hint: Java sources return "null" at this point, PDF417Reader::extractPureBits throws */
-	  /* exception. Here, NotFoundException is thrown right now. */
-      throw NotFoundException("BitMatrix::getTopLeftOnBit: TopLeftBit not found!");
-    }
-    int y = bitsOffset / rowSize_;
-    int x = (bitsOffset % rowSize_) << 5;
-
-    int theBits = bits_[bitsOffset];
-    int bit = 0;
-    while ((theBits << (31-bit)) == 0) {
-      bit++;
-    }
-    x += bit;
-	ArrayRef<int> res=new Array<int>(2);
-	res[0]=x;
-	res[1]=y;
-    return res;
+int BitMatrix::getWidth() const {
+  return width;
 }
 
-ArrayRef<int> BitMatrix::getBottomRightOnBit()
-{
-    int bitsOffset = words_ /* stimmt das? Java: bits_.length */ - 1;
-    while (bitsOffset >= 0 && bits_[bitsOffset] == 0) {
-      bitsOffset--;
-    }
-    if (bitsOffset < 0) {
-	  /* hint: Java sources return "null" at this point, PDF417Reader::extractPureBits throws */
-	  /* exception. Here, NotFoundException is thrown right now. */
-      throw NotFoundException("BitMatrix::getBottomRightOnBit: BottomRightBit not found!");
-    }
-
-    int y = bitsOffset / rowSize_;
-    int x = (bitsOffset % rowSize_) << 5;
-
-    unsigned int theBits = bits_[bitsOffset];
-    int bit = 31;
-    while ((theBits >> bit) == 0) {
-      bit--;
-    }
-    x += bit;
-
-	ArrayRef<int> res=new Array<int>(2);
-	res[0]=x;
-	res[1]=y;
-    return res;
+int BitMatrix::getHeight() const {
+  return height;
 }
 
-size_t BitMatrix::getWidth() const {
-  return width_;
+ArrayRef<int> BitMatrix::getTopLeftOnBit() {
+  int bitsOffset = 0;
+  while (bitsOffset < bits.size() && bits[bitsOffset] == 0) {
+    bitsOffset++;
+  }
+  if (bitsOffset == bits.size()) {
+    return ArrayRef<int>();
+  }
+  int y = bitsOffset / rowSize;
+  int x = (bitsOffset % rowSize) << 5;
+
+  int theBits = bits[bitsOffset];
+  int bit = 0;
+  while ((theBits << (31-bit)) == 0) {
+    bit++;
+  }
+  x += bit;
+  ArrayRef<int> res=new Array<int>(2);
+  res[0]=x;
+  res[1]=y;
+  return res;
 }
 
-size_t BitMatrix::getHeight() const {
-  return height_;
+ArrayRef<int> BitMatrix::getBottomRightOnBit() {
+  int bitsOffset = bits.size() - 1;
+  while (bitsOffset >= 0 && bits[bitsOffset] == 0) {
+    bitsOffset--;
+  }
+  if (bitsOffset < 0) {
+    return ArrayRef<int>();
+  }
+
+  int y = bitsOffset / rowSize;
+  int x = (bitsOffset % rowSize) << 5;
+
+  int theBits = bits[bitsOffset];
+  int bit = 31;
+  while ((theBits >> bit) == 0) {
+    bit--;
+  }
+  x += bit;
+
+  ArrayRef<int> res=new Array<int>(2);
+  res[0]=x;
+  res[1]=y;
+  return res;
 }
 
-size_t BitMatrix::getDimension() const {
-  return width_;
-}
-
-unsigned int* BitMatrix::getBits() const {
-  return bits_;
-}
-
+/*
 namespace zxing {
   ostream& operator<<(ostream &out, const BitMatrix &bm) {
-    for (size_t y = 0; y < bm.height_; y++) {
-      for (size_t x = 0; x < bm.width_; x++) {
+    for (int y = 0; y < bm.height; y++) {
+      for (int x = 0; x < bm.width; x++) {
         out << (bm.get(x, y) ? "X " : "  ");
       }
       out << "\n";
@@ -221,37 +190,4 @@ const char* BitMatrix::description() {
   return out.str().c_str();
 }
 
-const char* BitMatrix::descriptionROW(int row) {
-  std::stringstream out;
-    if(row >= 0 && row < height_) {
-      for (size_t x = 0; x < width_; x++) {
-        out << (get(x, row) ? "X" : " ");
-      }
-      out << "\n";
-    }
-  return out.str().c_str();
-}
-
-void BitMatrix::writePng(const char *filename, int zoom, int zoomv) {
-  if (!zoomv) {
-    zoomv = zoom;
-  }
-  int imageWidth = getWidth() * zoom;
-  int imageHeight = getHeight() * zoomv;
-  unsigned char *data = new unsigned char[imageWidth * imageHeight];
-  for (int i = 0; i < getHeight(); i++) {
-    for (int j = 0; j < getWidth(); j++) {
-      unsigned char bitValue = get(j, i) ? 0 : 255;
-      for (int k = 0; k < zoom; k++) {
-        for (int l = 0; l < zoomv; l++) {
-          data[j * zoom + k + (i * zoomv + l) * imageWidth] = bitValue;
-        }
-      }
-    }
-  }
-  int result = stbi_write_png(filename, imageWidth, imageHeight, 1, data, imageWidth);
-  delete[] data;
-  if (!result) {
-    throw IllegalArgumentException("Invalid filename (cannot write png).");
-  }
-}
+*/

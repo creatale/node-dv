@@ -51,18 +51,18 @@ const int DecodedBitStreamParser::PAL = 29;
 const int DecodedBitStreamParser::EXP900_SIZE = 16;
 
 const char DecodedBitStreamParser::PUNCT_CHARS[] = {
-      ';', '<', '>', '@', '[', '\\', '}', '_', '`', '~', '!',
-      '\r', '\t', ',', ':', '\n', '-', '.', '$', '/', '"', '|', '*',
-      '(', ')', '?', '{', '}', '\''};
+  ';', '<', '>', '@', '[', '\\', '}', '_', '`', '~', '!',
+  '\r', '\t', ',', ':', '\n', '-', '.', '$', '/', '"', '|', '*',
+  '(', ')', '?', '{', '}', '\''};
 
 const char DecodedBitStreamParser::MIXED_CHARS[] = {
-      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '&',
-      '\r', '\t', ',', ':', '#', '-', '.', '$', '/', '+', '%', '*',
-      '=', '^'};
-	  
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '&',
+  '\r', '\t', ',', ':', '#', '-', '.', '$', '/', '+', '%', '*',
+  '=', '^'};
+
 ArrayRef<BigInteger> DecodedBitStreamParser::AExp900_;
 
-  /**
+/**
    * Table containing values for the exponent of 900.
    * This is used in the numeric compaction decode algorithm.
    * Hint: will be initialized only once (because of zero check), so it can be
@@ -128,7 +128,7 @@ Ref<DecoderResult> DecodedBitStreamParser::decode(ArrayRef<int> codewords)
       throw FormatException("PDF417:DecodedBitStreamParser:decode: codeword overflow");
     }
   }
-  ArrayRef<unsigned char> dummybuf(1);
+  ArrayRef<char> dummybuf(1);
   dummybuf[0]= '\0';
 
   return Ref<DecoderResult>(new DecoderResult(dummybuf, result));
@@ -247,10 +247,10 @@ void DecodedBitStreamParser::decodeTextCompaction(ArrayRef<int> textCompactionDa
         } else if (subModeCh == MODE_SHIFT_TO_BYTE_COMPACTION_MODE) {
           result->append((char) byteCompactionData[i]);
           // 2012-11-27 hfn after fix by srowen in java code:
-		  // the pdf417 specs say we have to return to the last latched
-		  // sub-mode. But I checked different encoder implementations and
-		  // all of them return to alpha sub-mode after Shift-to-Byte
-		  subMode = ALPHA;
+          // the pdf417 specs say we have to return to the last latched
+          // sub-mode. But I checked different encoder implementations and
+          // all of them return to alpha sub-mode after Shift-to-Byte
+          subMode = ALPHA;
         }
       }
       break;
@@ -275,10 +275,10 @@ void DecodedBitStreamParser::decodeTextCompaction(ArrayRef<int> textCompactionDa
         } else if (subModeCh == MODE_SHIFT_TO_BYTE_COMPACTION_MODE) {
           result->append((char) byteCompactionData[i]);
           // 2012-11-27 hfn after fix by srowen in java code:
-		  // the pdf417 specs say we have to return to the last latched
-		  // sub-mode. But I checked different encoder implementations and
-		  // all of them return to alpha sub-mode after Shift-to-Byte
-		  subMode = ALPHA;
+          // the pdf417 specs say we have to return to the last latched
+          // sub-mode. But I checked different encoder implementations and
+          // all of them return to alpha sub-mode after Shift-to-Byte
+          subMode = ALPHA;
         }
       }
       break;
@@ -303,10 +303,10 @@ void DecodedBitStreamParser::decodeTextCompaction(ArrayRef<int> textCompactionDa
         } else if (subModeCh == MODE_SHIFT_TO_BYTE_COMPACTION_MODE) {
           result->append((char) byteCompactionData[i]);
           // 2012-11-27 hfn after fix by srowen in java code:
-		  // the pdf417 specs say we have to return to the last latched
-		  // sub-mode. But I checked different encoder implementations and
-		  // all of them return to alpha sub-mode after Shift-to-Byte
-		  subMode = ALPHA;
+          // the pdf417 specs say we have to return to the last latched
+          // sub-mode. But I checked different encoder implementations and
+          // all of them return to alpha sub-mode after Shift-to-Byte
+          subMode = ALPHA;
         }
       }
       break;
@@ -321,10 +321,10 @@ void DecodedBitStreamParser::decodeTextCompaction(ArrayRef<int> textCompactionDa
         } else if (subModeCh == MODE_SHIFT_TO_BYTE_COMPACTION_MODE) {
           result->append((char) byteCompactionData[i]);
           // 2012-11-27 hfn after fix by srowen in java code:
-		  // the pdf417 specs say we have to return to the last latched
-		  // sub-mode. But I checked different encoder implementations and
-		  // all of them return to alpha sub-mode after Shift-to-Byte
-		  subMode = ALPHA;
+          // the pdf417 specs say we have to return to the last latched
+          // sub-mode. But I checked different encoder implementations and
+          // all of them return to alpha sub-mode after Shift-to-Byte
+          subMode = ALPHA;
         }
       }
       break;
@@ -351,28 +351,28 @@ void DecodedBitStreamParser::decodeTextCompaction(ArrayRef<int> textCompactionDa
       } else {
         if (subModeCh == PAL) {
           subMode = ALPHA;
-        // 2012-11-27 added from recent java code:
+          // 2012-11-27 added from recent java code:
         } else if (subModeCh == MODE_SHIFT_TO_BYTE_COMPACTION_MODE) {
-          // PS before Shift-to-Byte is used as a padding character, 
+          // PS before Shift-to-Byte is used as a padding character,
           // see 5.4.2.4 of the specification
           result->append((char) byteCompactionData[i]);
           // 2012-11-27 hfn after fix by srowen in java code:
-		  // the pdf417 specs say we have to return to the last latched
-		  // sub-mode. But I checked different encoder implementations and
-		  // all of them return to alpha sub-mode after Shift-to-Byte
-		  subMode = ALPHA;
+          // the pdf417 specs say we have to return to the last latched
+          // sub-mode. But I checked different encoder implementations and
+          // all of them return to alpha sub-mode after Shift-to-Byte
+          subMode = ALPHA;
         } else if (subModeCh == TEXT_COMPACTION_MODE_LATCH) {
           subMode = ALPHA;
         }
       }
       break;
-      }
-      if (ch != 0) {
-        // Append decoded character to result
-        result->append(ch);
-      }
-      i++;
     }
+    if (ch != 0) {
+      // Append decoded character to result
+      result->append(ch);
+    }
+    i++;
+  }
 }
 
 /**
@@ -397,43 +397,52 @@ int DecodedBitStreamParser::byteCompaction(int mode, ArrayRef<int> codewords, in
     ArrayRef<char> decodedData = new Array<char>(6);
     ArrayRef<int> byteCompactedCodewords = new Array<int>(6);
     bool end = false;
+    int nextCode = codewords[codeIndex++];
     while ((codeIndex < codewords[0]) && !end) {
-      int code = codewords[codeIndex++];
-      if (code < TEXT_COMPACTION_MODE_LATCH) {
-        byteCompactedCodewords[count] = code;
-        count++;
-        // Base 900
-        value = 900 * value + code;
-      } else {
-        if (code == TEXT_COMPACTION_MODE_LATCH ||
-          code == BYTE_COMPACTION_MODE_LATCH ||
-          code == NUMERIC_COMPACTION_MODE_LATCH ||
-          code == BYTE_COMPACTION_MODE_LATCH_6 ||
-          code == BEGIN_MACRO_PDF417_CONTROL_BLOCK ||
-          code == BEGIN_MACRO_PDF417_OPTIONAL_FIELD ||
-          code == MACRO_PDF417_TERMINATOR) {
-          codeIndex--;
-          end = true;
-        }
+      byteCompactedCodewords[count++] = nextCode;
+      // Base 900
+      value = 900 * value + nextCode;
+      nextCode = codewords[codeIndex++];
+      // perhaps it should be ok to check only nextCode >= TEXT_COMPACTION_MODE_LATCH
+      if (nextCode == TEXT_COMPACTION_MODE_LATCH ||
+          nextCode == BYTE_COMPACTION_MODE_LATCH ||
+          nextCode == NUMERIC_COMPACTION_MODE_LATCH ||
+          nextCode == BYTE_COMPACTION_MODE_LATCH_6 ||
+          nextCode == BEGIN_MACRO_PDF417_CONTROL_BLOCK ||
+          nextCode == BEGIN_MACRO_PDF417_OPTIONAL_FIELD ||
+          nextCode == MACRO_PDF417_TERMINATOR)
+      {
+        end = true;
       }
-      if ((count % 5 == 0) && (count > 0)) {
-        // Decode every 5 codewords
-        // Convert to Base 256
-        for (j = 0; j < 6; ++j) {
-          decodedData[5 - j] = (char) (value % 256);
-          value >>= 8;
+      else
+      {
+        if ((count%5 == 0) && (count > 0))
+        {
+          // Decode every 5 codewords
+          // Convert to Base 256
+          for (int j = 0; j < 6; ++j)
+          {
+            decodedData[5 - j] = (char) (value%256);
+            value >>= 8;
+          }
+          result->append(std::string(&(decodedData->values()[0]), decodedData->values().size()));
+          count = 0;
         }
-        result->append(std::string(&decodedData[0],6));
-        count = 0;
       }
     }
+
+    // if the end of all codewords is reached the last codeword needs to be added
+    if (codeIndex == codewords[0] && nextCode < TEXT_COMPACTION_MODE_LATCH)
+      byteCompactedCodewords[count++] = nextCode;
+
     // If Byte Compaction mode is invoked with codeword 901,
-    // the final group of codewords is interpreted directly
+    // the last group of codewords is interpreted directly
     // as one byte per codeword, without compaction.
-    for (i = (count / 5) * 5; i < count; i++) {
-      result->append((char) byteCompactedCodewords[i]);
+    for (int i = 0; i < count; i++)
+    {
+      result->append((char)byteCompactedCodewords[i]);
     }
-    
+
   } else if (mode == BYTE_COMPACTION_MODE_LATCH_6) {
     // Total number of Byte Compaction characters to be encoded
     // is an integer multiple of 6
@@ -448,12 +457,12 @@ int DecodedBitStreamParser::byteCompaction(int mode, ArrayRef<int> codewords, in
         value = 900 * value + code;
       } else {
         if (code == TEXT_COMPACTION_MODE_LATCH ||
-          code == BYTE_COMPACTION_MODE_LATCH ||
-          code == NUMERIC_COMPACTION_MODE_LATCH ||
-          code == BYTE_COMPACTION_MODE_LATCH_6 ||
-          code == BEGIN_MACRO_PDF417_CONTROL_BLOCK ||
-          code == BEGIN_MACRO_PDF417_OPTIONAL_FIELD ||
-          code == MACRO_PDF417_TERMINATOR) {
+            code == BYTE_COMPACTION_MODE_LATCH ||
+            code == NUMERIC_COMPACTION_MODE_LATCH ||
+            code == BYTE_COMPACTION_MODE_LATCH_6 ||
+            code == BEGIN_MACRO_PDF417_CONTROL_BLOCK ||
+            code == BEGIN_MACRO_PDF417_OPTIONAL_FIELD ||
+            code == MACRO_PDF417_TERMINATOR) {
           codeIndex--;
           end = true;
         }
@@ -500,18 +509,18 @@ int DecodedBitStreamParser::numericCompaction(ArrayRef<int> codewords, int codeI
       count++;
     } else {
       if (code == TEXT_COMPACTION_MODE_LATCH ||
-        code == BYTE_COMPACTION_MODE_LATCH ||
-        code == BYTE_COMPACTION_MODE_LATCH_6 ||
-        code == BEGIN_MACRO_PDF417_CONTROL_BLOCK ||
-        code == BEGIN_MACRO_PDF417_OPTIONAL_FIELD ||
-        code == MACRO_PDF417_TERMINATOR) {
+          code == BYTE_COMPACTION_MODE_LATCH ||
+          code == BYTE_COMPACTION_MODE_LATCH_6 ||
+          code == BEGIN_MACRO_PDF417_CONTROL_BLOCK ||
+          code == BEGIN_MACRO_PDF417_OPTIONAL_FIELD ||
+          code == MACRO_PDF417_TERMINATOR) {
         codeIndex--;
-        end = true;          
+        end = true;
       }
     }
     if (count % MAX_NUMERIC_CODEWORDS == 0 ||
-      code == NUMERIC_COMPACTION_MODE_LATCH ||
-      end) {
+        code == NUMERIC_COMPACTION_MODE_LATCH ||
+        end) {
       // Re-invoking Numeric Compaction mode (by using codeword 902
       // while in Numeric Compaction mode) serves  to terminate the
       // current Numeric Compaction mode grouping as described in 5.4.4.2,
@@ -542,7 +551,7 @@ int DecodedBitStreamParser::numericCompaction(ArrayRef<int> codewords, int codeI
     t = 1 000 213 298 174 000 div 900 = 1 111 348 109 082
     Calculate codeword 1
     d1 = 1 111 348 109 082 mod 900 = 282
-  
+
     t = 1 111 348 109 082 div 900 = 1 234 831 232
     Calculate codeword 2
     d2 = 1 234 831 232 mod 900 = 632

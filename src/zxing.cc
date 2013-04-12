@@ -22,18 +22,15 @@
 #include "zxing.h"
 #include "image.h"
 #include "util.h"
-#include <zxing/LuminanceSource.h>
 #include <zxing/Binarizer.h>
 #include <zxing/BinaryBitmap.h>
-#include <zxing/common/HybridBinarizer.h>
-#include <zxing/common/HybridBinarizer.h>
-#include <zxing/Result.h>
-#include <zxing/ReaderException.h>
+#include <zxing/LuminanceSource.h>
 #include <zxing/MultiFormatReader.h>
+#include <zxing/ReaderException.h>
+#include <zxing/Result.h>
+#include <zxing/common/Array.h>
+#include <zxing/common/HybridBinarizer.h>
 #include <zxing/multi/GenericMultipleBarcodeReader.h>
-#include <cstdlib>
-#include <sstream>
-#include <cstdlib>
 #include <node_buffer.h>
 
 using namespace v8;
@@ -45,22 +42,21 @@ public:
     PixSource(Pix* pix, bool take = false);
     ~PixSource();
 
-    int getWidth() const;
-    int getHeight() const;
-    unsigned char* getRow(int y, unsigned char* row);
-    unsigned char* getMatrix();
+    zxing::ArrayRef<char> getRow(int y, zxing::ArrayRef<char> row) const;
+    zxing::ArrayRef<char> getMatrix() const;
 
     bool isCropSupported() const;
     zxing::Ref<zxing::LuminanceSource> crop(int left, int top, int width, int height);
+
     bool isRotateSupported() const;
     zxing::Ref<zxing::LuminanceSource> rotateCounterClockwise();
-    int getStraightLine(unsigned char *line, int nLengthMax, int x1,int y1,int x2,int y2);
 
 private:
     PIX* pix_;
 };
 
 PixSource::PixSource(Pix* pix, bool take)
+    : LuminanceSource(pix ? pix->w : 0, pix ? pix->h : 0)
 {
     if (take) {
         assert(pix->d == 8);
@@ -75,45 +71,34 @@ PixSource::~PixSource()
     pixDestroy(&pix_);
 }
 
-int PixSource::getWidth() const
+zxing::ArrayRef<char> PixSource::getRow(int y, zxing::ArrayRef<char> row) const
 {
-    return pix_->w;
-}
-
-int PixSource::getHeight() const
-{
-    return pix_->h;
-}
-
-unsigned char* PixSource::getRow(int y, unsigned char* row)
-{
-    row = row ? row : new unsigned char[pix_->w];
+    if (!row) {
+        row = zxing::ArrayRef<char>(getWidth());
+    }
     if (static_cast<uint32_t>(y) < pix_->h) {
         uint32_t *line = pix_->data + (pix_->wpl * y);
-        unsigned char *r = row;
-        for (uint32_t x = 0; x < pix_->w; ++x) {
-            *r = GET_DATA_BYTE(line, x);
-            ++r;
+        for (int x = 0; x < getWidth(); ++x) {
+            row[x] = GET_DATA_BYTE(line, x);
         }
     }
     return row;
 }
 
-unsigned char* PixSource::getMatrix()
+zxing::ArrayRef<char> PixSource::getMatrix() const
 {
-    unsigned char* matrix = new unsigned char[pix_->w * pix_->h];
-    unsigned char* m = matrix;
+    zxing::ArrayRef<char> matrix(getWidth() * getHeight());
+    char* m = &matrix[0];
     uint32_t *line = pix_->data;
     for (uint32_t y = 0; y < pix_->h; ++y) {
         for (uint32_t x = 0; x < pix_->w; ++x) {
-            *m = GET_DATA_BYTE(line, x);
+            *m = (char)GET_DATA_BYTE(line, x);
             ++m;
         }
         line += pix_->wpl;
     }
     return matrix;
 }
-
 
 bool PixSource::isRotateSupported() const
 {
@@ -144,103 +129,18 @@ zxing::Ref<zxing::LuminanceSource> PixSource::crop(int left, int top, int width,
     return zxing::Ref<PixSource>(new PixSource(croppedPix, true));
 }
 
-//TODO: clean this code someday (more or less copied).
-int PixSource::getStraightLine(unsigned char *line, int nLengthMax, int x1,int y1,int x2,int y2)
-{
-    int width = pix_->w;
-    int height = pix_->h;
-    int x,y,xDiff,yDiff,xDiffAbs,yDiffAbs,nMigr,dX,dY;
-    int cnt;
-    int nLength = nLengthMax;
-    int nMigrGlob;
-
-    if(x1 < 0 || x1 >= 0 + width || x2 < 0 || x2 >= 0 + width
-            || y1 < 0 || y1 >= height || y2 < 0 || y2 >= 0 + height)
-        return 0;
-
-    x = x1;
-    y = y1;
-    cnt = 0;
-    xDiff = x2 - x1;
-    yDiff = y2 - y1;
-    xDiffAbs = std::abs(xDiff);
-    yDiffAbs = std::abs(yDiff);
-    dX = dY = 1;
-    if (xDiff < 0)
-        dX = -1;
-    if (yDiff < 0)
-        dY = -1;
-
-    nMigrGlob = nLength / 2;
-
-    unsigned char* matrix = getMatrix();
-
-    // horizontal dimension greater than vertical?
-    if (xDiffAbs > yDiffAbs) {
-        nMigr = xDiffAbs / 2;
-        // distributes regularly <nLength> points of the straight line to line[]:
-        while(cnt < nLength) {
-            while(cnt < nLength && nMigrGlob > 0) {
-                line[cnt] = matrix[(0 + y) * width + 0 + x];
-                nMigrGlob -= xDiffAbs;
-                cnt++;
-            }
-            while(nMigrGlob <= 0) {
-                nMigrGlob += nLength;
-                x += dX;
-                nMigr -= yDiffAbs;
-                if (nMigr < 0) {
-                    nMigr += xDiffAbs;
-                    y += dY;
-                }
-            }
-        }
-    }
-    else {
-        // vertical dimension greater than horizontal:
-        nMigr = yDiffAbs / 2;
-
-        while(cnt < nLength) {
-            while(cnt < nLength && nMigrGlob > 0) {
-                line[cnt] = matrix[(0 + y) * width + 0 + x];
-                nMigrGlob -= yDiffAbs;
-                cnt++;
-            }
-            while(nMigrGlob <= 0) {
-                nMigrGlob += nLength;
-                y += dY;
-                nMigr -= xDiffAbs;
-                if (nMigr < 0) {
-                    nMigr += yDiffAbs;
-                    x += dX;
-                }
-            }
-        }
-    }
-
-    // last point?
-    if (cnt < nLengthMax) {
-        line[cnt] = matrix[(0 + y) * width + 0 + x];
-        cnt++;
-    }
-
-    delete matrix;
-
-    return cnt;
-}
-
-const zxing::BarcodeFormat ZXing::BARCODEFORMATS[] = {
-    zxing::BarcodeFormat_QR_CODE,
-    zxing::BarcodeFormat_DATA_MATRIX,
-    zxing::BarcodeFormat_PDF_417,
-    zxing::BarcodeFormat_UPC_E,
-    zxing::BarcodeFormat_UPC_A,
-    zxing::BarcodeFormat_EAN_8,
-    zxing::BarcodeFormat_EAN_13,
-    zxing::BarcodeFormat_CODE_128,
-    zxing::BarcodeFormat_CODE_39,
-    zxing::BarcodeFormat_ITF,
-    zxing::BarcodeFormat_AZTEC
+const zxing::BarcodeFormat::Value ZXing::BARCODEFORMATS[] = {
+    zxing::BarcodeFormat::QR_CODE,
+    zxing::BarcodeFormat::DATA_MATRIX,
+    zxing::BarcodeFormat::PDF_417,
+    zxing::BarcodeFormat::UPC_E,
+    zxing::BarcodeFormat::UPC_A,
+    zxing::BarcodeFormat::EAN_8,
+    zxing::BarcodeFormat::EAN_13,
+    zxing::BarcodeFormat::CODE_128,
+    zxing::BarcodeFormat::CODE_39,
+    zxing::BarcodeFormat::ITF,
+    zxing::BarcodeFormat::AZTEC
 };
 
 const size_t ZXing::BARCODEFORMATS_LENGTH = 11;
@@ -305,7 +205,7 @@ Handle<Value> ZXing::GetFormats(Local<String> prop, const AccessorInfo &info)
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
     Local<Object> format = Object::New();
     for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-        format->Set(String::NewSymbol(zxing::barcodeFormatNames[BARCODEFORMATS[i]]),
+        format->Set(String::NewSymbol(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]),
                 Boolean::New(obj->hints_.containsFormat(BARCODEFORMATS[i])));
     }
     return scope.Close(format);
@@ -318,7 +218,7 @@ void ZXing::SetFormats(Local<String> prop, Local<Value> value, const AccessorInf
         Local<Object> format = value->ToObject();
         obj->hints_.clear();
         for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-            if (format->Get(String::NewSymbol(zxing::barcodeFormatNames[BARCODEFORMATS[i]]))->BooleanValue()) {
+            if (format->Get(String::NewSymbol(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]))->BooleanValue()) {
                 obj->hints_.addFormat(BARCODEFORMATS[i]);
             }
         }
@@ -355,11 +255,11 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
         zxing::Ref<zxing::Result> result(obj->reader_->decodeWithState(binary));
         Local<Object> object = Object::New();
         std::string resultStr = result->getText()->getText();
-        object->Set(String::NewSymbol("type"), String::New(zxing::barcodeFormatNames[result->getBarcodeFormat()]));
+        object->Set(String::NewSymbol("type"), String::New(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]));
         object->Set(String::NewSymbol("data"), String::New(resultStr.c_str()));
         object->Set(String::NewSymbol("buffer"), node::Buffer::New((char*)resultStr.data(), resultStr.length())->handle_);
         Local<Array> points = Array::New();
-        for (size_t i = 0; i < result->getResultPoints().size(); ++i) {
+        for (int i = 0; i < result->getResultPoints().size(); ++i) {
             Local<Object> point = Object::New();
             point->Set(String::NewSymbol("x"), Number::New(result->getResultPoints()[i]->getX()));
             point->Set(String::NewSymbol("y"), Number::New(result->getResultPoints()[i]->getY()));

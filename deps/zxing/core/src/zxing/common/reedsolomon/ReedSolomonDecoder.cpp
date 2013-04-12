@@ -1,3 +1,4 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
  *  ReedSolomonDecoder.cpp
  *  zxing
@@ -25,40 +26,25 @@
 #include <zxing/common/reedsolomon/ReedSolomonException.h>
 #include <zxing/common/IllegalArgumentException.h>
 
-using namespace std;
+using namespace std; // remove
 
-namespace zxing {
+using zxing::Ref;
+using zxing::ArrayRef;
+using zxing::ReedSolomonDecoder;
+using zxing::GenericGFPoly;
+using zxing::GenericGF;
 
-ReedSolomonDecoder::ReedSolomonDecoder(Ref<GenericGF> fld) :
-    field(fld) {
-}
+ReedSolomonDecoder::ReedSolomonDecoder(Ref<GenericGF> field_) : field(field_) {}
 
 ReedSolomonDecoder::~ReedSolomonDecoder() {
 }
 
 void ReedSolomonDecoder::decode(ArrayRef<int> received, int twoS) {
-
   Ref<GenericGFPoly> poly(new GenericGFPoly(field, received));
-
-
-/*
-#ifdef DEBUG
-  cout << "decoding with poly " << *poly << endl;
-#endif
-*/
-
-  ArrayRef<int> syndromeCoefficients(new Array<int> (twoS));
-
-
-#ifdef DEBUG
-  cout << "syndromeCoefficients array = " <<
-      syndromeCoefficients.array_ << endl;
-#endif
-
-  bool dataMatrix = (field.object_ == GenericGF::DATA_MATRIX_FIELD_256.object_);
+  ArrayRef<int> syndromeCoefficients(twoS);
   bool noError = true;
   for (int i = 0; i < twoS; i++) {
-    int eval = poly->evaluateAt(field->exp(dataMatrix ? i + 1 : i));
+    int eval = poly->evaluateAt(field->exp(i + field->getGeneratorBase()));
     syndromeCoefficients[syndromeCoefficients->size() - 1 - i] = eval;
     if (eval != 0) {
       noError = false;
@@ -67,17 +53,18 @@ void ReedSolomonDecoder::decode(ArrayRef<int> received, int twoS) {
   if (noError) {
     return;
   }
-
   Ref<GenericGFPoly> syndrome(new GenericGFPoly(field, syndromeCoefficients));
-  Ref<GenericGFPoly> monomial = field->buildMonomial(twoS, 1);
-  vector<Ref<GenericGFPoly> > sigmaOmega = runEuclideanAlgorithm(monomial, syndrome, twoS);
-  ArrayRef<int> errorLocations = findErrorLocations(sigmaOmega[0]);
-  ArrayRef<int> errorMagitudes = findErrorMagnitudes(sigmaOmega[1], errorLocations, dataMatrix);
-  for (unsigned i = 0; i < errorLocations->size(); i++) {
+  vector<Ref<GenericGFPoly> > sigmaOmega =
+    runEuclideanAlgorithm(field->buildMonomial(twoS, 1), syndrome, twoS);
+  Ref<GenericGFPoly> sigma = sigmaOmega[0];
+  Ref<GenericGFPoly> omega = sigmaOmega[1];
+  ArrayRef<int> errorLocations = findErrorLocations(sigma);
+  ArrayRef<int> errorMagitudes = findErrorMagnitudes(omega, errorLocations);
+  for (int i = 0; i < errorLocations->size(); i++) {
     int position = received->size() - 1 - field->log(errorLocations[i]);
-    //TODO: check why the position would be invalid
-    if (position < 0 || (size_t)position >= received.size())
-      throw IllegalArgumentException("Invalid position (ReedSolomonDecoder)");
+    if (position < 0) {
+      throw ReedSolomonException("Bad error location");
+    }
     received[position] = GenericGF::addOrSubtract(received[position], errorMagitudes[i]);
   }
 }
@@ -97,7 +84,6 @@ vector<Ref<GenericGFPoly> > ReedSolomonDecoder::runEuclideanAlgorithm(Ref<Generi
   Ref<GenericGFPoly> tLast(field->getZero());
   Ref<GenericGFPoly> t(field->getOne());
 
-
   // Run Euclidean algorithm until r's degree is less than R/2
   while (r->getDegree() >= R / 2) {
     Ref<GenericGFPoly> rLastLast(rLast);
@@ -105,14 +91,13 @@ vector<Ref<GenericGFPoly> > ReedSolomonDecoder::runEuclideanAlgorithm(Ref<Generi
     rLast = r;
     tLast = t;
 
-
     // Divide rLastLast by rLast, with quotient q and remainder r
     if (rLast->isZero()) {
       // Oops, Euclidean algorithm already terminated?
       throw ReedSolomonException("r_{i-1} was zero");
     }
     r = rLastLast;
-    Ref<GenericGFPoly> q(field->getZero());
+    Ref<GenericGFPoly> q = field->getZero();
     int denominatorLeadingTerm = rLast->getCoefficient(rLast->getDegree());
     int dltInverse = field->inverse(denominatorLeadingTerm);
     while (r->getDegree() >= rLast->getDegree() && !r->isZero()) {
@@ -123,7 +108,6 @@ vector<Ref<GenericGFPoly> > ReedSolomonDecoder::runEuclideanAlgorithm(Ref<Generi
     }
 
     t = q->multiply(tLast)->addOrSubtract(tLastLast);
-
   }
 
   int sigmaTildeAtZero = t->getCoefficient(0);
@@ -134,17 +118,6 @@ vector<Ref<GenericGFPoly> > ReedSolomonDecoder::runEuclideanAlgorithm(Ref<Generi
   int inverse = field->inverse(sigmaTildeAtZero);
   Ref<GenericGFPoly> sigma(t->multiply(inverse));
   Ref<GenericGFPoly> omega(r->multiply(inverse));
-
-
-/*
-#ifdef DEBUG
-  cout << "t = " << *t << endl;
-  cout << "r = " << *r << "\n";
-  cout << "sigma = " << *sigma << endl;
-  cout << "omega = " << *omega << endl;
-#endif
-*/
-
   vector<Ref<GenericGFPoly> > result(2);
   result[0] = sigma;
   result[1] = omega;
@@ -162,7 +135,6 @@ ArrayRef<int> ReedSolomonDecoder::findErrorLocations(Ref<GenericGFPoly> errorLoc
   ArrayRef<int> result(new Array<int>(numErrors));
   int e = 0;
   for (int i = 1; i < field->getSize() && e < numErrors; i++) {
-    // cout << "errorLocator(" << i << ") == " << errorLocator->evaluateAt(i) << endl;
     if (errorLocator->evaluateAt(i) == 0) {
       result[e] = field->inverse(i);
       e++;
@@ -174,25 +146,25 @@ ArrayRef<int> ReedSolomonDecoder::findErrorLocations(Ref<GenericGFPoly> errorLoc
   return result;
 }
 
-ArrayRef<int> ReedSolomonDecoder::findErrorMagnitudes(Ref<GenericGFPoly> errorEvaluator, ArrayRef<int> errorLocations, bool dataMatrix) {
+ArrayRef<int> ReedSolomonDecoder::findErrorMagnitudes(Ref<GenericGFPoly> errorEvaluator, ArrayRef<int> errorLocations) {
   // This is directly applying Forney's Formula
-  int s = errorLocations.size();
+  int s = errorLocations->size();
   ArrayRef<int> result(new Array<int>(s));
   for (int i = 0; i < s; i++) {
     int xiInverse = field->inverse(errorLocations[i]);
     int denominator = 1;
     for (int j = 0; j < s; j++) {
       if (i != j) {
-        denominator = field->multiply(denominator, GenericGF::addOrSubtract(1, field->multiply(errorLocations[j],
-                                     xiInverse)));
+        int term = field->multiply(errorLocations[j], xiInverse);
+        int termPlus1 = (term & 0x1) == 0 ? term | 1 : term & ~1;
+        denominator = field->multiply(denominator, termPlus1);
       }
     }
-    result[i] = field->multiply(errorEvaluator->evaluateAt(xiInverse), field->inverse(denominator));
-
-    if (dataMatrix) {
+    result[i] = field->multiply(errorEvaluator->evaluateAt(xiInverse),
+                                field->inverse(denominator));
+    if (field->getGeneratorBase() != 0) {
       result[i] = field->multiply(result[i], xiInverse);
-	}
+    }
   }
   return result;
-}
 }

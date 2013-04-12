@@ -26,20 +26,20 @@
 #include <zxing/qrcode/decoder/DataBlock.h>
 #include <zxing/qrcode/decoder/DecodedBitStreamParser.h>
 #include <zxing/ReaderException.h>
+#include <zxing/ChecksumException.h>
 #include <zxing/common/reedsolomon/ReedSolomonException.h>
 
 using zxing::qrcode::Decoder;
 using zxing::DecoderResult;
 using zxing::Ref;
-
-namespace zxing {
-namespace qrcode {
+using zxing::ArrayRef;
+using zxing::BitMatrix;
 
 Decoder::Decoder() :
   rsDecoder_(GenericGF::QR_CODE_FIELD_256) {
 }
 
-void Decoder::correctErrors(ArrayRef<unsigned char> codewordBytes, int numDataCodewords) {
+void Decoder::correctErrors(ArrayRef<char> codewordBytes, int numDataCodewords) {
   int numCodewords = codewordBytes->size();
   ArrayRef<int> codewordInts(numCodewords);
   for (int i = 0; i < numCodewords; i++) {
@@ -49,13 +49,12 @@ void Decoder::correctErrors(ArrayRef<unsigned char> codewordBytes, int numDataCo
 
   try {
     rsDecoder_.decode(codewordInts, numECCodewords);
-  } catch (ReedSolomonException const& ex) {
-    ReaderException rex(ex.what());
-    throw rex;
+  } catch (ReedSolomonException const& ignored) {
+    throw ChecksumException();
   }
 
   for (int i = 0; i < numDataCodewords; i++) {
-    codewordBytes[i] = (unsigned char)codewordInts[i];
+    codewordBytes[i] = (char)codewordInts[i];
   }
 }
 
@@ -63,12 +62,14 @@ Ref<DecoderResult> Decoder::decode(Ref<BitMatrix> bits) {
   // Construct a parser and read version, error-correction level
   BitMatrixParser parser(bits);
 
+  // std::cerr << *bits << std::endl;
+
   Version *version = parser.readVersion();
   ErrorCorrectionLevel &ecLevel = parser.readFormatInformation()->getErrorCorrectionLevel();
 
 
   // Read codewords
-  ArrayRef<unsigned char> codewords(parser.readCodewords());
+  ArrayRef<char> codewords(parser.readCodewords());
 
 
   // Separate into data blocks
@@ -80,14 +81,14 @@ Ref<DecoderResult> Decoder::decode(Ref<BitMatrix> bits) {
   for (size_t i = 0; i < dataBlocks.size(); i++) {
     totalBytes += dataBlocks[i]->getNumDataCodewords();
   }
-  ArrayRef<unsigned char> resultBytes(totalBytes);
+  ArrayRef<char> resultBytes(totalBytes);
   int resultOffset = 0;
 
 
   // Error-correct and copy data blocks together into a stream of bytes
   for (size_t j = 0; j < dataBlocks.size(); j++) {
     Ref<DataBlock> dataBlock(dataBlocks[j]);
-    ArrayRef<unsigned char> codewordBytes = dataBlock->getCodewords();
+    ArrayRef<char> codewordBytes = dataBlock->getCodewords();
     int numDataCodewords = dataBlock->getNumDataCodewords();
     correctErrors(codewordBytes, numDataCodewords);
     for (int i = 0; i < numDataCodewords; i++) {
@@ -101,5 +102,3 @@ Ref<DecoderResult> Decoder::decode(Ref<BitMatrix> bits) {
                                         DecodedBitStreamParser::Hashtable());
 }
 
-}
-}

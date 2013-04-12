@@ -29,12 +29,14 @@
 namespace zxing {
 
 class BitMatrix : public Counted {
+public:
+  static const int bitsPerWord = std::numeric_limits<unsigned int>::digits;
+
 private:
-  size_t width_;
-  size_t height_;
-  size_t words_;
-  size_t rowSize_;
-  unsigned int* bits_;
+  int width;
+  int height;
+  int rowSize;
+  ArrayRef<int> bits;
 
 #define ZX_LOG_DIGITS(digits) \
     ((digits == 8) ? 3 : \
@@ -44,49 +46,43 @@ private:
         ((digits == 128) ? 7 : \
          (-1))))))
 
-  static const unsigned int bitsPerWord;
-  static const unsigned int logBits;
-  static const unsigned int bitsMask;
+  static const int logBits = ZX_LOG_DIGITS(bitsPerWord);
+  static const int bitsMask = (1 << logBits) - 1;
 
 public:
-  BitMatrix(size_t dimension);
-  BitMatrix(size_t width, size_t height);
+  BitMatrix(int dimension);
+  BitMatrix(int width, int height);
 
   ~BitMatrix();
 
-  bool get(size_t x, size_t y) const {
-    size_t offset = x + width_ * y;
-    return ((bits_[offset >> logBits] >> (offset & bitsMask)) & 0x01) != 0;
+  bool get(int x, int y) const {
+    int offset = y * rowSize + (x >> logBits);
+    return ((((unsigned)bits[offset]) >> (x & bitsMask)) & 1) != 0;
   }
 
-  void set(size_t x, size_t y) {
-    size_t offset = x + width_ * y;
-    bits_[offset >> logBits] |= 1 << (offset & bitsMask);
+  void set(int x, int y) {
+    int offset = y * rowSize + (x >> logBits);
+    bits[offset] |= 1 << (x & bitsMask);
   }
 
-  void flip(size_t x, size_t y);
+  void flip(int x, int y);
   void clear();
-  void setRegion(size_t left, size_t top, size_t width, size_t height);
+  void setRegion(int left, int top, int width, int height);
   Ref<BitArray> getRow(int y, Ref<BitArray> row);
 
-  size_t getDimension() const;
-  size_t getWidth() const;
-  size_t getHeight() const;
+  int getWidth() const;
+  int getHeight() const;
 
-  unsigned int* getBits() const;
-  
-  /* 2012-05-29 hfn added: */
+  // ArrayRef<int> getBits() const;
   ArrayRef<int> getTopLeftOnBit();
   ArrayRef<int> getBottomRightOnBit();
-  
 
   friend std::ostream& operator<<(std::ostream &out, const BitMatrix &bm);
   const char *description();
-  const char *descriptionROW(int row);
-
-  void writePng(const char *filename, int zoom, int zoomv = 0);
 
 private:
+  inline void init(int, int);
+
   BitMatrix(const BitMatrix&);
   BitMatrix& operator =(const BitMatrix&);
 };

@@ -52,14 +52,14 @@ Ref<Result> PDF417Reader::decode(Ref<BinaryBitmap> image, DecodeHints hints)
     OutputDebugString(sz);
   }
 #endif
-  std::vector<Ref<ResultPoint> > points(detectorResult->getPoints());
+  ArrayRef< Ref<ResultPoint> > points(detectorResult->getPoints());
   
   if (!hints.isEmpty()) {
     Ref<ResultPointCallback> rpcb = hints.getResultPointCallback();
     /* .get(DecodeHintType.NEED_RESULT_POINT_CALLBACK); */
     if (rpcb != NULL) {
-      for (size_t i = 0; i < points.size(); i++) {
-        rpcb->foundPossibleResultPoint(*(points[i]));
+      for (int i = 0; i < points.size(); i++) {
+        rpcb->foundPossibleResultPoint(*points[i]);
       }
     }
   }
@@ -68,7 +68,7 @@ Ref<Result> PDF417Reader::decode(Ref<BinaryBitmap> image, DecodeHints hints)
   }
   */
   Ref<Result> r(new Result(decoderResult->getText(), decoderResult->getRawBytes(), points,
-    BarcodeFormat_PDF_417));
+    BarcodeFormat::PDF_417));
 #if (defined _WIN32 && defined(DEBUG))
   {
     WCHAR sz[1024];

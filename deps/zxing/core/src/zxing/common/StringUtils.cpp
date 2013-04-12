@@ -20,9 +20,8 @@
 #include <zxing/DecodeHints.h>
 
 using namespace std;
-
-namespace zxing {
-namespace common {
+using namespace zxing;
+using namespace zxing::common;
 
 // N.B.: these are the iconv strings for at least some versions of iconv
 
@@ -36,7 +35,7 @@ char const* const StringUtils::ISO88591 = "ISO8859-1";
 const bool StringUtils::ASSUME_SHIFT_JIS = false;
 
 string
-StringUtils::guessEncoding(unsigned char* bytes, int length,
+StringUtils::guessEncoding(char* bytes, int length,
                            Hashtable const& hints) {
   Hashtable::const_iterator i = hints.find(DecodeHints::CHARACTER_SET);
   if (i != hints.end()) {
@@ -65,7 +64,7 @@ StringUtils::guessEncoding(unsigned char* bytes, int length,
   //int isoHighChars = 0;
   int isoHighOther = 0;
 
-  typedef unsigned char byte;
+  typedef char byte;
   boolean utf8bom = length > 3 &&
     bytes[0] == (byte) 0xEF &&
     bytes[1] == (byte) 0xBB &&
@@ -196,7 +195,4 @@ StringUtils::guessEncoding(unsigned char* bytes, int length,
   }
   // Otherwise, we take a wild guess with platform encoding
   return PLATFORM_DEFAULT_ENCODING;
-}
-
-}
 }
