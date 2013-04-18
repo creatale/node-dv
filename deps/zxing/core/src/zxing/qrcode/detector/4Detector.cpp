@@ -36,7 +36,7 @@ namespace math_utils = zxing::common::detector::math_utils;
 using std::ostringstream;
 using std::min;
 using std::max;
-using zxing::isnan;
+//using zxing::isnan;
 using zxing::qrcode::Detector;
 using zxing::Ref;
 using zxing::BitMatrix;
