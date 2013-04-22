@@ -354,6 +354,9 @@ Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, con
             char *text = static_cast<tesseract::ResultIterator *>(it)->GetUTF8Text(level);
             result->Set(String::NewSymbol("text"), String::New(text));
             delete[] text;
+            // Extract confidence.
+            float confidence = static_cast<tesseract::ResultIterator *>(it)->Confidence(level);
+            result->Set(String::NewSymbol("confidence"), Number::New(confidence));
         }
         if (level == tesseract::RIL_SYMBOL && recognize) {
             // Extract choices
