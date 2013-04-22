@@ -31,7 +31,6 @@
         'src/util.cc',
         'src/zxing.cc',
         'src/module.cc',
-        'src/tickreader.cc',
       ],
       'cflags!': ['-fno-exceptions'],
       'cflags_cc!': ['-fno-exceptions'],

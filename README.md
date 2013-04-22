@@ -4,11 +4,10 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 ## Features
 
-- Image loading using [jpgd](http://code.google.com/p/jpeg-compressor/), [LodePNG](http://lodev.org/lodepng/) and pixel buffers.
+- Image loading using [jpgd](http://code.google.com/p/jpeg-compressor/), [LodePNG](http://lodev.org/lodepng/) and pixel buffers
 - Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69)
 - OCR using [Tesseract](http://code.google.com/p/tesseract-ocr/) (Version 3.02)
-- OMR using [ZXing](http://code.google.com/p/zxing/) (Version 2.10 with PDF417 patches applied) for Barcodes
-- OMR using TickReader for checkboxes
+- OMR for Barcodes using [ZXing](http://code.google.com/p/zxing/) (Version 2.10 with PDF417 patches applied)
 
 ## Installation
 
@@ -37,3 +36,4 @@ Here are some quick links to help you get started:
 ## License
 
 Licensed under the incredibly [permissive](http://en.wikipedia.org/wiki/Permissive_free_software_licence) [MIT License](http://creativecommons.org/licenses/MIT/). Copyright &copy; 2012 Christoph Schulz.
+
