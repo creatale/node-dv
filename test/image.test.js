@@ -30,6 +30,7 @@ describe('Image', function(){
                 }
             }
         }
+        this.textpage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
     })
     it('should save using #toBuffer()', function(){
         writeImage('gray.png', this.gray);
@@ -41,8 +42,9 @@ describe('Image', function(){
     it('should return raw image data using #toBuffer()', function(){
         var buf = new dv.Image('rgb', this.rgbBuffer, 128, 256).toBuffer();
         buf.length.should.equal(this.rgbBuffer.length);
-        for (var i = 0; i < 1000; i++)
+        for (var i = 0; i < 1000; i++) {
             buf[i].should.equal(this.rgbBuffer[i]);
+        }
     })
     it('should #invert()', function(){
         writeImage('gray-invert.png', this.gray.invert());
@@ -66,7 +68,6 @@ describe('Image', function(){
     it('should #convolve()', function(){
         writeImage('gray-convolve.png', this.gray.convolve(15, 15));
     })
-
     it('should #rotate()', function(){
         writeImage('gray-rotate.png', this.gray.rotate(-0.703125));
         writeImage('gray-rotate45.png', this.gray.rotate(45));
@@ -106,8 +107,7 @@ describe('Image', function(){
         skew.confidence.should.equal(4.957831859588623);
     })
     it('should #connectedComponents()', function(){
-        var textpage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
-        var binaryImage = textpage.otsuAdaptiveThreshold(32, 32, 0, 0, 0.1).image;
+        var binaryImage = this.textpage.otsuAdaptiveThreshold(32, 32, 0, 0, 0.1).image;
         var boxes = binaryImage.connectedComponents(4);
         var canvas = new dv.Image(binaryImage);
         for (var i in boxes) {
@@ -118,25 +118,8 @@ describe('Image', function(){
         writeImage('textpage-components.png', canvas);
     })
     it('should #distanceFunction() and #maxDynamicRange', function(){
-        var barcodes = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/barcodes.png'));
-        var distanceMap = barcodes.distanceFunction(4);
+        var distanceMap = this.rgb.toGray().distanceFunction(4);
         writeImage('distance-map.png', distanceMap.maxDynamicRange('log'));
-    })
-    it('should isolate barcodes', function(){
-        var barcodes = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/barcodes.png'));
-        var open = barcodes.thin('bg', 8, 5).dilate(3, 3);
-        var openMap = open.distanceFunction(8);
-        var openMask = openMap.threshold(10).erode(11*2, 11*2);
-        writeImage('barcodes-open.png', open);
-        writeImage('barcodes-openMap.png', openMap.maxDynamicRange('log'));
-        writeImage('barcodes-openMask.png', openMask);
-        var boxes = openMask.invert().connectedComponents(8);
-        for (var i in boxes) {
-            barcodes.drawBox(boxes[i].x, boxes[i].y,
-                             boxes[i].width, boxes[i].height,
-                             2, 'flip');
-        }
-        writeImage('barcodes-isolated.png', barcodes);
     })
     it('should #drawBox()', function(){
         var canvas = new dv.Image(this.gray)
