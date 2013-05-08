@@ -195,6 +195,8 @@ Handle<Value> Image::New(const Arguments &args)
             depth = 32;
         } else if (strcmp("rgb", *format) == 0) {
             depth = 24;
+        } else if (strcmp("gray", *format) == 0) {
+            depth = 8;
         } else {
             std::stringstream msg;
             msg << "invalid buffer format '" << *format << "'";
