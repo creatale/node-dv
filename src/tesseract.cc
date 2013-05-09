@@ -38,6 +38,7 @@ void Tesseract::Init(Handle<Object> target)
     proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
     proto->SetAccessor(String::NewSymbol("rectangle"), GetRectangle, SetRectangle);
     proto->SetAccessor(String::NewSymbol("pageSegMode"), GetPageSegMode, SetPageSegMode);
+    proto->SetAccessor(String::NewSymbol("symbolWhitelist"), GetSymbolWhitelist, SetSymbolWhitelist);
     proto->Set(String::NewSymbol("clear"),
                FunctionTemplate::New(Clear)->GetFunction());
     proto->Set(String::NewSymbol("clearAdaptiveClassifier"),
@@ -209,6 +210,23 @@ void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const Acc
     }
 }
 
+Handle<Value> Tesseract::GetSymbolWhitelist(Local<String> prop, const AccessorInfo &info)
+{
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
+    return String::New(obj->api_.GetStringVariable("tessedit_char_whitelist"));
+}
+
+void Tesseract::SetSymbolWhitelist(Local<String> prop, Local<Value> value, const AccessorInfo &info)
+{
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
+    if (value->IsString()) {
+        String::AsciiValue whitelist(value);
+        obj->api_.SetVariable("tessedit_char_whitelist", *whitelist);
+    } else {
+        THROW(TypeError, "value must be of type string");
+    }
+}
+
 Handle<Value> Tesseract::Clear(const Arguments &args)
 {
     HandleScope scope;
@@ -278,6 +296,12 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     if (args.Length() >= 1 && args[0]->IsString()) {
         String::AsciiValue mode(args[0]);
+        bool withConfidence = false;
+        if (args.Length() == 2 && args[1]->IsBoolean()) {
+            withConfidence = args[1]->BooleanValue();
+        } else if (args.Length() == 3 && args[2]->IsBoolean()) {
+            withConfidence = args[2]->BooleanValue();
+        }
         const char *text = NULL;
         if (strcmp("plain", *mode) == 0) {
             text = obj->api_.GetUTF8Text();
@@ -288,18 +312,26 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
         } else if (strcmp("box", *mode) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
             text = obj->api_.GetBoxText(args[1]->Int32Value());
         }
-        if (text) {
+        if (!text) {
+            return THROW(Error, "Internal tesseract error");
+        }
+        if (withConfidence) {
+            Handle<Object> result = Object::New();
+            result->Set(String::NewSymbol("text"), String::New(text));
+            // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
+            result->Set(String::NewSymbol("confidence"), Number::New(obj->api_.MeanTextConf()));
+            return scope.Close(result);
+        } else {
             Local<String> textString = String::New(text);
             // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
             return scope.Close(textString);
         }
-        return THROW(Error, "Internal tesseract error");
     }
     return THROW(TypeError, "cannot convert argument list to "
-                 "(\"plain\") or "
-                 "(\"unlv\") or "
-                 "(\"hocr\", pageNumber: Int32) or "
-                 "(\"box\", pageNumber: Int32)");
+                 "(\"plain\", [withConfidence]) or "
+                 "(\"unlv\", [withConfidence]) or "
+                 "(\"hocr\", pageNumber: Int32, [withConfidence]) or "
+                 "(\"box\", pageNumber: Int32, [withConfidence])");
 }
 
 Tesseract::Tesseract(const char *datapath, const char *language)

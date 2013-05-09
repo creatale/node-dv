@@ -10,6 +10,14 @@ var textParagraph =
          'Norland an by minuter enquire it general on towards forming. Adapted mrs totally company ' +
          'two yet conduct men.').replace(/\s/g, '').toLowerCase();
 
+var compareTextParagraph = function(text){
+    var plainText =  text.replace(/\s/g, '').toLowerCase();
+    for (var i = 0; i < 6; ++i) {
+        var paragraph = plainText.substr(i * textParagraph.length, textParagraph.length);
+        paragraph.should.equal(textParagraph, 'Paragraph ' + i);
+    }
+}
+
 var writeImageBoxes = function(basename, image, array){
     //console.log(util.inspect(array, false, 100));
     var canvas = new dv.Image(image);
@@ -35,6 +43,11 @@ describe('Tesseract', function(){
     })
     it('should set #image', function(){
         this.tesseract.image = this.textPage300;
+    })
+    it('should set/get #symbolWhitelist', function(){
+        this.tesseract.symbolWhitelist = '0123456789';
+        this.tesseract.symbolWhitelist.should.equal('0123456789');
+        this.tesseract.symbolWhitelist = '';
     })
     it('should #findRegions()', function(){
         writeImageBoxes('textpage300-regions.png', this.textPage300, this.tesseract.findRegions());
@@ -68,10 +81,12 @@ describe('Tesseract', function(){
     })
     it('should #findText(\'plain\')', function(){
         this.tesseract.image = this.textPage300;
-        var plainText = this.tesseract.findText('plain').replace(/\s/g, '').toLowerCase();
-        for (var i = 0; i < 6; ++i) {
-            var paragraph = plainText.substr(i * textParagraph.length, textParagraph.length);
-            paragraph.should.equal(textParagraph, 'Paragraph ' + i);
-        }
+        compareTextParagraph(this.tesseract.findText('plain'));
+    })
+    it('should #findText(\'plain\', true)', function(){
+        this.tesseract.image = this.textPage300;
+        var result = this.tesseract.findText('plain', true);
+        compareTextParagraph(result.text);
+        result.confidence.should.be.above(90);
     })
 })

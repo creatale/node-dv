@@ -41,6 +41,8 @@ private:
     static void SetRectangle(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
     static v8::Handle<v8::Value> GetPageSegMode(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
     static void SetPageSegMode(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
+    static v8::Handle<v8::Value> GetSymbolWhitelist(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+    static void SetSymbolWhitelist(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
 
     // Methods.
     static v8::Handle<v8::Value> Clear(const v8::Arguments& args);
