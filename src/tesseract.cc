@@ -209,6 +209,18 @@ void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const Acc
     }
 }
 
+Handle<Value> Tesseract::SetVariable(const Arguments &args)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
+    if (args.Length() == 2 && args[0]->IsString() && args[1]->IsString()) {
+        String::AsciiValue key(args[0]);
+        String::AsciiValue val(args[1]);
+        return Number::New(obj->api_.SetVariable(*key, *value));
+    }
+    return THROW(TypeError, "cannot convert argument list to (key, value)");
+}
+
 Handle<Value> Tesseract::Clear(const Arguments &args)
 {
     HandleScope scope;
