@@ -40,6 +40,8 @@ void Tesseract::Init(Handle<Object> target)
     proto->SetAccessor(String::NewSymbol("pageSegMode"), GetPageSegMode, SetPageSegMode);
     proto->Set(String::NewSymbol("SetVariable"),
                FunctionTemplate::New(SetVariable)->GetFunction());
+    proto->Set(String::NewSymbol("MeanTextConf"),
+               FunctionTemplate::New(MeanTextConf)->GetFunction());
     proto->Set(String::NewSymbol("clear"),
                FunctionTemplate::New(Clear)->GetFunction());
     proto->Set(String::NewSymbol("clearAdaptiveClassifier"),
@@ -221,6 +223,13 @@ Handle<Value> Tesseract::SetVariable(const Arguments &args)
         return Number::New(obj->api_.SetVariable(*key, *val));
     }
     return THROW(TypeError, "cannot convert argument list to (key, value)");
+}
+
+Handle<Value> Tesseract::MeanTextConf(const Arguments &args)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
+    return Number::New(obj->api_.MeanTextConf());
 }
 
 Handle<Value> Tesseract::Clear(const Arguments &args)
