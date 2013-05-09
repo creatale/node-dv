@@ -43,6 +43,7 @@ private:
     static void SetPageSegMode(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
 
     // Methods.
+    static v8::Handle<v8::Value> SetVariable(const v8::Arguments& args);
     static v8::Handle<v8::Value> Clear(const v8::Arguments& args);
     static v8::Handle<v8::Value> ClearAdaptiveClassifier(const v8::Arguments& args);
     static v8::Handle<v8::Value> ThresholdImage(const v8::Arguments& args);
