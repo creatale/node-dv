@@ -216,7 +216,7 @@ Handle<Value> Tesseract::SetVariable(const Arguments &args)
     if (args.Length() == 2 && args[0]->IsString() && args[1]->IsString()) {
         String::AsciiValue key(args[0]);
         String::AsciiValue val(args[1]);
-        return Number::New(obj->api_.SetVariable(*key, *value));
+        return Number::New(obj->api_.SetVariable(*key, *val));
     }
     return THROW(TypeError, "cannot convert argument list to (key, value)");
 }
