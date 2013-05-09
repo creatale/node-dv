@@ -38,6 +38,8 @@ void Tesseract::Init(Handle<Object> target)
     proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
     proto->SetAccessor(String::NewSymbol("rectangle"), GetRectangle, SetRectangle);
     proto->SetAccessor(String::NewSymbol("pageSegMode"), GetPageSegMode, SetPageSegMode);
+    proto->Set(String::NewSymbol("SetVariable"),
+               FunctionTemplate::New(SetVariable)->GetFunction());
     proto->Set(String::NewSymbol("clear"),
                FunctionTemplate::New(Clear)->GetFunction());
     proto->Set(String::NewSymbol("clearAdaptiveClassifier"),
