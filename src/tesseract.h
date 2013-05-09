@@ -44,6 +44,7 @@ private:
 
     // Methods.
     static v8::Handle<v8::Value> SetVariable(const v8::Arguments& args);
+    static v8::Handle<v8::Value> MeanTextConf(const v8::Arguments& args);
     static v8::Handle<v8::Value> Clear(const v8::Arguments& args);
     static v8::Handle<v8::Value> ClearAdaptiveClassifier(const v8::Arguments& args);
     static v8::Handle<v8::Value> ThresholdImage(const v8::Arguments& args);
