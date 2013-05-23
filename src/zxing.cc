@@ -248,6 +248,9 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
 {
     HandleScope scope;
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    if (obj->image_.IsEmpty()) {
+        return THROW(Error, "No image set");
+    }
     try {
         zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
         zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
