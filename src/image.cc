@@ -100,6 +100,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(ApplyCurve)->GetFunction());
     proto->Set(String::NewSymbol("rankFilter"),
                FunctionTemplate::New(RankFilter)->GetFunction());
+    proto->Set(String::NewSymbol("octreeColorQuant"),
+               FunctionTemplate::New(OctreeColorQuant)->GetFunction());
     proto->Set(String::NewSymbol("medianCutQuant"),
                FunctionTemplate::New(MedianCutQuant)->GetFunction());
     proto->Set(String::NewSymbol("threshold"),
@@ -485,6 +487,22 @@ Handle<Value> Image::RankFilter(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (int, int, float) signature");
+    }
+}
+
+Handle<Value> Image::OctreeColorQuant(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && args[0]->IsInt32()) {
+        int colors = args[0]->ToInt32()->Value();
+        PIX *pixd = pixOctreeColorQuant(obj->pix_, colors, 0);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while quantizating");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int) signature");
     }
 }
 

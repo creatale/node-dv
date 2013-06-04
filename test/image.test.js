@@ -117,7 +117,7 @@ describe('Image', function(){
         }
         writeImage('textpage-components.png', canvas);
     })
-    it('should #distanceFunction() and #maxDynamicRange', function(){
+    it('should #distanceFunction() and #maxDynamicRange()', function(){
         var distanceMap = this.rgb.toGray().distanceFunction(4);
         writeImage('distance-map.png', distanceMap.maxDynamicRange('log'));
     })
@@ -128,21 +128,24 @@ describe('Image', function(){
         .drawBox(150, 150, 100, 100, 5, 'flip');
         writeImage('gray-box.png', canvas);
     })
-    it('should #medianCutQuant', function() {
-        writeImage('rgb-medianCutQuant-4.png', this.rgb.medianCutQuant(4));
+    it('should #octreeColorQuant()', function() {
+        writeImage('rgb-octreeColorQuant-16.png', this.rgb.medianCutQuant(16));
     })
-    it('should #threshold', function() {
+    it('should #medianCutQuant()', function() {
+        writeImage('rgb-medianCutQuant-16.png', this.rgb.medianCutQuant(16));
+    })
+    it('should #threshold()', function() {
         writeImage('gray-threshold-64.png', this.gray.threshold(64));
         writeImage('gray-threshold-196.png', this.gray.threshold(196));
     })
-    it('should #histogram', function() {
+    it('should #histogram()', function() {
         var result = this.gray.histogram()
         result.length.should.equal(256);
         result[0].should.equal(0);
         result[128].should.be.within(0.00, 0.01);
         result[255].should.be.within(0.44, 0.45);
     })
-    it('should #applyCurve and #setMasked', function() {
+    it('should #applyCurve() and #setMasked()', function() {
         var curve = new Array(256);
         for (var i = 0; i < 256; i++)
             curve[i] = i / 2;

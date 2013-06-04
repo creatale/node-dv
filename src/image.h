@@ -60,6 +60,7 @@ private:
     static v8::Handle<v8::Value> SetMasked(const v8::Arguments &args);
     static v8::Handle<v8::Value> ApplyCurve(const v8::Arguments &args);
     static v8::Handle<v8::Value> RankFilter(const v8::Arguments& args);
+    static v8::Handle<v8::Value> OctreeColorQuant(const v8::Arguments& args);
     static v8::Handle<v8::Value> MedianCutQuant(const v8::Arguments& args);
     static v8::Handle<v8::Value> Threshold(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToGray(const v8::Arguments& args);
