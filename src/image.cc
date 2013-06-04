@@ -840,7 +840,7 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
         String::AsciiValue format(args[0]->ToString());
         if (strcmp("png", *format) != 0) {
             std::stringstream msg;
-            msg << "invalid bufffer format '" << *format << "'";
+            msg << "invalid format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
         encodePNG = true;
@@ -867,6 +867,7 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
             }
             if (encodePNG) {
                 state.info_png.color.colortype = LCT_RGB;
+                state.info_png.color.bitdepth = 8;
                 state.info_raw.colortype = LCT_RGB;
                 error = lodepng::encode(pngData, imgData, obj->pix_->w, obj->pix_->h, state);
             }
@@ -884,6 +885,7 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
             }
             if (encodePNG) {
                 state.info_png.color.colortype = LCT_GREY;
+                state.info_png.color.bitdepth = obj->pix_->d;
                 state.info_raw.colortype = LCT_GREY;
                 error = lodepng::encode(pngData, imgData, pix8->w, pix8->h, state);
             }
@@ -896,10 +898,11 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
             msg << "error while encoding '" << lodepng_error_text(error) << "'";
             return THROW(Error, msg.str().c_str());
         }
-        if (encodePNG)
+        if (encodePNG) {
             return Buffer::New(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_;
-        else
+        } else {
             return Buffer::New(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_;
+        }
     } else {
         return THROW(TypeError, "could not convert arguments");
     }
