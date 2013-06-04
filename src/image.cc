@@ -493,8 +493,8 @@ Handle<Value> Image::MedianCutQuant(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 1 && args[0]->IsInt32()) {
-        int depth = args[0]->ToInt32()->Value();
-        PIX *pixd = pixMedianCutQuantGeneral(obj->pix_, 0, depth, 1 << depth, 0, 1, 1);
+        int colors = args[0]->ToInt32()->Value();
+        PIX *pixd = pixMedianCutQuantGeneral(obj->pix_, 0, 0, colors, 0, 1, 1);
         if (pixd == NULL) {
             return THROW(TypeError, "error while quantizating");
         }
@@ -905,6 +905,8 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
                 if (obj->pix_->colormap ) {
                     state.info_png.color.colortype = LCT_PALETTE;
                     state.info_png.color.bitdepth = obj->pix_->d;
+                    if (obj->pix_->d == 8)
+                    	state.encoder.auto_convert = LAC_NO;
                     state.info_png.color.palettesize = pixcmapGetCount(obj->pix_->colormap);
                     state.info_png.color.palette = new unsigned char[state.info_png.color.palettesize * 4];
                     state.info_raw.palettesize = pixcmapGetCount(obj->pix_->colormap);
