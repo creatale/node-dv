@@ -128,6 +128,9 @@ describe('Image', function(){
         .drawBox(150, 150, 100, 100, 5, 'flip');
         writeImage('gray-box.png', canvas);
     })
+    it('should #medianCutQuant', function() {
+        writeImage('rgb-medianCutQuant-4.png', this.rgb.medianCutQuant(4));
+    })
     it('should #threshold', function() {
         writeImage('gray-threshold-64.png', this.gray.threshold(64));
         writeImage('gray-threshold-196.png', this.gray.threshold(196));

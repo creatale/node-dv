@@ -100,6 +100,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(ApplyCurve)->GetFunction());
     proto->Set(String::NewSymbol("rankFilter"),
                FunctionTemplate::New(RankFilter)->GetFunction());
+    proto->Set(String::NewSymbol("medianCutQuant"),
+               FunctionTemplate::New(MedianCutQuant)->GetFunction());
     proto->Set(String::NewSymbol("threshold"),
                FunctionTemplate::New(Threshold)->GetFunction());
     proto->Set(String::NewSymbol("toGray"),
@@ -483,6 +485,22 @@ Handle<Value> Image::RankFilter(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (int, int, float) signature");
+    }
+}
+
+Handle<Value> Image::MedianCutQuant(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args.Length() == 1 && args[0]->IsInt32()) {
+        int depth = args[0]->ToInt32()->Value();
+        PIX *pixd = pixMedianCutQuantGeneral(obj->pix_, 0, depth, 1 << depth, 0, 1, 1);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while quantizating");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (int) signature");
     }
 }
 
@@ -872,7 +890,7 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
                 error = lodepng::encode(pngData, imgData, obj->pix_->w, obj->pix_->h, state);
             }
         } else if (obj->pix_->d <= 8) {
-            PIX *pix8 = pixConvertTo8(obj->pix_, 0);
+            PIX *pix8 = pixConvertTo8(obj->pix_, obj->pix_->colormap ? 1 : 0);
             // Image is Grayscale, so create a 1 byte per pixel image.
             uint32_t *line;
             imgData.reserve(pix8->w * pix8->h);
@@ -884,9 +902,31 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
                 line += pix8->wpl;
             }
             if (encodePNG) {
-                state.info_png.color.colortype = LCT_GREY;
-                state.info_png.color.bitdepth = obj->pix_->d;
-                state.info_raw.colortype = LCT_GREY;
+                if (obj->pix_->colormap ) {
+                    state.info_png.color.colortype = LCT_PALETTE;
+                    state.info_png.color.bitdepth = obj->pix_->d;
+                    state.info_png.color.palettesize = pixcmapGetCount(obj->pix_->colormap);
+                    state.info_png.color.palette = new unsigned char[state.info_png.color.palettesize * 4];
+                    state.info_raw.palettesize = pixcmapGetCount(obj->pix_->colormap);
+                    state.info_raw.palette = new unsigned char[state.info_png.color.palettesize * 4];
+                    for (size_t i = 0; i < state.info_png.color.palettesize * 4; i += 4) {
+                        int32_t r, g, b;
+                        pixcmapGetColor(obj->pix_->colormap, i / 4, &r, &g, &b);
+                        state.info_png.color.palette[i+0] = r;
+                        state.info_png.color.palette[i+1] = g;
+                        state.info_png.color.palette[i+2] = b;
+                        state.info_png.color.palette[i+3] = 255;
+                        state.info_raw.palette[i+0] = r;
+                        state.info_raw.palette[i+1] = g;
+                        state.info_raw.palette[i+2] = b;
+                        state.info_raw.palette[i+3] = 255;
+                    }
+                    state.info_raw.colortype = LCT_PALETTE;
+                } else {
+                    state.info_png.color.colortype = LCT_GREY;
+                    state.info_png.color.bitdepth = obj->pix_->d;
+                    state.info_raw.colortype = LCT_GREY;
+                }
                 error = lodepng::encode(pngData, imgData, pix8->w, pix8->h, state);
             }
             pixDestroy(&pix8);
