@@ -926,9 +926,9 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
                     if (obj->pix_->d == 8)
                     	state.encoder.auto_convert = LAC_NO;
                     state.info_png.color.palettesize = pixcmapGetCount(obj->pix_->colormap);
-                    state.info_png.color.palette = new unsigned char[state.info_png.color.palettesize * 4];
+                    state.info_png.color.palette = new unsigned char[1024];
                     state.info_raw.palettesize = pixcmapGetCount(obj->pix_->colormap);
-                    state.info_raw.palette = new unsigned char[state.info_png.color.palettesize * 4];
+                    state.info_raw.palette = new unsigned char[1024];
                     for (size_t i = 0; i < state.info_png.color.palettesize * 4; i += 4) {
                         int32_t r, g, b;
                         pixcmapGetColor(obj->pix_->colormap, i / 4, &r, &g, &b);
