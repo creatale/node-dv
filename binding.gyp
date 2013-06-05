@@ -52,7 +52,7 @@
               'Release': {
                 'msvs_settings': {
                   'VCCLCompilerTool': {
-                    'WarningLevel!': '0',
+                    'WarningLevel': '3',
                   },
                 },
               },
