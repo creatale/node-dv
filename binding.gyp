@@ -1,5 +1,6 @@
 {
-  "targets": [
+  'includes': [ 'common.gyp' ],
+  'targets': [
     {
       'target_name': 'dvBinding',
       'dependencies': [
@@ -32,33 +33,33 @@
         'src/zxing.cc',
         'src/module.cc',
       ],
-      'cflags!': ['-fno-exceptions'],
-      'cflags_cc!': ['-fno-exceptions'],
       'conditions': [
+        ['OS=="linux"',
+          {
+            'cflags!': [ '-w' ],
+          }
+        ],
         ['OS=="mac"',
           {
             'xcode_settings': {
-              'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
-            },
+              'OTHER_CFLAGS!': [ '-w' ]
+            }
+          }
+        ],
+        ['OS=="win"',
+          {
             'configurations': {
-              'Debug': {
-                'msvs_settings': {
-                  'VCCLCompilerTool': {
-                    'ExceptionHandling': '1',
-                  },
-                },
-              },
               'Release': {
                 'msvs_settings': {
                   'VCCLCompilerTool': {
-                    'ExceptionHandling': '1',
+                    'WarningLevel!': '0',
                   },
                 },
               },
             },
           }
-        ],
-      ],
+        ]
+      ]
     },
   ]
 }

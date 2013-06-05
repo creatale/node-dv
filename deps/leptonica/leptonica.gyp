@@ -1,5 +1,6 @@
 {
-  "targets": [
+  'includes': [ '../../common.gyp' ],
+  'targets': [
     {
       'target_name': 'liblept',
       'type': 'static_library',

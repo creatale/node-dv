@@ -1,5 +1,6 @@
 {
-  "targets": [
+  'includes': [ '../../common.gyp' ],
+  'targets': [
     {
       'target_name': 'libzxing',
       'type': 'static_library',
@@ -111,16 +112,7 @@
         'core/src/zxing/qrcode/detector/FinderPatternFinder.cpp',
         'core/src/zxing/qrcode/detector/FinderPatternInfo.cpp',
       ],
-      'cflags!': ['-fno-exceptions'],
-      'cflags_cc!': ['-fno-exceptions'],
       'conditions': [
-        ['OS=="mac"',
-          {
-            'xcode_settings': {
-              'GCC_ENABLE_CPP_EXCEPTIONS': 'YES'
-            }
-          }
-        ],
         ['OS=="win"',
           {
             'include_dirs': [
@@ -129,22 +121,6 @@
             'sources': [
               'core/src/win32/zxing/win_iconv.c',
             ],
-            'configurations': {
-              'Debug': {
-                'msvs_settings': {
-                  'VCCLCompilerTool': {
-                    'ExceptionHandling': '1',
-                  },
-                },
-              },
-              'Release': {
-                'msvs_settings': {
-                  'VCCLCompilerTool': {
-                    'ExceptionHandling': '1',
-                  },
-                },
-              },
-            },
           }
         ],
       ],
