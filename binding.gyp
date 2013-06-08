@@ -1,5 +1,5 @@
 {
-  'includes': [ 'common.gyp' ],
+  'includes': [ 'deps/common.gyp' ],
   'targets': [
     {
       'target_name': 'dvBinding',

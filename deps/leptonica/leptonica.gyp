@@ -1,5 +1,5 @@
 {
-  'includes': [ '../../common.gyp' ],
+  'includes': [ '../common.gyp' ],
   'targets': [
     {
       'target_name': 'liblept',
