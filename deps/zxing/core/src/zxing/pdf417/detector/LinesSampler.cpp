@@ -35,10 +35,10 @@ using zxing::Point;
 // VC++
 using zxing::Line;
 
-const int LinesSampler::MODULES_IN_SYMBOL;
-const int LinesSampler::BARS_IN_SYMBOL;
-const int LinesSampler::POSSIBLE_SYMBOLS;
-const int LinesSampler::BARCODE_START_OFFSET;
+//const int LinesSampler::MODULES_IN_SYMBOL;
+//const int LinesSampler::BARS_IN_SYMBOL;
+//const int LinesSampler::POSSIBLE_SYMBOLS;
+//const int LinesSampler::BARCODE_START_OFFSET;
 
 namespace {
 
