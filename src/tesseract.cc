@@ -361,10 +361,10 @@ Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, con
     } else {
         it = api_.AnalyseLayout();
     }
-    if (it == NULL) {
-        return THROW(Error, "ResultIterator == null");
-    }
     Local<Array> results = Array::New();
+    if (it == NULL) {
+        return results;
+    }
     int index = 0;
     do {
         if (it->Empty(level)) {
