@@ -28,6 +28,8 @@ using zxing::ArrayRef;
 using zxing::Ref;
 using zxing::BitArray;
 using zxing::BitMatrix;
+
+// VC++
 using zxing::LuminanceSource;
 
 namespace {

@@ -27,6 +27,8 @@
 using zxing::GenericGFPoly;
 using zxing::ArrayRef;
 using zxing::Ref;
+
+// VC++
 using zxing::GenericGF;
 
 GenericGFPoly::GenericGFPoly(Ref<GenericGF> field,

@@ -1,3 +1,4 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 #ifndef __PDF417_READER_H__
 #define __PDF417_READER_H__
 
@@ -25,28 +26,24 @@
 #include <zxing/DecodeHints.h>
 
 namespace zxing {
-	namespace pdf417 {
+namespace pdf417 {
 
 
-		class PDF417Reader : public Reader {
-		private:
-			Decoder decoder_;
+class PDF417Reader : public Reader {
+ private:
+  decoder::Decoder decoder;
 			
-			static Ref<BitMatrix> extractPureBits(Ref<BitMatrix> image);
-			static int moduleSize(ArrayRef<int> leftTopBlack, Ref<BitMatrix> image);
-			static int findPatternStart(int x, int y, Ref<BitMatrix> image);
-			static int findPatternEnd(int x, int y, Ref<BitMatrix> image);
+  static Ref<BitMatrix> extractPureBits(Ref<BitMatrix> image);
+  static int moduleSize(ArrayRef<int> leftTopBlack, Ref<BitMatrix> image);
+  static int findPatternStart(int x, int y, Ref<BitMatrix> image);
+  static int findPatternEnd(int x, int y, Ref<BitMatrix> image);
 
-		protected:
-			Decoder& getDecoder();
+ public:
+  Ref<Result> decode(Ref<BinaryBitmap> image, DecodeHints hints);
+  void reset();
+};
 
-		public:
-			PDF417Reader();
-			virtual Ref<Result> decode(Ref<BinaryBitmap> image, DecodeHints hints);
-			virtual ~PDF417Reader();
-			virtual void reset();
-		};
-	}
+}
 }
 
 #endif // __PDF417_READER_H__

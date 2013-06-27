@@ -1,9 +1,6 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
- *  BitMatrixParser.cpp
- *  zxing
- *
- *  Created by Hartmut Neubauer, 2012-05-22, from sources written in Java.
- *  Copyright 2008-2012 ZXing authors All rights reserved.
+ * Copyright 2008-2012 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,22 +23,20 @@
  *                    parsed now.
  */
 
-#include <zxing/common/BitMatrix.h>
-#include <zxing/common/Counted.h>
-#include <zxing/common/Array.h>
-#include <zxing/pdf417/PDF417Reader.h>
 #include <zxing/pdf417/decoder/BitMatrixParser.h>
-#include <zxing/common/Point.h>
 
-namespace zxing {
-namespace pdf417 {
+using zxing::pdf417::decoder::BitMatrixParser;
+using zxing::ArrayRef;
+
+// VC++
+
+using zxing::Ref;
+using zxing::BitMatrix;
 
 const int BitMatrixParser::MAX_ROWS = 90;
 // Maximum Codewords (Data + Error)
 const int BitMatrixParser::MAX_CW_CAPACITY = 929;
 const int BitMatrixParser::MODULES_IN_SYMBOL = 17;
-
-/* Definition of SIZEOF_SYMBOL_TABLE_: see below */
 
 BitMatrixParser::BitMatrixParser(Ref<BitMatrix> bitMatrix)
   : bitMatrix_(bitMatrix)
@@ -108,8 +103,7 @@ ArrayRef<int> BitMatrixParser::readCodewords()
  * @return the next available index into the codeword array after processing
  *         this row.
  */
-int BitMatrixParser::processRow(int rowNumber, ArrayRef<int> codewords, int next)
-{
+int BitMatrixParser::processRow(int rowNumber, ArrayRef<int> codewords, int next) {
   int width = bitMatrix_->getWidth();
   int columnNumber = 0;
   int cwClusterNumber = -1;
@@ -117,7 +111,7 @@ int BitMatrixParser::processRow(int rowNumber, ArrayRef<int> codewords, int next
   for (int i = 0; i < width; i += MODULES_IN_SYMBOL) {
     for (int mask = MODULES_IN_SYMBOL - 1; mask >= 0; mask--) {
       if (bitMatrix_->get(i + (MODULES_IN_SYMBOL - 1 - mask), rowNumber)) {
-        symbol |= 1L << mask;
+        symbol |= int64_t(1) << mask;
       }
     }
     if (columnNumber > 0) {
@@ -132,14 +126,14 @@ int BitMatrixParser::processRow(int rowNumber, ArrayRef<int> codewords, int next
       
       if (cw < 0 && i < width - MODULES_IN_SYMBOL) {
         // Skip errors on the Right row indicator column
-        if (eraseCount_ >= (int)erasures_.size()) {
+        if (eraseCount_ >= (int)erasures_->size()) {
           throw FormatException("BitMatrixParser::processRow(PDF417): eraseCount too big!");
         }
         erasures_[eraseCount_] = next;
         next++;
         eraseCount_++;
       } else {
-        if (next >= codewords.size()) {
+        if (next >= codewords->size()) {
           throw FormatException("BitMatrixParser::processRow(PDF417): codewords index out of bound.");
         }
         codewords[next++] = cw;
@@ -218,7 +212,7 @@ int BitMatrixParser::getCodeword(int64_t symbol, int *pi)
   if (i == -1) {
     return -1;
   } else {
-    int cw = CODEWORD_TABLE_[i] - 1;
+    int cw = CODEWORD_TABLE[i] - 1;
     if (pi!= NULL) {
       *pi = cw / 929;
     }
@@ -237,12 +231,12 @@ int BitMatrixParser::getCodeword(int64_t symbol, int *pi)
 int BitMatrixParser::findCodewordIndex(int64_t symbol)
 {
   int first = 0;
-  int upto = SIZEOF_SYMBOL_TABLE_;
+  int upto = SYMBOL_TABLE_LENGTH;
   while (first < upto) {
     int mid = ((unsigned int)(first + upto)) >> 1; // Compute mid point.
-    if (symbol < SYMBOL_TABLE_[mid]) {
+    if (symbol < SYMBOL_TABLE[mid]) {
       upto = mid; // repeat search in bottom half.
-    } else if (symbol > SYMBOL_TABLE_[mid]) {
+    } else if (symbol > SYMBOL_TABLE[mid]) {
       first = mid + 1; // Repeat search in top half.
     } else {
       return mid; // Found it. return position
@@ -282,7 +276,7 @@ bool BitMatrixParser::IsEqual(int &a, int &b, int rownumber)
   return true;
 }
 
-const int BitMatrixParser::SYMBOL_TABLE_[] =
+const int BitMatrixParser::SYMBOL_TABLE[] =
 {
   0x1025e, 0x1027a, 0x1029e,
   0x102bc, 0x102f2, 0x102f4, 0x1032e, 0x1034e, 0x1035c, 0x10396,
@@ -685,7 +679,7 @@ const int BitMatrixParser::SYMBOL_TABLE_[] =
   0x1fba2, 0x1fba4, 0x1fba8, 0x1fbb6, 0x1fbda
 };
 
-const int BitMatrixParser::CODEWORD_TABLE_[] =
+const int BitMatrixParser::CODEWORD_TABLE[] =
 {
   2627, 1819, 2622, 2621, 1813, 1812, 2729, 2724, 2723,
   2779, 2774, 2773,  902,  896,  908,  868,  865,  861,
@@ -999,8 +993,5 @@ const int BitMatrixParser::CODEWORD_TABLE_[] =
   1540, 1484, 1481, 1478, 1491, 1700
 };
 
-const int BitMatrixParser::SIZEOF_SYMBOL_TABLE_ = sizeof(BitMatrixParser::SYMBOL_TABLE_) / sizeof(int);
-
-
-} /* namespace pdf417 */
-} /* namespace zxing */
+const int BitMatrixParser::SYMBOL_TABLE_LENGTH =
+    sizeof(BitMatrixParser::SYMBOL_TABLE) / sizeof(int);

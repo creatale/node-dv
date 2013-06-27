@@ -31,6 +31,7 @@
 
 namespace zxing {
 namespace pdf417 {
+namespace decoder {
 
 /**
  * <p>The main class which implements PDF417 Code decoding -- as
@@ -50,12 +51,12 @@ private:
   static void verifyCodewordCount(ArrayRef<int> codewords, int numECCodewords);
 
 public:
-  Decoder();
 
   Ref<DecoderResult> decode(Ref<BitMatrix> bits, DecodeHints const &hints);
 };
 
-} /* namespace pdf417 */
-} /* namespace zxing */
+}
+}
+}
 
 #endif // __DECOCER_PDF_H__

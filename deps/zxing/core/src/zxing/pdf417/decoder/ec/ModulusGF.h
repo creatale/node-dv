@@ -25,6 +25,8 @@
 
 namespace zxing {
 namespace pdf417 {
+namespace decoder {
+namespace ec {
 
 class ModulusPoly;
 
@@ -62,7 +64,9 @@ class ModulusGF {
   
 };
 
-} /* namespace pdf417 */
-} /* namespace zxing */
+}
+}
+}
+}
 
 #endif /* __MODULUS_GF_PDF_H__ */

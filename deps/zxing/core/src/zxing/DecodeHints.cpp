@@ -25,9 +25,11 @@ using zxing::Ref;
 using zxing::ResultPointCallback;
 using zxing::DecodeHintType;
 using zxing::DecodeHints;
+
+// VC++
 using zxing::BarcodeFormat;
 
-const DecodeHintType DecodeHints::CHARACTER_SET = 1 << 30;
+const DecodeHintType DecodeHints::CHARACTER_SET;
 
 const DecodeHints DecodeHints::PRODUCT_HINT(
   UPC_A_HINT |
@@ -65,7 +67,6 @@ DecodeHints::DecodeHints(DecodeHintType init) {
 void DecodeHints::addFormat(BarcodeFormat toadd) {
   switch (toadd) {
   case BarcodeFormat::AZTEC: hints |= AZTEC_HINT; break;
-  case BarcodeFormat::PDF_417: hints |= PDF_417_HINT; break;
   case BarcodeFormat::CODABAR: hints |= CODABAR_HINT; break;
   case BarcodeFormat::CODE_39: hints |= CODE_39_HINT; break;
   case BarcodeFormat::CODE_93: hints |= CODE_93_HINT; break;
@@ -75,6 +76,7 @@ void DecodeHints::addFormat(BarcodeFormat toadd) {
   case BarcodeFormat::EAN_13: hints |= EAN_13_HINT; break;
   case BarcodeFormat::ITF: hints |= ITF_HINT; break;
   case BarcodeFormat::MAXICODE: hints |= MAXICODE_HINT; break;
+  case BarcodeFormat::PDF_417: hints |= PDF_417_HINT; break;
   case BarcodeFormat::QR_CODE: hints |= QR_CODE_HINT; break;
   case BarcodeFormat::RSS_14: hints |= RSS_14_HINT; break;
   case BarcodeFormat::RSS_EXPANDED: hints |= RSS_EXPANDED_HINT; break;
@@ -89,7 +91,6 @@ bool DecodeHints::containsFormat(BarcodeFormat tocheck) const {
   DecodeHintType checkAgainst = 0;
   switch (tocheck) {
   case BarcodeFormat::AZTEC: checkAgainst |= AZTEC_HINT; break;
-  case BarcodeFormat::PDF_417: checkAgainst |= PDF_417_HINT; break;
   case BarcodeFormat::CODABAR: checkAgainst |= CODABAR_HINT; break;
   case BarcodeFormat::CODE_39: checkAgainst |= CODE_39_HINT; break;
   case BarcodeFormat::CODE_93: checkAgainst |= CODE_93_HINT; break;
@@ -99,6 +100,7 @@ bool DecodeHints::containsFormat(BarcodeFormat tocheck) const {
   case BarcodeFormat::EAN_13: checkAgainst |= EAN_13_HINT; break;
   case BarcodeFormat::ITF: checkAgainst |= ITF_HINT; break;
   case BarcodeFormat::MAXICODE: checkAgainst |= MAXICODE_HINT; break;
+  case BarcodeFormat::PDF_417: checkAgainst |= PDF_417_HINT; break;
   case BarcodeFormat::QR_CODE: checkAgainst |= QR_CODE_HINT; break;
   case BarcodeFormat::RSS_14: checkAgainst |= RSS_14_HINT; break;
   case BarcodeFormat::RSS_EXPANDED: checkAgainst |= RSS_EXPANDED_HINT; break;
@@ -107,7 +109,7 @@ bool DecodeHints::containsFormat(BarcodeFormat tocheck) const {
   case BarcodeFormat::UPC_EAN_EXTENSION: checkAgainst |= UPC_EAN_EXTENSION_HINT; break;
   default: throw IllegalArgumentException("Unrecognizd barcode format");
   }
-  return (hints & checkAgainst);
+  return (hints & checkAgainst) != 0;
 }
 
 void DecodeHints::setTryHarder(bool toset) {
@@ -119,7 +121,7 @@ void DecodeHints::setTryHarder(bool toset) {
 }
 
 bool DecodeHints::getTryHarder() const {
-  return (hints & TRYHARDER_HINT);
+  return (hints & TRYHARDER_HINT) != 0;
 }
 
 void DecodeHints::setResultPointCallback(Ref<ResultPointCallback> const& _callback) {

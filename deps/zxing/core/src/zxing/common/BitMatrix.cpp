@@ -55,12 +55,6 @@ void BitMatrix::flip(int x, int y) {
   bits[offset] ^= 1 << (x & bitsMask);
 }
 
-/*
-void BitMatrix::clear() {
-  std::fill(&bits[0], &bits[rowSize], 0);
-}
-*/
-
 void BitMatrix::setRegion(int left, int top, int width, int height) {
   if (top < 0 || left < 0) {
     throw IllegalArgumentException("Left and top must be nonnegative");
@@ -81,29 +75,6 @@ void BitMatrix::setRegion(int left, int top, int width, int height) {
   }
 }
 
-/*
-void BitMatrix::setRegion(int left, int top, int width, int height) {
-  if ((long)top < 0 || (long)left < 0) {
-    throw IllegalArgumentException("topI and leftJ must be nonnegative");
-  }
-  if (height < 1 || width < 1) {
-    throw IllegalArgumentException("height and width must be at least 1");
-  }
-  int right = left + width;
-  int bottom = top + height;
-  if (right > this->width || bottom > this->height) {
-    throw IllegalArgumentException("top + height and left + width must be <= matrix dimension");
-  }
-  for (int y = top; y < bottom; y++) {
-    int offset =  y * rowSize;
-    for (int x = left; x < right; x++) {
-      int offset = x + yOffset;
-      bits[offset + (x >> 5)] |= 1 << (offset & bitsMask);
-    }
-  }
-}
-*/
-
 Ref<BitArray> BitMatrix::getRow(int y, Ref<BitArray> row) {
   if (row.empty() || row->getSize() < width) {
     row = new BitArray(width);
@@ -123,12 +94,12 @@ int BitMatrix::getHeight() const {
   return height;
 }
 
-ArrayRef<int> BitMatrix::getTopLeftOnBit() {
+ArrayRef<int> BitMatrix::getTopLeftOnBit() const {
   int bitsOffset = 0;
-  while (bitsOffset < bits.size() && bits[bitsOffset] == 0) {
+  while (bitsOffset < bits->size() && bits[bitsOffset] == 0) {
     bitsOffset++;
   }
-  if (bitsOffset == bits.size()) {
+  if (bitsOffset == bits->size()) {
     return ArrayRef<int>();
   }
   int y = bitsOffset / rowSize;
@@ -140,14 +111,14 @@ ArrayRef<int> BitMatrix::getTopLeftOnBit() {
     bit++;
   }
   x += bit;
-  ArrayRef<int> res=new Array<int>(2);
+  ArrayRef<int> res (2);
   res[0]=x;
   res[1]=y;
   return res;
 }
 
-ArrayRef<int> BitMatrix::getBottomRightOnBit() {
-  int bitsOffset = bits.size() - 1;
+ArrayRef<int> BitMatrix::getBottomRightOnBit() const {
+  int bitsOffset = bits->size() - 1;
   while (bitsOffset >= 0 && bits[bitsOffset] == 0) {
     bitsOffset--;
   }
@@ -165,29 +136,8 @@ ArrayRef<int> BitMatrix::getBottomRightOnBit() {
   }
   x += bit;
 
-  ArrayRef<int> res=new Array<int>(2);
+  ArrayRef<int> res (2);
   res[0]=x;
   res[1]=y;
   return res;
 }
-
-/*
-namespace zxing {
-  ostream& operator<<(ostream &out, const BitMatrix &bm) {
-    for (int y = 0; y < bm.height; y++) {
-      for (int x = 0; x < bm.width; x++) {
-        out << (bm.get(x, y) ? "X " : "  ");
-      }
-      out << "\n";
-    }
-    return out;
-  }
-}
-
-const char* BitMatrix::description() {
-  ostringstream out;
-  out << *this;
-  return out.str().c_str();
-}
-
-*/

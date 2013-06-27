@@ -28,9 +28,10 @@ using zxing::Ref;
 using zxing::ArrayRef;
 using zxing::Result;
 using zxing::aztec::AztecReader;
-using zxing::Result;
-using zxing::DecodeHints;
+
+// VC++
 using zxing::BinaryBitmap;
+using zxing::DecodeHints;
         
 AztecReader::AztecReader() : decoder_() {
   // nothing

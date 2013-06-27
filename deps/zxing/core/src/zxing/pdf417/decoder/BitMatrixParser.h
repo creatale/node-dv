@@ -29,6 +29,7 @@
 
 namespace zxing {
 namespace pdf417 {
+namespace decoder {
 
 class BitMatrixParser : public Counted {
 private:
@@ -49,9 +50,9 @@ private:
   int ecLevel_; /* = -1 */
 
 public:
-  static const int SYMBOL_TABLE_[];
-  static const int SIZEOF_SYMBOL_TABLE_;
-  static const int CODEWORD_TABLE_[];
+  static const int SYMBOL_TABLE[];
+  static const int SYMBOL_TABLE_LENGTH;
+  static const int CODEWORD_TABLE[];
   
 public:
   BitMatrixParser(Ref<BitMatrix> bitMatrix);
@@ -76,7 +77,8 @@ protected:
   bool IsEqual(int &a, int &b, int rownumber);
 };
  
-} /* namespace pdf417 */
-} /* namespace zxing */
+}
+}
+}
 
 #endif // __BIT_MATRIX_PARSER__PDF_H__

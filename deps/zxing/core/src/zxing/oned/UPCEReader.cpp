@@ -24,6 +24,8 @@ using std::vector;
 using zxing::Ref;
 using zxing::String;
 using zxing::oned::UPCEReader;
+
+// VC++
 using zxing::BitArray;
 
 #define VECTOR_INIT(v) v, v + sizeof(v)/sizeof(v[0])
@@ -134,7 +136,7 @@ Ref<String> UPCEReader::convertUPCEtoUPCA(Ref<String> const& upce_) {
     result.append(1, lastChar);
     break;
   }
-  result.append(1, upce.size() < 8 ? 0 : upce[7]);
+  result.append(1, upce[7]);
   return Ref<String>(new String(result));
 }
 

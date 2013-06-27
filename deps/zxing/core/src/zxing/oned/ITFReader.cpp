@@ -32,50 +32,48 @@ using zxing::Result;
 using zxing::FormatException;
 using zxing::NotFoundException;
 using zxing::oned::ITFReader;
+
+// VC++
 using zxing::BitArray;
 
 #define VECTOR_INIT(v) v, v + sizeof(v)/sizeof(v[0])
 
 namespace {
 
-  const int W = 3; // Pixel width of a wide line
-  const int N = 1; // Pixed width of a narrow line
+const int W = 3; // Pixel width of a wide line
+const int N = 1; // Pixed width of a narrow line
 
-  const int DEFAULT_ALLOWED_LENGTHS_LEN = 10;
-  const int DEFAULT_ALLOWED_LENGTHS_[DEFAULT_ALLOWED_LENGTHS_LEN] = { 44, 24, 20, 18, 16, 14, 12, 10, 8, 6 };
-  const ArrayRef<int> DEFAULT_ALLOWED_LENGTHS (new Array<int>(DEFAULT_ALLOWED_LENGTHS_,
-                                                              DEFAULT_ALLOWED_LENGTHS_LEN ));
+const int DEFAULT_ALLOWED_LENGTHS_[] =
+{ 48, 44, 24, 20, 18, 16, 14, 12, 10, 8, 6 };
+const ArrayRef<int> DEFAULT_ALLOWED_LENGTHS (new Array<int>(VECTOR_INIT(DEFAULT_ALLOWED_LENGTHS_)));
 
-  /**
-   * Start/end guard pattern.
-   *
-   * Note: The end pattern is reversed because the row is reversed before
-   * searching for the END_PATTERN
-   */
-  const int START_PATTERN_LEN = 4;
-  const int START_PATTERN_[START_PATTERN_LEN] = {N, N, N, N};
-  const vector<int> START_PATTERN (VECTOR_INIT(START_PATTERN_));
+/**
+ * Start/end guard pattern.
+ *
+ * Note: The end pattern is reversed because the row is reversed before
+ * searching for the END_PATTERN
+ */
+const int START_PATTERN_[] = {N, N, N, N};
+const vector<int> START_PATTERN (VECTOR_INIT(START_PATTERN_));
 
-  const int END_PATTERN_REVERSED_LEN = 3;
-  const int END_PATTERN_REVERSED_[END_PATTERN_REVERSED_LEN] = {N, N, W};
-  const vector<int> END_PATTERN_REVERSED (VECTOR_INIT(END_PATTERN_REVERSED_));
+const int END_PATTERN_REVERSED_[] = {N, N, W};
+const vector<int> END_PATTERN_REVERSED (VECTOR_INIT(END_PATTERN_REVERSED_));
 
-  /**
-   * Patterns of Wide / Narrow lines to indicate each digit
-   */
-  const int PATTERNS_LEN = 10;
-  const int PATTERNS[PATTERNS_LEN][5] = {
-    {N, N, W, W, N}, // 0
-    {W, N, N, N, W}, // 1
-    {N, W, N, N, W}, // 2
-    {W, W, N, N, N}, // 3
-    {N, N, W, N, W}, // 4
-    {W, N, W, N, N}, // 5
-    {N, W, W, N, N}, // 6
-    {N, N, N, W, W}, // 7
-    {W, N, N, W, N}, // 8
-    {N, W, N, W, N}  // 9
-  };
+/**
+ * Patterns of Wide / Narrow lines to indicate each digit
+ */
+const int PATTERNS[][5] = {
+  {N, N, W, W, N}, // 0
+  {W, N, N, N, W}, // 1
+  {N, W, N, N, W}, // 2
+  {W, W, N, N, N}, // 3
+  {N, N, W, N, W}, // 4
+  {W, N, W, N, N}, // 5
+  {N, W, W, N, N}, // 6
+  {N, N, N, W, W}, // 7
+  {W, N, N, W, N}, // 8
+  {N, W, N, W, N}  // 9
+};
 
 }
 
@@ -115,9 +113,10 @@ Ref<Result> ITFReader::decodeRow(int rowNumber, Ref<BitArray> row) {
   }
 
   ArrayRef< Ref<ResultPoint> > resultPoints(2);
-  resultPoints[0] = Ref<OneDResultPoint>(new OneDResultPoint(startRange[1], (float) rowNumber));
-  resultPoints[1] = Ref<OneDResultPoint>(new OneDResultPoint(endRange[0], (float) rowNumber));
-
+  resultPoints[0] =
+      Ref<OneDResultPoint>(new OneDResultPoint(float(startRange[1]), float(rowNumber)));
+  resultPoints[1] =
+      Ref<OneDResultPoint>(new OneDResultPoint(float(endRange[0]), float(rowNumber)));
   return Ref<Result>(new Result(resultString, ArrayRef<char>(), resultPoints, BarcodeFormat::ITF));
 }
 
@@ -319,7 +318,7 @@ int ITFReader::decodeDigit(vector<int>& counters){
 
   int bestVariance = MAX_AVG_VARIANCE; // worst variance we'll accept
   int bestMatch = -1;
-  int max = PATTERNS_LEN;
+  int max = sizeof(PATTERNS)/sizeof(PATTERNS[0]);
   for (int i = 0; i < max; i++) {
     int const* pattern = PATTERNS[i];
     int variance = patternMatchVariance(counters, pattern, MAX_INDIVIDUAL_VARIANCE);

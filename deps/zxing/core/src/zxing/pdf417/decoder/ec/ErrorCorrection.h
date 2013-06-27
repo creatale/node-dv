@@ -1,3 +1,5 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
+
 #ifndef __ERROR_CORRECTION_PDF_H__
 #define __ERROR_CORRECTION_PDF_H__
 /*
@@ -28,6 +30,8 @@
 
 namespace zxing {
 namespace pdf417 {
+namespace decoder {
+namespace ec {
 
 
 /**
@@ -41,25 +45,27 @@ namespace pdf417 {
  */
 class ErrorCorrection: public Counted {
 
-  private:
-	ModulusGF &field_;
+ private:
+  ModulusGF &field_;
 
-  public:
-	ErrorCorrection();
-	void decode(ArrayRef<int> received,
-                     int numECCodewords,
-                     ArrayRef<int> erasures);
+ public:
+  ErrorCorrection();
+  void decode(ArrayRef<int> received,
+              int numECCodewords,
+              ArrayRef<int> erasures);
 
-  private:
-    std::vector<Ref<ModulusPoly> > runEuclideanAlgorithm(Ref<ModulusPoly> a, Ref<ModulusPoly> b, int R);
+ private:
+  std::vector<Ref<ModulusPoly> > runEuclideanAlgorithm(Ref<ModulusPoly> a, Ref<ModulusPoly> b, int R);
 
-	ArrayRef<int> findErrorLocations(Ref<ModulusPoly> errorLocator);
-	ArrayRef<int> findErrorMagnitudes(Ref<ModulusPoly> errorEvaluator,
+  ArrayRef<int> findErrorLocations(Ref<ModulusPoly> errorLocator);
+  ArrayRef<int> findErrorMagnitudes(Ref<ModulusPoly> errorEvaluator,
                                     Ref<ModulusPoly> errorLocator,
                                     ArrayRef<int> errorLocations);
 };
 
-} /* namespace pdf417 */
-} /* namespace zxing */
+}
+}
+}
+}
 
 #endif /* __ERROR_CORRECTION_PDF_H__ */

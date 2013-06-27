@@ -1,12 +1,9 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 #ifndef __DECODED_BIT_STREAM_PARSER_PD_H__
 #define __DECODED_BIT_STREAM_PARSER_PD_H__
 
 /*
- *  DecodedBitStreamParser.h
- *  zxing
- *
- *  Created by Hartmut Neubauer, 2012-05-23 from Java sources.
- *  Copyright 2010 ZXing authors All rights reserved.
+ * Copyright 2010 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,23 +18,16 @@
  * limitations under the License.
  */
 
-#include <string>
-#include <sstream>
+#include <bigint/BigInteger.hh>
 #include <zxing/common/Array.h>
-#include <zxing/common/BitSource.h>
-#include <zxing/common/Counted.h>
+#include <zxing/common/Str.h>
 #include <zxing/common/DecoderResult.h>
-#include <zxing/bigint/BigIntegerLibrary.h>
-
 
 namespace zxing {
-
 namespace pdf417 {
 
-using namespace bigInteger;
-
 class DecodedBitStreamParser {
-protected:
+ protected:
   enum Mode {
     ALPHA,
     LOWER,
@@ -47,7 +37,7 @@ protected:
     PUNCT_SHIFT
   };
 
-private:
+ private:
   
   static const int TEXT_COMPACTION_MODE_LATCH;
   static const int BYTE_COMPACTION_MODE_LATCH;
@@ -71,19 +61,19 @@ private:
   static const char PUNCT_CHARS[];
   static const char MIXED_CHARS[];
  
-  static ArrayRef<BigInteger> AExp900_;
-  static void InitExp900();
+  static ArrayRef<BigInteger> EXP900;
+  static ArrayRef<BigInteger> initEXP900();
   
   static int textCompaction(ArrayRef<int> codewords, int codeIndex, Ref<String> result);
   static void decodeTextCompaction(ArrayRef<int> textCompactionData,
-                                           ArrayRef<int> byteCompactionData,
-                                           int length,
-                                           Ref<String> result);
+                                   ArrayRef<int> byteCompactionData,
+                                   int length,
+                                   Ref<String> result);
   static int byteCompaction(int mode, ArrayRef<int> codewords, int codeIndex, Ref<String> result);
   static int numericCompaction(ArrayRef<int> codewords, int codeIndex, Ref<String> result);
   static Ref<String> decodeBase900toBase10(ArrayRef<int> codewords, int count);
 
-public:
+ public:
   DecodedBitStreamParser();
   static Ref<DecoderResult> decode(ArrayRef<int> codewords);
 };

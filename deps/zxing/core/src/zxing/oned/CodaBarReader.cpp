@@ -24,7 +24,6 @@
 #include <zxing/FormatException.h>
 #include <zxing/ChecksumException.h>
 #include <math.h>
-#include <string.h>
 #include <sstream>
 
 using std::vector;
@@ -35,6 +34,8 @@ using zxing::ChecksumException;
 using zxing::Ref;
 using zxing::Result;
 using zxing::oned::CodaBarReader;
+
+// VC++
 using zxing::BitArray;
 
 namespace {
@@ -282,8 +283,7 @@ int CodaBarReader::findStartPattern() {
 }
 
 bool CodaBarReader::arrayContains(char const array[], char key) {
-  //TODO: index does not exist return index(array, key) != 0;
-  return false;
+  return strchr(array, key) != 0;
 }
 
 

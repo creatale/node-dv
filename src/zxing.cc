@@ -262,7 +262,7 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
         object->Set(String::NewSymbol("data"), String::New(resultStr.c_str()));
         object->Set(String::NewSymbol("buffer"), node::Buffer::New((char*)resultStr.data(), resultStr.length())->handle_);
         Local<Array> points = Array::New();
-        for (int i = 0; i < result->getResultPoints().size(); ++i) {
+        for (int i = 0; i < result->getResultPoints()->size(); ++i) {
             Local<Object> point = Object::New();
             point->Set(String::NewSymbol("x"), Number::New(result->getResultPoints()[i]->getX()));
             point->Set(String::NewSymbol("y"), Number::New(result->getResultPoints()[i]->getY()));

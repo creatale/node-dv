@@ -1,8 +1,5 @@
 // -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
- *  MultiFormatOneDReader.cpp
- *  ZXing
- *
  *  Copyright 2010 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,6 +29,8 @@
 using zxing::Ref;
 using zxing::Result;
 using zxing::oned::MultiFormatOneDReader;
+
+// VC++
 using zxing::DecodeHints;
 using zxing::BitArray;
 
@@ -89,6 +88,7 @@ Ref<Result> MultiFormatOneDReader::decodeRow(int rowNumber, Ref<BitArray> row) {
       Ref<Result> result = reader->decodeRow(rowNumber, row);
       return result;
     } catch (ReaderException const& re) {
+      (void)re;
       // continue
     }
   }

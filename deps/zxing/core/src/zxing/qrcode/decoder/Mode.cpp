@@ -27,8 +27,10 @@
 #include <sstream>
 
 using zxing::qrcode::Mode;
-using zxing::qrcode::Version;
 using std::ostringstream;
+
+// VC++
+using zxing::qrcode::Version;
 
 Mode Mode::TERMINATOR(0, 0, 0, 0x00, "TERMINATOR");
 Mode Mode::NUMERIC(10, 12, 14, 0x01, "NUMERIC");

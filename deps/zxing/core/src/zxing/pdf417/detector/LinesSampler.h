@@ -2,10 +2,7 @@
 #define __LINESSAMPLER_H__
 
 /*
- *  Detector.h
- *  zxing
- *
- *  Copyright 2010 ZXing authors All rights reserved.
+ * Copyright 2010 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,41 +17,38 @@
  * limitations under the License.
  */
 
-#include <zxing/common/Counted.h>
-#include <zxing/common/DetectorResult.h>
-#include <zxing/common/BitMatrix.h>
-#include <zxing/common/PerspectiveTransform.h>
-#include <zxing/common/Point.h>
-#include <zxing/NotFoundException.h>
-#include <algorithm>
-#include <vector>
 #include <map>
+#include <zxing/common/BitMatrix.h>
+#include <zxing/ResultPoint.h>
+#include <zxing/common/Point.h>
 
 namespace zxing {
 namespace pdf417 {
+namespace detector {
 
 class LinesSampler {
 private:
-  static const size_t MODULES_IN_SYMBOL;
-  static const size_t BARS_IN_SYMBOL;
-  static const size_t POSSIBLE_SYMBOLS;
-  static const float RATIOS_TABLE[];
-  static const size_t BARCODE_START_OFFSET;
+  static const int MODULES_IN_SYMBOL = 17;
+  static const int BARS_IN_SYMBOL = 8;
+  static const int POSSIBLE_SYMBOLS = 2787;
+  static const std::vector<float> RATIOS_TABLE;
+  static std::vector<float> init_ratios_table();
+  static const int BARCODE_START_OFFSET = 2;
 
   Ref<BitMatrix> linesMatrix_;
   int symbolsPerLine_;
   int dimension_;
   
-  static std::vector<Ref<ResultPoint> > findVertices(Ref<BitMatrix> matrix, size_t rowStep);
-  static std::vector<Ref<ResultPoint> > findVertices180(Ref<BitMatrix> matrix, size_t rowStep);
+  static std::vector<Ref<ResultPoint> > findVertices(Ref<BitMatrix> matrix, int rowStep);
+  static std::vector<Ref<ResultPoint> > findVertices180(Ref<BitMatrix> matrix, int rowStep);
 
   static ArrayRef<int> findGuardPattern(Ref<BitMatrix> matrix,
-                                        size_t column,
-                                        size_t row,
-                                        size_t width,
+                                        int column,
+                                        int row,
+                                        int width,
                                         bool whiteFirst,
                                         const int pattern[],
-                                        size_t patternSize,
+                                        int patternSize,
                                         ArrayRef<int> counters);
   static int patternMatchVariance(ArrayRef<int> counters, const int pattern[],
                                   int maxIndividualVariance);
@@ -86,30 +80,32 @@ private:
                         Ref<ResultPoint> bottomRight,
                         float moduleWidth);
 
-   Ref<BitMatrix> sampleLines(const std::vector<Ref<ResultPoint> > &vertices, int dimensionY, int dimension);
+   Ref<BitMatrix> sampleLines(std::vector<Ref<ResultPoint> > const &vertices,
+                              int dimensionY,
+                              int dimension);
 
-  static void codewordsToBitMatrix(std::vector<std::vector<unsigned int> > &codewords, Ref<BitMatrix> &matrix);
-  static int calculateClusterNumber(unsigned int codeword);
+  static void codewordsToBitMatrix(std::vector<std::vector<int> > &codewords,
+                                   Ref<BitMatrix> &matrix);
+  static int calculateClusterNumber(int codeword);
   static Ref<BitMatrix> sampleGrid(Ref<BitMatrix> image,
                                    int dimension);
   static void computeSymbolWidths(std::vector<float>& symbolWidths,
-                                  const size_t symbolsPerLine, Ref<BitMatrix> linesMatrix);
+                                  const int symbolsPerLine, Ref<BitMatrix> linesMatrix);
   static void linesMatrixToCodewords(std::vector<std::vector<int> > &clusterNumbers,
-                                     const size_t symbolsPerLine, const std::vector<float> &symbolWidths,
-                                     Ref<BitMatrix> linesMatrix, std::vector<std::vector<unsigned int> > &codewords);
-  static std::vector<std::vector<std::map<unsigned int, unsigned int> > > distributeVotes(const size_t symbolsPerLine,
-                                                                                          const std::vector<std::vector<unsigned int> >& codewords,
-                                                                                          const std::vector<std::vector<int> >& clusterNumbers);
-  static std::vector<size_t> findMissingLines(const size_t symbolsPerLine,
-                                              std::vector<std::vector<unsigned int> > &detectedCodeWords);
-  static int decodeRowCount(const size_t symbolsPerLine, std::vector<std::vector<unsigned int> > &detectedCodeWords,
-                            std::vector<size_t> &insertLinesAt);
-
-
-  static unsigned int computeCodeword(const std::vector<short> &pBarWidths,
-                                      int cwStart,
-                                      int cwEnd);
-
+                                     const int symbolsPerLine,
+                                     const std::vector<float> &symbolWidths,
+                                     Ref<BitMatrix> linesMatrix,
+                                     std::vector<std::vector<int> > &codewords);
+  static std::vector<std::vector<std::map<int, int> > >
+      distributeVotes(const int symbolsPerLine,
+                      const std::vector<std::vector<int> >& codewords,
+                      const std::vector<std::vector<int> >& clusterNumbers);
+  static std::vector<int>
+      findMissingLines(const int symbolsPerLine,
+                       std::vector<std::vector<int> > &detectedCodeWords);
+  static int decodeRowCount(const int symbolsPerLine,
+                            std::vector<std::vector<int> > &detectedCodeWords,
+                            std::vector<int> &insertLinesAt);
 
   static int round(float d);
   static Point intersection(Line a, Line b);
@@ -119,6 +115,7 @@ public:
   Ref<BitMatrix> sample();
 };
 
+}
 }
 }
 

@@ -24,12 +24,13 @@
 using zxing::oned::UPCAReader;
 using zxing::Ref;
 using zxing::Result;
+
+// VC++
 using zxing::BitArray;
 using zxing::BinaryBitmap;
 using zxing::DecodeHints;
 
-UPCAReader::UPCAReader() : ean13Reader() {
-}
+UPCAReader::UPCAReader() : ean13Reader() {}
 
 Ref<Result> UPCAReader::decodeRow(int rowNumber, Ref<BitArray> row) {
   return maybeReturnResult(ean13Reader.decodeRow(rowNumber, row));

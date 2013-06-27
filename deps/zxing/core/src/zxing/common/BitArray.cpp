@@ -19,6 +19,8 @@
 
 using std::vector;
 using zxing::BitArray;
+
+// VC++
 using zxing::Ref;
 
 int BitArray::makeArraySize(int size) {

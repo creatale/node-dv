@@ -1,8 +1,5 @@
 // -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
- *  ReedSolomonDecoder.cpp
- *  zxing
- *
  *  Created by Christian Brunschen on 05/05/2008.
  *  Copyright 2008 Google UK. All rights reserved.
  *
@@ -25,13 +22,16 @@
 #include <zxing/common/reedsolomon/ReedSolomonDecoder.h>
 #include <zxing/common/reedsolomon/ReedSolomonException.h>
 #include <zxing/common/IllegalArgumentException.h>
+#include <zxing/IllegalStateException.h>
 
-using namespace std; // remove
-
+using std::vector;
 using zxing::Ref;
 using zxing::ArrayRef;
 using zxing::ReedSolomonDecoder;
 using zxing::GenericGFPoly;
+using zxing::IllegalStateException;
+
+// VC++
 using zxing::GenericGF;
 
 ReedSolomonDecoder::ReedSolomonDecoder(Ref<GenericGF> field_) : field(field_) {}
@@ -108,6 +108,10 @@ vector<Ref<GenericGFPoly> > ReedSolomonDecoder::runEuclideanAlgorithm(Ref<Generi
     }
 
     t = q->multiply(tLast)->addOrSubtract(tLastLast);
+
+    if (r->getDegree() >= rLast->getDegree()) {
+      throw IllegalStateException("Division algorithm failed to reduce polynomial?");
+    }
   }
 
   int sigmaTildeAtZero = t->getCoefficient(0);

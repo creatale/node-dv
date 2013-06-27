@@ -1,8 +1,6 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
- *  Detector.cpp
- *  zxing
- *
- *  Copyright 2010 ZXing authors All rights reserved.
+ * Copyright 2010 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,18 +15,32 @@
  * limitations under the License.
  */
 
-#include <zxing/ResultPoint.h>
-#include <zxing/common/GridSampler.h>
-#include <zxing/common/Point.h>
-#include <zxing/pdf417/PDF417Reader.h>
+#include <limits>
 #include <zxing/pdf417/detector/Detector.h>
 #include <zxing/pdf417/detector/LinesSampler.h>
-#include <zxing/pdf417/decoder/BitMatrixParser.h>
-#include <cmath>
-#include <sstream>
-#include <cstdlib>
-#include <cfloat>
-#include <map>
+#include <zxing/common/GridSampler.h>
+#include <zxing/common/detector/JavaMath.h>
+#include <zxing/common/detector/MathUtils.h>
+
+using std::max;
+using std::abs;
+using std::numeric_limits;
+using zxing::pdf417::detector::Detector;
+using zxing::common::detector::Math;
+using zxing::common::detector::MathUtils;
+using zxing::Ref;
+using zxing::ArrayRef;
+using zxing::DetectorResult;
+using zxing::ResultPoint;
+using zxing::Point;
+using zxing::BitMatrix;
+using zxing::GridSampler;
+
+// VC++
+
+using zxing::BinaryBitmap;
+using zxing::DecodeHints;
+using zxing::Line;
 
 /**
  * <p>Encapsulates logic that can detect a PDF417 Code in an image, even if the
@@ -39,73 +51,53 @@
  * @author Schweers Informationstechnologie GmbH (hartmut.neubauer@schweers.de)
  * @author creatale GmbH (christoph.schulz@creatale.de)
  */
-namespace zxing {
-namespace pdf417 {
 
-const int Detector::MAX_AVG_VARIANCE = (int) ((1 << 8) * 0.42f);
-const int Detector::MAX_INDIVIDUAL_VARIANCE = (int) ((1 << 8) * 0.8f);
+const int Detector::MAX_AVG_VARIANCE= (int) (PATTERN_MATCH_RESULT_SCALE_FACTOR * 0.42f);
+const int Detector::MAX_INDIVIDUAL_VARIANCE = (int) (PATTERN_MATCH_RESULT_SCALE_FACTOR * 0.8f);
 
 // B S B S B S B S Bar/Space pattern
 // 11111111 0 1 0 1 0 1 000
 const int Detector::START_PATTERN[] = {8, 1, 1, 1, 1, 1, 1, 3};
+const int Detector::START_PATTERN_LENGTH = sizeof(START_PATTERN) / sizeof(int);
 
 // 11111111 0 1 0 1 0 1 000
 const int Detector::START_PATTERN_REVERSE[] = {3, 1, 1, 1, 1, 1, 1, 8};
+const int Detector::START_PATTERN_REVERSE_LENGTH = sizeof(START_PATTERN_REVERSE) / sizeof(int);
 
 // 1111111 0 1 000 1 0 1 00 1
 const int Detector::STOP_PATTERN[] = {7, 1, 1, 3, 1, 1, 1, 2, 1};
+const int Detector::STOP_PATTERN_LENGTH = sizeof(STOP_PATTERN) / sizeof(int);
 
 // B S B S B S B S B Bar/Space pattern
 // 1111111 0 1 000 1 0 1 00 1
 const int Detector::STOP_PATTERN_REVERSE[] = {1, 2, 1, 1, 1, 3, 1, 1, 7};
+const int Detector::STOP_PATTERN_REVERSE_LENGTH = sizeof(STOP_PATTERN_REVERSE) / sizeof(int);
 
-const size_t Detector::SIZEOF_START_PATTERN = sizeof(START_PATTERN) / sizeof(int);
-const size_t Detector::SIZEOF_START_PATTERN_REVERSE = sizeof(START_PATTERN_REVERSE) / sizeof(int);
-const size_t Detector::SIZEOF_STOP_PATTERN = sizeof(STOP_PATTERN) / sizeof(int);
-const size_t Detector::SIZEOF_STOP_PATTERN_REVERSE = sizeof(STOP_PATTERN_REVERSE) / sizeof(int);
-const size_t Detector::COUNT_VERTICES = 16;
+Detector::Detector(Ref<BinaryBitmap> image) : image_(image) {}
 
-Detector::Detector(Ref<BinaryBitmap> image)
-  : image_(image) {
-}
-
-/**
- * <p>Detects a PDF417 Code in an image, simply.</p>
- *
- * @return {@link DetectorResult} encapsulating results of detecting a PDF417 Code
- * @throws NotFoundException if no QR Code can be found
- */
 Ref<DetectorResult> Detector::detect() {
-  DecodeHints defaultHints;
-  return detect(defaultHints);
+  return detect(DecodeHints());
 }
 
-/**
- * <p>Detects a PDF417 Code in an image. Only checks 0 and 180 degree rotations.</p>
- *
- * @param hints optional hints to detector
- * @return {@link DetectorResult} encapsulating results of detecting a PDF417 Code
- * @throws NotFoundException if no PDF417 Code can be found
- */
 Ref<DetectorResult> Detector::detect(DecodeHints const& hints) {
+  (void)hints;
   // Fetch the 1 bit matrix once up front.
   Ref<BitMatrix> matrix = image_->getBlackMatrix();
 
   // Try to find the vertices assuming the image is upright.
   const int rowStep = 8;
-  std::vector<Ref<ResultPoint> > vertices;
-  vertices = findVertices(matrix, rowStep);
-  if (vertices.empty()) {
+  ArrayRef< Ref<ResultPoint> > vertices (findVertices(matrix, rowStep));
+  if (!vertices) {
     // Maybe the image is rotated 180 degrees?
     vertices = findVertices180(matrix, rowStep);
-    if (!vertices.empty()) {
+    if (vertices) {
       correctVertices(matrix, vertices, true);
     }
   } else {
     correctVertices(matrix, vertices, false);
   }
 
-  if (vertices.empty()) {
+  if (!vertices) {
     throw NotFoundException("No vertices found.");
   }
   
@@ -115,25 +107,23 @@ Ref<DetectorResult> Detector::detect(DecodeHints const& hints) {
   }
   
   int dimension = computeDimension(vertices[12], vertices[14],
-      vertices[13], vertices[15], moduleWidth);
+                                   vertices[13], vertices[15], moduleWidth);
   if (dimension < 1) {
     throw NotFoundException("Bad dimension.");
   }
-
-  int yDimension = std::max(computeYDimension(vertices[12], vertices[14],
-      vertices[13], vertices[15], moduleWidth), dimension);
+  
+  int yDimension = max(computeYDimension(vertices[12], vertices[14],
+                                         vertices[13], vertices[15], moduleWidth), dimension);
 
   // Deskew and sample lines from image.
   Ref<BitMatrix> linesMatrix = sampleLines(vertices, dimension, yDimension);
-  LinesSampler sampler(linesMatrix, dimension);
-  Ref<BitMatrix> linesGrid(sampler.sample());
+  Ref<BitMatrix> linesGrid(LinesSampler(linesMatrix, dimension).sample());
 
-  //TODO: verify vertices (was vertices[5 4 6 7]).
   ArrayRef< Ref<ResultPoint> > points(4);
-  points[0] = new ResultPoint(0.0f, (float)linesMatrix->getHeight());
-  points[1] = new ResultPoint(0.0f, 0.0f);
-  points[2] = new ResultPoint((float)linesMatrix->getWidth(), 0.0f);
-  points[3] = new ResultPoint((float)linesMatrix->getWidth(), (float)linesMatrix->getHeight());
+  points[0] = vertices[5];
+  points[1] = vertices[4];
+  points[2] = vertices[6];
+  points[3] = vertices[7];
   return Ref<DetectorResult>(new DetectorResult(linesGrid, points));
 }
 
@@ -153,20 +143,20 @@ Ref<DetectorResult> Detector::detect(DecodeHints const& hints) {
  *           vertices[6] x, y top right codeword area
  *           vertices[7] x, y bottom right codeword area
  */
-std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, size_t rowStep)
+ArrayRef< Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, int rowStep)
 {
-  const size_t height = matrix->getHeight();
-  const size_t width = matrix->getWidth();
+  const int height = matrix->getHeight();
+  const int width = matrix->getWidth();
   
-  std::vector<Ref<ResultPoint> > result(COUNT_VERTICES);
+  ArrayRef< Ref<ResultPoint> > result(16);
   bool found = false;
 
-  ArrayRef<int> counters(new Array<int>(SIZEOF_START_PATTERN));
+  ArrayRef<int> counters(new Array<int>(START_PATTERN_LENGTH));
 
   // Top Left
-  for (size_t i = 0; i < height; i += rowStep) {
+  for (int i = 0; i < height; i += rowStep) {
     ArrayRef<int> loc = findGuardPattern(matrix, 0, i, width, false, START_PATTERN,
-                                         SIZEOF_START_PATTERN, counters);
+                                         START_PATTERN_LENGTH, counters);
     if (loc) {
       result[0] = new ResultPoint((float)loc[0], (float)i);
       result[4] = new ResultPoint((float)loc[1], (float)i);
@@ -177,9 +167,9 @@ std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, siz
   // Bottom left
   if (found) { // Found the Top Left vertex
     found = false;
-    for (long i = height - 1; i > 0; i -= rowStep) {
+    for (int i = height - 1; i > 0; i -= rowStep) {
       ArrayRef<int> loc = findGuardPattern(matrix, 0, i, width, false, START_PATTERN,
-                                           SIZEOF_START_PATTERN, counters);
+                                           START_PATTERN_LENGTH, counters);
       if (loc) {
         result[1] = new ResultPoint((float)loc[0], (float)i);
         result[5] = new ResultPoint((float)loc[1], (float)i);
@@ -189,14 +179,14 @@ std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, siz
     }
   }
 
-  counters = new Array<int>(SIZEOF_STOP_PATTERN);
+  counters = new Array<int>(STOP_PATTERN_LENGTH);
 
   // Top right
   if (found) { // Found the Bottom Left vertex
     found = false;
-    for (size_t i = 0; i < height; i += rowStep) {
+    for (int i = 0; i < height; i += rowStep) {
       ArrayRef<int> loc = findGuardPattern(matrix, 0, i, width, false, STOP_PATTERN,
-                                           SIZEOF_STOP_PATTERN, counters);
+                                           STOP_PATTERN_LENGTH, counters);
       if (loc) {
         result[2] = new ResultPoint((float)loc[1], (float)i);
         result[6] = new ResultPoint((float)loc[0], (float)i);
@@ -208,9 +198,9 @@ std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, siz
   // Bottom right
   if (found) { // Found the Top right vertex
     found = false;
-    for (long i = height - 1; i > 0; i -= rowStep) {
+    for (int i = height - 1; i > 0; i -= rowStep) {
       ArrayRef<int> loc = findGuardPattern(matrix, 0, i, width, false, STOP_PATTERN,
-                                           SIZEOF_STOP_PATTERN, counters);
+                                           STOP_PATTERN_LENGTH, counters);
       if (loc) {
         result[3] = new ResultPoint((float)loc[1], (float)i);
         result[7] = new ResultPoint((float)loc[0], (float)i);
@@ -220,48 +210,24 @@ std::vector<Ref<ResultPoint> > Detector::findVertices(Ref<BitMatrix> matrix, siz
     }
   }
 
-  if (!found) {
-    // Do not return partial results (instead of returning null).
-    result.clear();
-  }
-
-  return result;
+  return found ? result : ArrayRef< Ref<ResultPoint> >();
 }
 
-/**
- * Locate the vertices and the codewords area of a black blob using the Start
- * and Stop patterns as locators. This assumes that the image is rotated 180
- * degrees and if it locates the start and stop patterns at it will re-map
- * the vertices for a 0 degree rotation.
- * TODO: Change assumption about barcode location.
- *
- * @param matrix the scanned barcode image.
- * @param rowStep the step size for iterating rows (every n-th row).
- * @return an array containing the vertices:
- *           vertices[0] x, y top left barcode
- *           vertices[1] x, y bottom left barcode
- *           vertices[2] x, y top right barcode
- *           vertices[3] x, y bottom right barcode
- *           vertices[4] x, y top left codeword area
- *           vertices[5] x, y bottom left codeword area
- *           vertices[6] x, y top right codeword area
- *           vertices[7] x, y bottom right codeword area
- */
-std::vector<Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, size_t rowStep)
-{
-  const size_t height = matrix->getHeight();
-  const size_t width = matrix->getWidth();
-  const size_t halfWidth = width >> 1;
+ArrayRef< Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, int rowStep) {
+  const int height = matrix->getHeight();
+  const int width = matrix->getWidth();
+  const int halfWidth = width >> 1;
   
-  std::vector<Ref<ResultPoint> > result(COUNT_VERTICES);
+  ArrayRef< Ref<ResultPoint> > result(16);
   bool found = false;
   
-  ArrayRef<int> counters = new Array<int>(SIZEOF_START_PATTERN_REVERSE);
+  ArrayRef<int> counters = new Array<int>(START_PATTERN_REVERSE_LENGTH);
   
   // Top Left
   for (int i = height - 1; i > 0; i -= rowStep) {
-    ArrayRef<int> loc = findGuardPattern(matrix, halfWidth, i, halfWidth, true, START_PATTERN_REVERSE,
-                                         SIZEOF_START_PATTERN_REVERSE, counters);
+    ArrayRef<int> loc =
+        findGuardPattern(matrix, halfWidth, i, halfWidth, true, START_PATTERN_REVERSE,
+                         START_PATTERN_REVERSE_LENGTH, counters);
     if (loc) {
       result[0] = new ResultPoint((float)loc[1], (float)i);
       result[4] = new ResultPoint((float)loc[0], (float)i);
@@ -272,9 +238,10 @@ std::vector<Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, 
   // Bottom Left
   if (found) { // Found the Top Left vertex
     found = false;
-    for (size_t i = 0; i < height; i += rowStep) {
-      ArrayRef<int> loc = findGuardPattern(matrix, halfWidth, i, halfWidth, true, START_PATTERN_REVERSE,
-                                           SIZEOF_START_PATTERN_REVERSE, counters);
+    for (int i = 0; i < height; i += rowStep) {
+      ArrayRef<int> loc =
+          findGuardPattern(matrix, halfWidth, i, halfWidth, true, START_PATTERN_REVERSE,
+                           START_PATTERN_REVERSE_LENGTH, counters);
       if (loc) {
         result[1] = new ResultPoint((float)loc[1], (float)i);
         result[5] = new ResultPoint((float)loc[0], (float)i);
@@ -284,14 +251,14 @@ std::vector<Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, 
     }
   }
 
-  counters = new Array<int>(SIZEOF_STOP_PATTERN_REVERSE);
+  counters = new Array<int>(STOP_PATTERN_REVERSE_LENGTH);
 
   // Top Right
   if (found) { // Found the Bottom Left vertex
     found = false;
     for (int i = height - 1; i > 0; i -= rowStep) {
       ArrayRef<int> loc = findGuardPattern(matrix, 0, i, halfWidth, false, STOP_PATTERN_REVERSE,
-                                           SIZEOF_STOP_PATTERN_REVERSE, counters);
+                                           STOP_PATTERN_REVERSE_LENGTH, counters);
       if (loc) {
         result[2] = new ResultPoint((float)loc[0], (float)i);
         result[6] = new ResultPoint((float)loc[1], (float)i);
@@ -303,9 +270,9 @@ std::vector<Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, 
   // Bottom Right
   if (found) { // Found the Top Right vertex
     found = false;
-    for (size_t i = 0; i < height; i += rowStep) {
+    for (int i = 0; i < height; i += rowStep) {
       ArrayRef<int> loc = findGuardPattern(matrix, 0, i, halfWidth, false, STOP_PATTERN_REVERSE,
-                                           SIZEOF_STOP_PATTERN_REVERSE, counters);
+                                           STOP_PATTERN_REVERSE_LENGTH, counters);
       if (loc) {
         result[3] = new ResultPoint((float)loc[0], (float)i);
         result[7] = new ResultPoint((float)loc[1], (float)i);
@@ -315,12 +282,7 @@ std::vector<Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, 
     }
   }
 
-  if (!found) {
-    // Do not return partial results (instead of returning null).
-    result.clear();
-  }
-
-  return result;
+  return found ? result : ArrayRef< Ref<ResultPoint> >();
 }
 
 /**
@@ -334,20 +296,20 @@ std::vector<Ref<ResultPoint> > Detector::findVertices180(Ref<BitMatrix> matrix, 
  * @return start/end horizontal offset of guard pattern, as an array of two ints.
  */
 ArrayRef<int> Detector::findGuardPattern(Ref<BitMatrix> matrix,
-                                         size_t column,
-                                         size_t row,
-                                         size_t width,
+                                         int column,
+                                         int row,
+                                         int width,
                                          bool whiteFirst,
                                          const int pattern[],
-                                         size_t patternSize,
-                                         ArrayRef<int> counters) {
-  counters->values().assign(counters.size(), 0);
-  size_t patternLength = patternSize;
+                                         int patternSize,
+                                         ArrayRef<int>& counters) {
+  counters->values().assign(counters->size(), 0);
+  int patternLength = patternSize;
   bool isWhite = whiteFirst;
 
-  size_t counterPosition = 0;
-  size_t patternStart = column;
-  for (size_t x = column; x < column + width; x++) {
+  int counterPosition = 0;
+  int patternStart = column;
+  for (int x = column; x < column + width; x++) {
     bool pixel = matrix->get(x, row);
     if (pixel ^ isWhite) {
       counters[counterPosition]++;
@@ -361,7 +323,7 @@ ArrayRef<int> Detector::findGuardPattern(Ref<BitMatrix> matrix,
           return result;
         }
         patternStart += counters[0] + counters[1];
-        for(size_t i = 0; i < patternLength - 2; ++i)
+        for(int i = 0; i < patternLength - 2; ++i)
           counters[i] = counters[ i + 2];
         counters[patternLength - 2] = 0;
         counters[patternLength - 1] = 0;
@@ -391,20 +353,21 @@ ArrayRef<int> Detector::findGuardPattern(Ref<BitMatrix> matrix,
  *         variance between counters and patterns equals the pattern length,
  *         higher values mean even more variance
  */
-int Detector::patternMatchVariance(ArrayRef<int> counters, const int pattern[],
+int Detector::patternMatchVariance(ArrayRef<int>& counters,
+                                   const int pattern[],
                                    int maxIndividualVariance)
 {
-  size_t numCounters = counters.size();
-  size_t total = 0;
-  size_t patternLength = 0;
-  for (size_t i = 0; i < numCounters; i++) {
+  int numCounters = counters->size();
+  int total = 0;
+  int patternLength = 0;
+  for (int i = 0; i < numCounters; i++) {
     total += counters[i];
     patternLength += pattern[i];
   }
   if (total < patternLength) {
     // If we don't even have one pixel per unit of bar width, assume this
     // is too small to reliably match, so fail:
-    return std::numeric_limits<int>::max();
+    return numeric_limits<int>::max();
   }
   // We're going to fake floating-point math in integers. We just need to use more bits.
   // Scale up patternLength so that intermediate values below like scaledCounter will have
@@ -413,12 +376,12 @@ int Detector::patternMatchVariance(ArrayRef<int> counters, const int pattern[],
   maxIndividualVariance = (maxIndividualVariance * unitBarWidth) >> 8;
 
   int totalVariance = 0;
-  for (size_t x = 0; x < numCounters; x++) {
+  for (int x = 0; x < numCounters; x++) {
     int counter = counters[x] << 8;
     int scaledPattern = pattern[x] * unitBarWidth;
     int variance = counter > scaledPattern ? counter - scaledPattern : scaledPattern - counter;
     if (variance > maxIndividualVariance) {
-      return std::numeric_limits<int>::max();
+      return numeric_limits<int>::max();
     }
     totalVariance += variance;
   }
@@ -443,11 +406,11 @@ int Detector::patternMatchVariance(ArrayRef<int> counters, const int pattern[],
  * @param upsideDown true if rotated by 180 degree.
  */
 void Detector::correctVertices(Ref<BitMatrix> matrix,
-                               std::vector<Ref<ResultPoint> > &vertices,
+                               ArrayRef< Ref<ResultPoint> >& vertices,
                                bool upsideDown)
 {
-  bool isLowLeft = std::abs(vertices[4]->getY() - vertices[5]->getY()) < 20.0;
-  bool isLowRight = std::abs(vertices[6]->getY() - vertices[7]->getY()) < 20.0;
+  bool isLowLeft = abs(vertices[4]->getY() - vertices[5]->getY()) < 20.0;
+  bool isLowRight = abs(vertices[6]->getY() - vertices[7]->getY()) < 20.0;
   if (isLowLeft || isLowRight) {
     throw NotFoundException("Cannot find enough PDF417 guard patterns!");
   } else {
@@ -479,7 +442,7 @@ void Detector::correctVertices(Ref<BitMatrix> matrix,
  * @param rowStep +1 if corner should be exceeded towards the bottom, -1 towards the top.
  */
 void Detector::findWideBarTopBottom(Ref<BitMatrix> matrix,
-                                    std::vector<Ref<ResultPoint> > &vertices,
+                                    ArrayRef< Ref<ResultPoint> > &vertices,
                                     int offsetVertice,
                                     int startWideBar,
                                     int lenWideBar,
@@ -494,14 +457,14 @@ void Detector::findWideBarTopBottom(Ref<BitMatrix> matrix,
   float barDiff = verticeEnd->getX() - verticeStart->getX();
   float barStart = verticeStart->getX() + barDiff * (float)startWideBar / (float)lenPattern;
   float barEnd = verticeStart->getX() + barDiff * (float)endWideBar / (float)lenPattern;
-  int x = round((barStart + barEnd) / 2.0f);
+  int x = Math::round((barStart + barEnd) / 2.0f);
 
   // Start vertically between the preliminary vertices.
-  int yStart = round(verticeStart->getY());
+  int yStart = Math::round(verticeStart->getY());
   int y = yStart;
 
   // Find offset of thin bar to the right as additional safeguard.
-  int nextBarX = std::max(barStart, barEnd) + 1;
+  int nextBarX = int(max(barStart, barEnd) + 1);
   for (; nextBarX < matrix->getWidth(); nextBarX++)
     if (!matrix->get(nextBarX - 1, y) && matrix->get(nextBarX, y)) break;
   nextBarX -= x;
@@ -537,23 +500,23 @@ void Detector::findWideBarTopBottom(Ref<BitMatrix> matrix,
 }
 
 /**
-* <p>Finds the intersection of two lines.</p>
-*
-* @param vertices The reference of the vertices vector
-* @param idxResult Index of result point inside the vertices vector.
-* @param idxLineA1
-* @param idxLineA2 Indices two points inside the vertices vector that define the first line.
-* @param idxLineB1
-* @param idxLineB2 Indices two points inside the vertices vector that define the second line.
-* @param matrix: bit matrix, here only for testing whether the result is inside the matrix.
-* @return Returns true when the result is valid and lies inside the matrix. Otherwise throws an
-* exception.
-**/
-void Detector::findCrossingPoint(std::vector<Ref<ResultPoint> > &vertices,
+ * <p>Finds the intersection of two lines.</p>
+ *
+ * @param vertices The reference of the vertices vector
+ * @param idxResult Index of result point inside the vertices vector.
+ * @param idxLineA1
+ * @param idxLineA2 Indices two points inside the vertices vector that define the first line.
+ * @param idxLineB1
+ * @param idxLineB2 Indices two points inside the vertices vector that define the second line.
+ * @param matrix: bit matrix, here only for testing whether the result is inside the matrix.
+ * @return Returns true when the result is valid and lies inside the matrix. Otherwise throws an
+ * exception.
+ **/
+void Detector::findCrossingPoint(ArrayRef< Ref<ResultPoint> >& vertices,
                                  int idxResult,
                                  int idxLineA1, int idxLineA2,
                                  int idxLineB1, int idxLineB2,
-                                 Ref<BitMatrix> matrix)
+                                 Ref<BitMatrix>& matrix)
 {
   Point p1(vertices[idxLineA1]->getX(), vertices[idxLineA1]->getY());
   Point p2(vertices[idxLineA2]->getX(), vertices[idxLineA2]->getY());
@@ -561,18 +524,18 @@ void Detector::findCrossingPoint(std::vector<Ref<ResultPoint> > &vertices,
   Point p4(vertices[idxLineB2]->getX(), vertices[idxLineB2]->getY());
 
   Point result(intersection(Line(p1, p2), Line(p3, p4)));
-  if (result.x == std::numeric_limits<float>::infinity() ||
-      result.y == std::numeric_limits<float>::infinity()) {
+  if (result.x == numeric_limits<float>::infinity() ||
+      result.y == numeric_limits<float>::infinity()) {
     throw NotFoundException("PDF:Detector: cannot find the crossing of parallel lines!");
   }
 
-  int x = round(result.x);
-  int y = round(result.y);
+  int x = Math::round(result.x);
+  int y = Math::round(result.y);
   if (x < 0 || x >= (int)matrix->getWidth() || y < 0 || y >= (int)matrix->getHeight()) {
     throw NotFoundException("PDF:Detector: crossing points out of region!");
   }
 
-  vertices[idxResult] = new ResultPoint(result.x, result.y);
+  vertices[idxResult] = Ref<ResultPoint>(new ResultPoint(result.x, result.y));
 }
 
 /**
@@ -587,9 +550,9 @@ Point Detector::intersection(Line a, Line b) {
   float p = a.start.x * a.end.y - a.start.y * a.end.x;
   float q = b.start.x * b.end.y - b.start.y * b.end.x;
   float denom = dxa * dyb - dya * dxb;
-  if(std::abs(denom) < 1e-12)  // Lines don't intersect (replaces "denom == 0")
-    return Point(std::numeric_limits<float>::infinity(),
-                 std::numeric_limits<float>::infinity());
+  if(abs(denom) < 1e-12)  // Lines don't intersect (replaces "denom == 0")
+    return Point(numeric_limits<float>::infinity(),
+                 numeric_limits<float>::infinity());
 
   float x = (p * dxb - dxa * q) / denom;
   float y = (p * dyb - dya * q) / denom;
@@ -612,8 +575,7 @@ Point Detector::intersection(Line a, Line b) {
  *           vertices[7] x, y bottom right codeword area
  * @return the module size.
  */
-float Detector::computeModuleWidth(std::vector<Ref<ResultPoint> > &vertices)
-{
+float Detector::computeModuleWidth(ArrayRef< Ref<ResultPoint> >& vertices) {
   float pixels1 = ResultPoint::distance(vertices[0], vertices[4]);
   float pixels2 = ResultPoint::distance(vertices[1], vertices[5]);
   float moduleWidth1 = (pixels1 + pixels2) / (17 * 2.0f);
@@ -634,14 +596,15 @@ float Detector::computeModuleWidth(std::vector<Ref<ResultPoint> > &vertices)
  * @param moduleWidth estimated module size
  * @return the number of modules in a row.
  */
-int Detector::computeDimension(Ref<ResultPoint> topLeft,
-                               Ref<ResultPoint> topRight,
-                               Ref<ResultPoint> bottomLeft,
-                               Ref<ResultPoint> bottomRight,
+int Detector::computeDimension(Ref<ResultPoint> const& topLeft,
+                               Ref<ResultPoint> const& topRight,
+                               Ref<ResultPoint> const& bottomLeft,
+                               Ref<ResultPoint> const& bottomRight,
                                float moduleWidth)
 {
-  int topRowDimension = round(ResultPoint::distance(topLeft, topRight) / moduleWidth);
-  int bottomRowDimension = round(ResultPoint::distance(bottomLeft, bottomRight) / moduleWidth);
+  int topRowDimension = MathUtils::round(ResultPoint::distance(topLeft, topRight) / moduleWidth);
+  int bottomRowDimension =
+      MathUtils::round(ResultPoint::distance(bottomLeft, bottomRight) / moduleWidth);
   return ((((topRowDimension + bottomRowDimension) >> 1) + 8) / 17) * 17;
 }
 
@@ -656,14 +619,16 @@ int Detector::computeDimension(Ref<ResultPoint> topLeft,
  * @param moduleWidth estimated module size
  * @return the number of modules in a row.
  */
-int Detector::computeYDimension(Ref<ResultPoint> topLeft,
-                                Ref<ResultPoint> topRight,
-                                Ref<ResultPoint> bottomLeft,
-                                Ref<ResultPoint> bottomRight,
+int Detector::computeYDimension(Ref<ResultPoint> const& topLeft,
+                                Ref<ResultPoint> const& topRight,
+                                Ref<ResultPoint> const& bottomLeft,
+                                Ref<ResultPoint> const& bottomRight,
                                 float moduleWidth)
 {
-  int leftColumnDimension = round(ResultPoint::distance(topLeft, bottomLeft) / moduleWidth);
-  int rightColumnDimension = round(ResultPoint::distance(topRight, bottomRight) / moduleWidth);
+  int leftColumnDimension =
+      MathUtils::round(ResultPoint::distance(topLeft, bottomLeft) / moduleWidth);
+  int rightColumnDimension =
+      MathUtils::round(ResultPoint::distance(topRight, bottomRight) / moduleWidth);
   return (leftColumnDimension + rightColumnDimension) >> 1;
 }
 
@@ -675,36 +640,25 @@ int Detector::computeYDimension(Ref<ResultPoint> topLeft,
  * @param yDimension y dimension
  * @return an over-sampled BitMatrix.
  */
-Ref<BitMatrix> Detector::sampleLines(const std::vector<Ref<ResultPoint> >& vertices, int dimensionY, int dimension)
-{
+Ref<BitMatrix> Detector::sampleLines(ArrayRef< Ref<ResultPoint> > const& vertices,
+                                     int dimensionY,
+                                     int dimension) {
   const int sampleDimensionX = dimension * 8;
   const int sampleDimensionY = dimensionY * 4;
   Ref<PerspectiveTransform> transform(
-        PerspectiveTransform::quadrilateralToQuadrilateral(
+      PerspectiveTransform::quadrilateralToQuadrilateral(
           0.0f, 0.0f,
           (float)sampleDimensionX, 0.0f,
           0.0f, (float)sampleDimensionY,
           (float)sampleDimensionX, (float)sampleDimensionY,
           vertices[12]->getX(), vertices[12]->getY(),
-      vertices[14]->getX(), vertices[14]->getY(),
-      vertices[13]->getX(), vertices[13]->getY(),
-      vertices[15]->getX(), vertices[15]->getY()));
+          vertices[14]->getX(), vertices[14]->getY(),
+          vertices[13]->getX(), vertices[13]->getY(),
+          vertices[15]->getX(), vertices[15]->getY()));
 
   Ref<BitMatrix> linesMatrix = GridSampler::getInstance().sampleGrid(
-        image_->getBlackMatrix(), sampleDimensionX, sampleDimensionY, transform);
+      image_->getBlackMatrix(), sampleDimensionX, sampleDimensionY, transform);
 
 
   return linesMatrix;
 }
-
-/**
- * Ends up being a bit faster than Math.round(). This merely rounds its
- * argument to the nearest int, where x.5 rounds up.
- */
-int Detector::round(float d)
-{
-  return (int)(d + 0.5f);
-}
-
-} /* namespace pdf417 */
-} /* namespace zxing */

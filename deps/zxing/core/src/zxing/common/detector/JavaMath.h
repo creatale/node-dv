@@ -1,6 +1,8 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
+#ifndef __ZXING_COMMON_DETECTOR_MATH_H__
+#define __ZXING_COMMON_DETECTOR_MATH_H__
 /*
- *  Author: Matt McCutchen, https://mattmccutchen.net/bigint
- *  Copyright 2008/2010/2012 ZXing authors All rights reserved.
+ *  Copyright 2012 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +15,29 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * The BigInteger library was included in the ZXing C++ library by Hartmut
- * Neubauer with the permission of Matt McCutchen because PDF417 uses
- * BigIntegers.
  */
 
-// This header file includes all of the library header files.
+#include <cmath>
 
-#include "NumberlikeArray.h"
-#include "BigUnsigned.h"
-#include "BigInteger.h"
-#include "BigIntegerAlgorithms.h"
-#include "BigUnsignedInABase.h"
-#include "BigIntegerUtils.h"
+namespace zxing {
+namespace common {
+namespace detector {
+
+class Math {
+ private:
+  Math();
+  ~Math();
+ public:
+
+  // Java standard Math.round
+  static inline int round(float a) {
+    return (int)std::floor(a +0.5f);
+  }
+
+};
+
+}
+}
+}
+
+#endif

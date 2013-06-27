@@ -1,10 +1,5 @@
 // -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
- *  MultiFormatBarcodeReader.cpp
- *  ZXing
- *
- *  Created by Lukasz Warchol on 10-01-26.
- *  Modified by Luiz Silva on 09/02/2010.
  *  Copyright 2010 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,9 +28,10 @@
 using zxing::Ref;
 using zxing::Result;
 using zxing::MultiFormatReader;
-using zxing::Result;
-using zxing::BinaryBitmap;
+
+// VC++
 using zxing::DecodeHints;
+using zxing::BinaryBitmap;
 
 MultiFormatReader::MultiFormatReader() {}
   
@@ -89,11 +85,11 @@ void MultiFormatReader::setHints(DecodeHints hints) {
   if (hints.containsFormat(BarcodeFormat::PDF_417)) {
     readers_.push_back(Ref<Reader>(new zxing::pdf417::PDF417Reader()));
   }
-/*
-      if (formats.contains(BarcodeFormat.MAXICODE)) {
-         readers.add(new MaxiCodeReader());
-      }
-*/
+  /*
+  if (hints.contains(BarcodeFormat.MAXICODE)) {
+    readers.add(new MaxiCodeReader());
+  }
+  */
   if (addOneDReader && tryHarder) {
     readers_.push_back(Ref<Reader>(new zxing::oned::MultiFormatOneDReader(hints)));
   }
@@ -104,7 +100,7 @@ void MultiFormatReader::setHints(DecodeHints hints) {
     readers_.push_back(Ref<Reader>(new zxing::qrcode::QRCodeReader()));
     readers_.push_back(Ref<Reader>(new zxing::datamatrix::DataMatrixReader()));
     readers_.push_back(Ref<Reader>(new zxing::aztec::AztecReader()));
-    // readers.add(new PDF417Reader());
+    readers_.push_back(Ref<Reader>(new zxing::pdf417::PDF417Reader()));
     // readers.add(new MaxiCodeReader());
 
     if (tryHarder) {
@@ -118,6 +114,7 @@ Ref<Result> MultiFormatReader::decodeInternal(Ref<BinaryBitmap> image) {
     try {
       return readers_[i]->decode(image, hints_);
     } catch (ReaderException const& re) {
+      (void)re;
       // continue
     }
   }

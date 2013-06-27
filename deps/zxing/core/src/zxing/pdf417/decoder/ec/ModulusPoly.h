@@ -26,6 +26,8 @@
 
 namespace zxing {
 namespace pdf417 {
+namespace decoder {
+namespace ec {
 
 class ModulusGF;
 
@@ -58,7 +60,9 @@ class ModulusPoly: public Counted {
 	#endif
 };
 
-} /* namespace pdf417 */
-} /* namespace zxing */
+}
+}
+}
+}
 
 #endif /* __MODULUS_GFPOLY_PDF_H__ */

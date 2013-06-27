@@ -19,11 +19,13 @@
 #include <zxing/ReaderException.h>
 
 using std::vector;
-using zxing::Ref;
-using zxing::BitArray;
 using zxing::oned::EAN8Reader;
 
-EAN8Reader::EAN8Reader() : decodeMiddleCounters(4, 0) { }
+// VC++
+using zxing::Ref;
+using zxing::BitArray;
+
+EAN8Reader::EAN8Reader() : decodeMiddleCounters(4, 0) {}
 
 int EAN8Reader::decodeMiddle(Ref<BitArray> row,
                              Range const& startRange,

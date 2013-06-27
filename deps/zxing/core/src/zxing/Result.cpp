@@ -26,6 +26,8 @@ using zxing::Ref;
 using zxing::ArrayRef;
 using zxing::String;
 using zxing::ResultPoint;
+
+// VC++
 using zxing::BarcodeFormat;
 
 Result::Result(Ref<String> text,

@@ -24,7 +24,7 @@ def rename(filename, new_filename):
 def applyFix():
     # Collect source filenames, grouped by basename.
     sources = {}
-    for root, dirnames, filenames in os.walk('core'):
+    for root, dirnames, filenames in os.walk('deps/zxing/core'):
         for filename in filenames:
             if filename.endswith('.cpp'):
                 if not filename in sources:
@@ -43,7 +43,7 @@ def applyFix():
             rename(filename, new_filename)
 
 def removeFix():
-    for root, dirnames, filenames in os.walk('core'):
+    for root, dirnames, filenames in os.walk('deps/zxing/core'):
         for filename in filenames:
             if filename.endswith('.cpp') and filename[0].isdigit():
                 # Remove number prefix.

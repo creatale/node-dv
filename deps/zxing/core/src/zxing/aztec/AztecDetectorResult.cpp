@@ -22,10 +22,13 @@
 #include <zxing/aztec/AztecDetectorResult.h>
 
 using zxing::aztec::AztecDetectorResult;
-using zxing::BitMatrix;
-using zxing::ResultPoint;
+
+// VC++
 using zxing::Ref;
 using zxing::ArrayRef;
+using zxing::BitMatrix;
+using zxing::ResultPoint;
+
 
 AztecDetectorResult::AztecDetectorResult(Ref<BitMatrix> bits,
                                          ArrayRef< Ref<ResultPoint> > points,

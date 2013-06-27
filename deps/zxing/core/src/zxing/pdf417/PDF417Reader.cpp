@@ -1,9 +1,6 @@
+// -*- mode:c++; tab-width:2; indent-tabs-mode:nil; c-basic-offset:2 -*-
 /*
- *  PDF417Reader.cpp
- *  zxing
- *
- *  Created by Hartmut Neubauer on 2010-05-21 from Java sources.
- *  Copyright 2010 ZXing authors All rights reserved.
+ * Copyright 2010 ZXing authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,83 +17,62 @@
 
 #include <zxing/pdf417/PDF417Reader.h>
 #include <zxing/pdf417/detector/Detector.h>
-#include <iostream>
 
-namespace zxing {
-namespace pdf417 {
+using zxing::Ref;
+using zxing::Result;
+using zxing::BitMatrix;
+using zxing::pdf417::PDF417Reader;
+using zxing::pdf417::detector::Detector;
 
-using namespace std;
+// VC++
+using zxing::ArrayRef;
+using zxing::BinaryBitmap;
+using zxing::DecodeHints;
 
-PDF417Reader::PDF417Reader() :
-decoder_() {
-}
-
-Ref<Result> PDF417Reader::decode(Ref<BinaryBitmap> image, DecodeHints hints)
-{
+Ref<Result> PDF417Reader::decode(Ref<BinaryBitmap> image, DecodeHints hints) {
   Ref<DecoderResult> decoderResult;
   /* 2012-05-30 hfn C++ DecodeHintType does not yet know a type "PURE_BARCODE", */
   /* therefore skip this for now, todo: may be add this type later */
   /*
-  if (!hints.isEmpty() && hints.containsKey(DecodeHintType.PURE_BARCODE)) {
-  BitMatrix bits = extractPureBits(image.getBlackMatrix());
-  decoderResult = decoder.decode(bits);
-  points = NO_POINTS;
-  } else {
+    if (!hints.isEmpty() && hints.containsKey(DecodeHintType.PURE_BARCODE)) {
+    BitMatrix bits = extractPureBits(image.getBlackMatrix());
+    decoderResult = decoder.decode(bits);
+    points = NO_POINTS;
+    } else {
   */
   Detector detector(image);
   Ref<DetectorResult> detectorResult = detector.detect(hints); /* 2012-09-17 hints ("try_harder") */
-#if (defined _WIN32 && defined DEBUG)
-  {
-    WCHAR sz[256];
-    wsprintf(sz,L"PDF417Reader::decode: detected, %d\n",detectorResult->getPoints()[0]);
-    OutputDebugString(sz);
-  }
-#endif
   ArrayRef< Ref<ResultPoint> > points(detectorResult->getPoints());
   
   if (!hints.isEmpty()) {
     Ref<ResultPointCallback> rpcb = hints.getResultPointCallback();
     /* .get(DecodeHintType.NEED_RESULT_POINT_CALLBACK); */
     if (rpcb != NULL) {
-      for (int i = 0; i < points.size(); i++) {
+      for (int i = 0; i < points->size(); i++) {
         rpcb->foundPossibleResultPoint(*points[i]);
       }
     }
   }
-  decoderResult = decoder_.decode(detectorResult->getBits(),hints);
+  decoderResult = decoder.decode(detectorResult->getBits(),hints);
   /*
-  }
+    }
   */
   Ref<Result> r(new Result(decoderResult->getText(), decoderResult->getRawBytes(), points,
-    BarcodeFormat::PDF_417));
-#if (defined _WIN32 && defined(DEBUG))
-  {
-    WCHAR sz[1024];
-    wsprintf(sz,L"PDF417Reader::decode: \"%S\"\n",decoderResult->getText().object_->getText().c_str());
-    OutputDebugString(sz);
-  }
-#endif
+                           BarcodeFormat::PDF_417));
   return r;
 }
 
-PDF417Reader::~PDF417Reader() {
+void PDF417Reader::reset() {
+  // do nothing
 }
 
-Decoder& PDF417Reader::getDecoder() {
-  return decoder_;
-}
-
-void PDF417Reader::reset() { /* do nothing */
-}
-
-Ref<BitMatrix> PDF417Reader::extractPureBits(Ref<BitMatrix> image)
-{
+Ref<BitMatrix> PDF417Reader::extractPureBits(Ref<BitMatrix> image) {
   ArrayRef<int> leftTopBlack = image->getTopLeftOnBit();
   ArrayRef<int> rightBottomBlack = image->getBottomRightOnBit();
   /* see BitMatrix::getTopLeftOnBit etc.:
-  if (leftTopBlack == null || rightBottomBlack == null) {
-  throw NotFoundException.getNotFoundInstance();
-} */
+     if (leftTopBlack == null || rightBottomBlack == null) {
+     throw NotFoundException.getNotFoundInstance();
+     } */
   
   int nModuleSize = moduleSize(leftTopBlack, image);
   
@@ -131,8 +107,7 @@ Ref<BitMatrix> PDF417Reader::extractPureBits(Ref<BitMatrix> image)
   return bits;
 }
 
-int PDF417Reader::moduleSize(ArrayRef<int> leftTopBlack, Ref<BitMatrix> image)
-{
+int PDF417Reader::moduleSize(ArrayRef<int> leftTopBlack, Ref<BitMatrix> image) {
   int x = leftTopBlack[0];
   int y = leftTopBlack[1];
   int width = image->getWidth();
@@ -143,16 +118,15 @@ int PDF417Reader::moduleSize(ArrayRef<int> leftTopBlack, Ref<BitMatrix> image)
     throw NotFoundException("PDF417Reader::moduleSize: not found!");
   }
   
-  int nModuleSize = (int)(((unsigned)(x - leftTopBlack[0])) >> 3); // We've crossed left first bar, which is 8x
-  if (nModuleSize == 0) {
+  int moduleSize = (int)(((unsigned)(x - leftTopBlack[0])) >> 3); // We've crossed left first bar, which is 8x
+  if (moduleSize == 0) {
     throw NotFoundException("PDF417Reader::moduleSize: is zero!");
   }
   
-  return nModuleSize;
+  return moduleSize;
 }
 
-int PDF417Reader::findPatternStart(int x, int y, Ref<BitMatrix> image)
-{
+int PDF417Reader::findPatternStart(int x, int y, Ref<BitMatrix> image) {
   int width = image->getWidth();
   int start = x;
   // start should be on black
@@ -172,8 +146,7 @@ int PDF417Reader::findPatternStart(int x, int y, Ref<BitMatrix> image)
   return start;
 }
 
-int PDF417Reader::findPatternEnd(int x, int y, Ref<BitMatrix> image)
-{
+int PDF417Reader::findPatternEnd(int x, int y, Ref<BitMatrix> image) {
   int width = image->getWidth();
   int end = width - 1;
   // end should be on black
@@ -195,8 +168,3 @@ int PDF417Reader::findPatternEnd(int x, int y, Ref<BitMatrix> image)
   }
   return end;
 }
-
-
-}
-}
-	
