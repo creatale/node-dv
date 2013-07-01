@@ -30,5 +30,6 @@
     v8::ThrowException(v8::Exception::type(v8::String::New(msg)))
 
 v8::Handle<v8::Object> createBox(Box* box);
+Box* toBox(const v8::Arguments &args, int start, int* end = 0);
 
 #endif

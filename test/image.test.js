@@ -111,9 +111,7 @@ describe('Image', function(){
         var boxes = binaryImage.connectedComponents(4);
         var canvas = new dv.Image(binaryImage);
         for (var i in boxes) {
-            canvas.drawBox(boxes[i].x, boxes[i].y,
-                           boxes[i].width, boxes[i].height,
-                           2, 'set');
+            canvas.drawBox(boxes[i], 2, 'set');
         }
         writeImage('textpage-components.png', canvas);
     })

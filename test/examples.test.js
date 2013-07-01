@@ -2,6 +2,10 @@ global.should = require('chai').should();
 var dv = require('../lib/dv');
 var fs = require('fs');
 
+var console = {
+    'log': function() {}
+}
+
 var writeImage = function(basename, image){
     fs.writeFileSync(__dirname + '/fixtures_out/' + basename, image.toBuffer('png'));
 }

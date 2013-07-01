@@ -20,6 +20,7 @@
  * SOFTWARE.
  */
 #include "util.h"
+#include <cmath>
 
 using namespace v8;
 
@@ -31,4 +32,34 @@ Handle<Object> createBox(Box* box)
     result->Set(String::NewSymbol("width"), Int32::New(box->w));
     result->Set(String::NewSymbol("height"), Int32::New(box->h));
     return result;
+}
+
+Box* toBox(const Arguments &args, int start, int* end)
+{
+    if (args[start]->IsNumber() && args[start + 1]->IsNumber()
+            && args[start + 2]->IsNumber() && args[start + 3]->IsNumber()) {
+        int x = floor(args[start + 0]->ToNumber()->Value());
+        int y = floor(args[start + 1]->ToNumber()->Value());
+        int width = ceil(args[start + 2]->ToNumber()->Value());
+        int height = ceil(args[start + 3]->ToNumber()->Value());
+        if (end) {
+            *end = start + 3;
+        }
+        return boxCreate(x, y, width, height);
+    } else if (args[start]->IsObject()) {
+        Handle<Object> object = args[start]->ToObject();
+        int x = floor(object->Get(String::NewSymbol("x"))->ToNumber()->Value());
+        int y = floor(object->Get(String::NewSymbol("y"))->ToNumber()->Value());
+        int width = ceil(object->Get(String::NewSymbol("width"))->ToNumber()->Value());
+        int height = ceil(object->Get(String::NewSymbol("height"))->ToNumber()->Value());
+        if (end) {
+            *end = start;
+        }
+        return boxCreate(x, y, width, height);
+    } else {
+        if (end) {
+            *end = start - 1;
+        }
+        return 0;
+    }
 }
