@@ -121,10 +121,14 @@ describe('Image', function(){
     })
     it('should #drawBox()', function(){
         var canvas = new dv.Image(this.gray)
-        .drawBox(50, 50, 100, 100, 5)
+        .drawBox(50, 50, 100, 100, 5, 'set')
         .drawBox(100, 100, 100, 100, 5, 'clear')
-        .drawBox(150, 150, 100, 100, 5, 'flip');
+        .drawBox(150, 150, 100, 100, 5, 'flip')
         writeImage('gray-box.png', canvas);
+        var colorCanvas = canvas.toColor()
+        .drawBox(25, 25, 100, 100, 5, 255, 0, 0)
+        .drawBox(75, 75, 100, 100, 5, 0, 0, 255, 0.5);
+        writeImage('gray-box-color.png', colorCanvas);
     })
     it('should #octreeColorQuant()', function() {
         writeImage('rgb-octreeColorQuant-16.png', this.rgb.medianCutQuant(16));

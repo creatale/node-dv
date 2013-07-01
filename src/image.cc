@@ -108,6 +108,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Threshold)->GetFunction());
     proto->Set(String::NewSymbol("toGray"),
                FunctionTemplate::New(ToGray)->GetFunction());
+    proto->Set(String::NewSymbol("toColor"),
+               FunctionTemplate::New(ToColor)->GetFunction());
     proto->Set(String::NewSymbol("erode"),
                FunctionTemplate::New(Erode)->GetFunction());
     proto->Set(String::NewSymbol("dilate"),
@@ -573,6 +575,13 @@ Handle<Value> Image::ToGray(const Arguments &args)
     }
 }
 
+Handle<Value> Image::ToColor(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    return scope.Close(Image::New(pixConvertTo32(obj->pix_)));
+}
+
 Handle<Value> Image::Erode(const Arguments &args)
 {
     HandleScope scope;
@@ -806,8 +815,9 @@ Handle<Value> Image::DrawBox(const Arguments &args)
     BOX *box = toBox(args, 0, &boxEnd);
     if (box && args[boxEnd + 1]->IsInt32()) {
         int borderWidth = args[boxEnd + 1]->ToInt32()->Value();
-        int opInt = L_SET_PIXELS;
+        int error = 0;
         if (args[boxEnd + 2]->IsString()) {
+            int opInt  = L_FLIP_PIXELS;
             String::AsciiValue op(args[boxEnd + 2]->ToString());
             if (strcmp("set", *op) == 0) {
                 opInt = L_SET_PIXELS;
@@ -815,16 +825,41 @@ Handle<Value> Image::DrawBox(const Arguments &args)
                 opInt = L_CLEAR_PIXELS;
             } else if (strcmp("flip", *op) == 0) {
                 opInt = L_FLIP_PIXELS;
+            } else {
+                boxDestroy(&box);
+                return THROW(TypeError, "invalid op");
             }
+            error = pixRenderBox(obj->pix_, box, borderWidth, opInt);
+        } else if (args[boxEnd + 2]->IsInt32() && args[boxEnd + 3]->IsInt32()
+                   && args[boxEnd + 4]->IsInt32()) {
+            if (obj->pix_->d < 32) {
+                return THROW(TypeError, "Not a 32bpp Image");
+                boxDestroy(&box);
+            }
+            uint8_t r = args[boxEnd + 2]->Int32Value();
+            uint8_t g = args[boxEnd + 3]->Int32Value();
+            uint8_t b = args[boxEnd + 4]->Int32Value();
+            if (args[boxEnd + 5]->IsNumber()) {
+                float fract = args[boxEnd + 5]->NumberValue();;
+                error = pixRenderBoxBlend(obj->pix_, box, borderWidth, r, g, b, fract);
+            } else {
+                error = pixRenderBoxArb(obj->pix_, box, borderWidth, r, g, b);
+            }
+        } else {
+            boxDestroy(&box);
+            return THROW(TypeError, "expected (box: Box, borderWidth: Int32, "
+                         "op: String) or (box: Box, borderWidth: Int32, r: Int32, "
+                         "g: Int32, b: Int32, [frac: Number])");
         }
-        int error = pixRenderBox(obj->pix_, box, borderWidth, opInt);
         boxDestroy(&box);
         if (error) {
             return THROW(TypeError, "error while drawing box");
         }
         return args.This();
     } else {
-        return THROW(TypeError, "expected (box: Box, borderWidth: Int32[, op: String])");
+        return THROW(TypeError, "expected (box: Box, borderWidth: Int32, "
+                     "op: String) or (box: Box, borderWidth: Int32, r: Int32, "
+                     "g: Int32, b: Int32, [frac: Number])");
     }
 }
 
