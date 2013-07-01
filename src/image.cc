@@ -515,7 +515,7 @@ Handle<Value> Image::Threshold(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() == 0 || args[0]->IsInt32()) {
-        int value = args.Length() == 1 ? 128 : args[0]->Int32Value();
+        int value = args.Length() == 0 ? 128 : args[0]->Int32Value();
         PIX *pixd = pixConvertTo1(obj->pix_, value);
         if (pixd == NULL) {
             return THROW(TypeError, "error while thresholding");
