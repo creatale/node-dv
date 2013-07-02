@@ -86,6 +86,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Subtract)->GetFunction());
     proto->Set(String::NewSymbol("convolve"),
                FunctionTemplate::New(Convolve)->GetFunction());
+    proto->Set(String::NewSymbol("unsharpMasking"),
+               FunctionTemplate::New(UnsharpMasking)->GetFunction());
     proto->Set(String::NewSymbol("rotate"),
                FunctionTemplate::New(Rotate)->GetFunction());
     proto->Set(String::NewSymbol("scale"),
@@ -341,6 +343,23 @@ Handle<Value> Image::Convolve(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (width: Number, height: Number)");
+    }
+}
+
+Handle<Value> Image::UnsharpMasking(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsNumber() && args[1]->IsNumber()) {
+        int halfWidth = ceil(args[0]->NumberValue());
+        float fract = args[1]->NumberValue();
+        Pix *pixd = pixUnsharpMasking(obj->pix_, halfWidth, fract);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying unsharp");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (halfWidth: Number, fract: Number)");
     }
 }
 
