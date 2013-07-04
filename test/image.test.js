@@ -2,8 +2,16 @@ global.should = require('chai').should();
 var dv = require('../lib/dv');
 var fs = require('fs');
 
+String.prototype.endsWith = function(suffix) {
+    return this.indexOf(suffix, this.length - suffix.length) !== -1;
+};
+
 var writeImage = function(basename, image){
-    fs.writeFileSync(__dirname + '/fixtures_out/' + basename, image.toBuffer('png'));
+    if (basename.endsWith('jpg')) {
+        fs.writeFileSync(__dirname + '/fixtures_out/' + basename, image.toBuffer('jpg'));
+    } else {
+        fs.writeFileSync(__dirname + '/fixtures_out/' + basename, image.toBuffer('png'));
+    }
 }
 
 describe('Image', function(){
@@ -33,6 +41,8 @@ describe('Image', function(){
         this.textpage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
     })
     it('should save using #toBuffer()', function(){
+        writeImage('gray.jpg', this.gray);
+        writeImage('rgb.jpg', this.rgb);
         writeImage('gray.png', this.gray);
         writeImage('rgb.png', this.rgb);
         writeImage('rgba.png', this.rgba);

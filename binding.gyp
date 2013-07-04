@@ -4,13 +4,13 @@
     {
       'target_name': 'dvBinding',
       'dependencies': [
-        'deps/jpgd/jpgd.gyp:jpgd',
+        'deps/jpg/jpg.gyp:jpg',
         'deps/lodepng/lodepng.gyp:lodepng',
         'deps/tesseract/tesseract.gyp:libtesseract',
         'deps/zxing/zxing.gyp:libzxing',
       ],
       'include_dirs': [
-        'deps/jpgd',
+        'deps/jpg',
         'deps/lodepng',
         'deps/leptonica/src',
         'deps/tesseract/api',

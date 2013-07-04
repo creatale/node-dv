@@ -26,6 +26,7 @@
 #include <node_buffer.h>
 #include <lodepng.h>
 #include <jpgd.h>
+#include <jpge.h>
 
 using namespace v8;
 using namespace node;
@@ -884,102 +885,161 @@ Handle<Value> Image::DrawBox(const Arguments &args)
 
 Handle<Value> Image::ToBuffer(const Arguments &args)
 {
+    const int FORMAT_RAW = 0;
+    const int FORMAT_PNG = 1;
+    const int FORMAT_JPG = 2;
+    int formatInt = FORMAT_RAW;
+    jpge::params params;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    bool encodePNG = false;
-    if (args.Length() == 1 && args[0]->IsString()) {
+    if (args.Length() >= 1 && args[0]->IsString()) {
         String::AsciiValue format(args[0]->ToString());
-        if (strcmp("png", *format) != 0) {
+        if (strcmp("raw", *format) == 0) {
+            formatInt = FORMAT_RAW;
+        } else if (strcmp("png", *format) == 0) {
+            formatInt = FORMAT_PNG;
+        } else if (strcmp("jpg", *format) == 0) {
+            formatInt = FORMAT_JPG;
+            if (args[1]->IsNumber()) {
+                params.m_quality = args[1]->Int32Value();
+            }
+        } else {
             std::stringstream msg;
             msg << "invalid format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
-        encodePNG = true;
     }
-    if (args.Length() <= 1) {
-        std::vector<unsigned char> imgData;
-        std::vector<unsigned char> pngData;
-        unsigned error = 0;
-        if (obj->pix_->d == 32 || obj->pix_->d == 24) {
-            // Image is RGB, so create a 3 byte per pixel image.
-            uint32_t *line;
-            imgData.reserve(obj->pix_->w * obj->pix_->h * 3);
-            line = obj->pix_->data;
-            for (uint32_t y = 0; y < obj->pix_->h; ++y) {
-                for (uint32_t x = 0; x < obj->pix_->w; ++x) {
-                    int32_t rval, gval, bval;
-                    extractRGBValues(line[x], &rval, &gval, &bval);
-                    imgData.push_back(rval);
-                    imgData.push_back(gval);
-                    imgData.push_back(bval);
+    std::vector<unsigned char> imgData;
+    std::vector<unsigned char> pngData;
+    char *jpgData;
+    int jpgDataSize;
+    unsigned error = 0;
+    if (obj->pix_->d == 32 || obj->pix_->d == 24) {
+        // Image is RGB, so create a 3 byte per pixel image.
+        uint32_t *line;
+        imgData.reserve(obj->pix_->w * obj->pix_->h * 3);
+        line = obj->pix_->data;
+        for (uint32_t y = 0; y < obj->pix_->h; ++y) {
+            for (uint32_t x = 0; x < obj->pix_->w; ++x) {
+                int32_t rval, gval, bval;
+                extractRGBValues(line[x], &rval, &gval, &bval);
+                imgData.push_back(rval);
+                imgData.push_back(gval);
+                imgData.push_back(bval);
+            }
+            line += obj->pix_->wpl;
+        }
+        if (formatInt == FORMAT_PNG) {
+            lodepng::State state;
+            state.info_png.color.colortype = LCT_RGB;
+            state.info_png.color.bitdepth = 8;
+            state.info_raw.colortype = LCT_RGB;
+            error = lodepng::encode(pngData, imgData, obj->pix_->w, obj->pix_->h, state);
+        } else if (formatInt == FORMAT_JPG) {
+            jpgDataSize = obj->pix_->w * obj->pix_->h * 3 + 1024;
+            jpgData = (char*)malloc(jpgDataSize);
+            if (!jpge::compress_image_to_jpeg_file_in_memory(
+                        jpgData, jpgDataSize, obj->pix_->w, obj->pix_->h,
+                        3, &imgData[0], params)) {
+                error = 1;
+            }
+        }
+    } else if (obj->pix_->d <= 8) {
+        PIX *pix8 = pixConvertTo8(obj->pix_, obj->pix_->colormap ? 1 : 0);
+        // Image is Grayscale, so create a 1 byte per pixel image.
+        uint32_t *line;
+        imgData.reserve(pix8->w * pix8->h);
+        line = pix8->data;
+        for (uint32_t y = 0; y < pix8->h; ++y) {
+            for (uint32_t x = 0; x < pix8->w; ++x) {
+                imgData.push_back(GET_DATA_BYTE(line, x));
+            }
+            line += pix8->wpl;
+        }
+        if (formatInt == FORMAT_PNG) {
+            lodepng::State state;
+            if (obj->pix_->colormap) {
+                state.info_png.color.colortype = LCT_PALETTE;
+                state.info_png.color.bitdepth = obj->pix_->d;
+                if (obj->pix_->d == 8)
+                    state.encoder.auto_convert = LAC_NO;
+                state.info_png.color.palettesize = pixcmapGetCount(obj->pix_->colormap);
+                state.info_png.color.palette = new unsigned char[1024];
+                state.info_raw.palettesize = pixcmapGetCount(obj->pix_->colormap);
+                state.info_raw.palette = new unsigned char[1024];
+                for (size_t i = 0; i < state.info_png.color.palettesize * 4; i += 4) {
+                    int32_t r, g, b;
+                    pixcmapGetColor(obj->pix_->colormap, i / 4, &r, &g, &b);
+                    state.info_png.color.palette[i+0] = r;
+                    state.info_png.color.palette[i+1] = g;
+                    state.info_png.color.palette[i+2] = b;
+                    state.info_png.color.palette[i+3] = 255;
+                    state.info_raw.palette[i+0] = r;
+                    state.info_raw.palette[i+1] = g;
+                    state.info_raw.palette[i+2] = b;
+                    state.info_raw.palette[i+3] = 255;
                 }
-                line += obj->pix_->wpl;
+                state.info_raw.colortype = LCT_PALETTE;
+            } else {
+                state.info_png.color.colortype = LCT_GREY;
+                state.info_png.color.bitdepth = obj->pix_->d;
+                state.info_raw.colortype = LCT_GREY;
             }
-            if (encodePNG) {
-                lodepng::State state;
-                state.info_png.color.colortype = LCT_RGB;
-                state.info_png.color.bitdepth = 8;
-                state.info_raw.colortype = LCT_RGB;
-                error = lodepng::encode(pngData, imgData, obj->pix_->w, obj->pix_->h, state);
-            }
-        } else if (obj->pix_->d <= 8) {
-            PIX *pix8 = pixConvertTo8(obj->pix_, obj->pix_->colormap ? 1 : 0);
-            // Image is Grayscale, so create a 1 byte per pixel image.
-            uint32_t *line;
-            imgData.reserve(pix8->w * pix8->h);
-            line = pix8->data;
-            for (uint32_t y = 0; y < pix8->h; ++y) {
-                for (uint32_t x = 0; x < pix8->w; ++x) {
-                    imgData.push_back(GET_DATA_BYTE(line, x));
-                }
-                line += pix8->wpl;
-            }
-            if (encodePNG) {
-                lodepng::State state;
-                if (obj->pix_->colormap ) {
-                    state.info_png.color.colortype = LCT_PALETTE;
-                    state.info_png.color.bitdepth = obj->pix_->d;
-                    if (obj->pix_->d == 8)
-                        state.encoder.auto_convert = LAC_NO;
-                    state.info_png.color.palettesize = pixcmapGetCount(obj->pix_->colormap);
-                    state.info_png.color.palette = new unsigned char[1024];
-                    state.info_raw.palettesize = pixcmapGetCount(obj->pix_->colormap);
-                    state.info_raw.palette = new unsigned char[1024];
-                    for (size_t i = 0; i < state.info_png.color.palettesize * 4; i += 4) {
-                        int32_t r, g, b;
-                        pixcmapGetColor(obj->pix_->colormap, i / 4, &r, &g, &b);
-                        state.info_png.color.palette[i+0] = r;
-                        state.info_png.color.palette[i+1] = g;
-                        state.info_png.color.palette[i+2] = b;
-                        state.info_png.color.palette[i+3] = 255;
-                        state.info_raw.palette[i+0] = r;
-                        state.info_raw.palette[i+1] = g;
-                        state.info_raw.palette[i+2] = b;
-                        state.info_raw.palette[i+3] = 255;
-                    }
-                    state.info_raw.colortype = LCT_PALETTE;
-                } else {
-                    state.info_png.color.colortype = LCT_GREY;
-                    state.info_png.color.bitdepth = obj->pix_->d;
-                    state.info_raw.colortype = LCT_GREY;
-                }
-                error = lodepng::encode(pngData, imgData, pix8->w, pix8->h, state);
-            }
+            error = lodepng::encode(pngData, imgData, pix8->w, pix8->h, state);
             pixDestroy(&pix8);
-        } else {
-            return THROW(Error, "invalid PIX depth");
-        }
-        if (error) {
-            std::stringstream msg;
-            msg << "error while encoding '" << lodepng_error_text(error) << "'";
-            return THROW(Error, msg.str().c_str());
-        }
-        if (encodePNG) {
-            return Buffer::New(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_;
-        } else {
-            return Buffer::New(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_;
+        } else if (formatInt == FORMAT_JPG) {
+            if (obj->pix_->colormap) {
+                PIX* rgbPix = pixConvertTo32(obj->pix_);
+                // Image is RGB, so create a 3 byte per pixel image.
+                imgData.clear();
+                uint32_t *line;
+                imgData.reserve(rgbPix->w * rgbPix->h * 3);
+                line = rgbPix->data;
+                for (uint32_t y = 0; y < rgbPix->h; ++y) {
+                    for (uint32_t x = 0; x < rgbPix->w; ++x) {
+                        int32_t rval, gval, bval;
+                        extractRGBValues(line[x], &rval, &gval, &bval);
+                        imgData.push_back(rval);
+                        imgData.push_back(gval);
+                        imgData.push_back(bval);
+                    }
+                    line += rgbPix->wpl;
+                }
+                pixDestroy(&rgbPix);
+                // To JPG
+                jpgDataSize = obj->pix_->w * obj->pix_->h * 3 + 1024;
+                jpgData = (char*)malloc(jpgDataSize);
+                if (!jpge::compress_image_to_jpeg_file_in_memory(
+                            jpgData, jpgDataSize, obj->pix_->w, obj->pix_->h,
+                            3, &imgData[0], params)) {
+                    error = 1;
+                }
+            } else {
+                // To JPG
+                jpgDataSize = obj->pix_->w * obj->pix_->h + 1024;
+                jpgData = (char*)malloc(jpgDataSize);
+                if (!jpge::compress_image_to_jpeg_file_in_memory(
+                            jpgData, jpgDataSize, obj->pix_->w, obj->pix_->h,
+                            1, &imgData[0], params)) {
+                    error = 1;
+                }
+            }
         }
     } else {
-        return THROW(TypeError, "could not convert arguments");
+        return THROW(Error, "invalid PIX depth");
+    }
+    if (error) {
+        std::stringstream msg;
+        msg << "error while encoding '" << lodepng_error_text(error) << "'";
+        return THROW(Error, msg.str().c_str());
+    }
+    if (formatInt == FORMAT_PNG) {
+        return Buffer::New(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_;
+    } else if (formatInt == FORMAT_JPG) {
+        Handle<Value> buffer = Buffer::New(jpgData, jpgDataSize)->handle_;
+        free(jpgData);
+        return buffer;
+    } else {
+        return Buffer::New(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_;
     }
 }
 
