@@ -30,6 +30,8 @@ console.log(tesseract.findText('plain'));
 Here are some quick links to help you get started:
 
 - [Introduction](https://github.com/creatale/node-dv/wiki/Introduction)
+- [Tutorial: Preprocessing](https://github.com/creatale/node-dv/wiki/Tutorial-Preprocessing)
+- [Tutorial: Recognition](https://github.com/creatale/node-dv/wiki/Tutorial-Recognition)
 - [API Reference](https://github.com/creatale/node-dv/wiki/API)
 - [Bug Tracker](https://github.com/creatale/node-dv/issues)
 - [Changelog](CHANGELOG.md)
