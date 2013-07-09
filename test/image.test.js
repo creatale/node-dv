@@ -59,7 +59,7 @@ describe('Image', function(){
     it('should #invert()', function(){
         writeImage('gray-invert.png', this.gray.invert());
     })
-    it('should #or(), #and(), #xor() and #subtract()', function(){
+    it('should #or(), #and(), #xor(), #add() and #subtract()', function(){
         var a = this.gray.otsuAdaptiveThreshold(16, 16, 0, 0, 0.1).image;
         var b = this.gray.erode(5, 5).otsuAdaptiveThreshold(16, 16, 0, 0, 0.1).image;
         writeImage('gray-boole-a.png', a);
@@ -67,19 +67,21 @@ describe('Image', function(){
         writeImage('gray-boole-or.png', a.or(b));
         writeImage('gray-boole-and.png', a.and(b));
         writeImage('gray-boole-xor.png', a.xor(b));
+        writeImage('gray-boole-add.png', a.add(b));
         writeImage('gray-boole-subtract.png', a.subtract(b));
     })
-    it('should subtract arithmetically', function(){
+    it('should #add() and #subtract() arithmetically', function(){
         var red = this.rgba.toGray(1, 0, 0);
         var cyan = this.rgba.toGray(0, 0.5, 0.5);
         this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
+        writeImage('gray-arith-add.png', red.add(cyan));
         writeImage('gray-arith-subtract.png', red.subtract(cyan));
     })
     it('should #convolve()', function(){
         writeImage('gray-convolve.png', this.gray.convolve(15, 15));
     })
-    it('should #unsharpMasking()', function(){
-        writeImage('gray-unsharpMasking.png', this.gray.unsharpMasking(6, 0.75));
+    it('should #unsharp()', function(){
+        writeImage('gray-unsharp.png', this.gray.unsharpMasking(6, 2.5));
     })
     it('should #rotate()', function(){
         writeImage('gray-rotate.png', this.gray.rotate(-0.703125));

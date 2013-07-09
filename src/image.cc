@@ -83,12 +83,16 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(And)->GetFunction());
     proto->Set(String::NewSymbol("xor"),
                FunctionTemplate::New(Xor)->GetFunction());
+    proto->Set(String::NewSymbol("add"),
+               FunctionTemplate::New(Add)->GetFunction());
     proto->Set(String::NewSymbol("subtract"),
                FunctionTemplate::New(Subtract)->GetFunction());
     proto->Set(String::NewSymbol("convolve"),
                FunctionTemplate::New(Convolve)->GetFunction());
-    proto->Set(String::NewSymbol("unsharpMasking"),
-               FunctionTemplate::New(UnsharpMasking)->GetFunction());
+    proto->Set(String::NewSymbol("unsharpMasking"), //TODO: remove (deprecated).
+               FunctionTemplate::New(Unsharp)->GetFunction());
+    proto->Set(String::NewSymbol("unsharp"),
+               FunctionTemplate::New(Unsharp)->GetFunction());
     proto->Set(String::NewSymbol("rotate"),
                FunctionTemplate::New(Rotate)->GetFunction());
     proto->Set(String::NewSymbol("scale"),
@@ -302,6 +306,27 @@ Handle<Value> Image::Xor(const Arguments &args)
     }
 }
 
+Handle<Value> Image::Add(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (Image::HasInstance(args[0])) {
+        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+        Pix *pixd;
+        if(obj->pix_->d >= 8) {
+            pixd = pixAddGray(NULL, obj->pix_, otherPix);
+        } else {
+            pixd = pixOr(NULL, obj->pix_, otherPix);
+        }
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while applying ADD");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (image: Image)");
+    }
+}
+
 Handle<Value> Image::Subtract(const Arguments &args)
 {
     HandleScope scope;
@@ -347,7 +372,7 @@ Handle<Value> Image::Convolve(const Arguments &args)
     }
 }
 
-Handle<Value> Image::UnsharpMasking(const Arguments &args)
+Handle<Value> Image::Unsharp(const Arguments &args)
 {
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
