@@ -1046,22 +1046,20 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
 Image::Image(Pix *pix)
     : pix_(pix)
 {
-    V8::AdjustAmountOfExternalAllocatedMemory(size());
+    if (pix_) {
+        V8::AdjustAmountOfExternalAllocatedMemory(size());
+    }
 }
 
 Image::~Image()
 {
-    V8::AdjustAmountOfExternalAllocatedMemory(-size());
     if (pix_) {
+        V8::AdjustAmountOfExternalAllocatedMemory(-size());
         pixDestroy(&pix_);
     }
 }
 
 int Image::size() const
 {
-    if (pix_) {
-        return pix_->h * pix_->wpl * sizeof(uint32_t);
-    } else {
-        return 0;
-    }
+    return pix_->h * pix_->wpl * sizeof(uint32_t);
 }

@@ -11,7 +11,7 @@
         {
           'xcode_settings': {
             'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
-            'OTHER_CFLAGS': [ '-O3', '-march=native', '-fast', '-w' ]
+            'OTHER_CFLAGS': [ '-O3', '-march=native', '-w' ]
           }
         }
       ],
