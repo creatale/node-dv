@@ -240,7 +240,7 @@ void ITFReader::validateQuietZone(Ref<BitArray> row, int startPattern) {
   }
   if (quietCount != 0) {
     // Unable to find the necessary number of quiet zone pixels.
-    //throw NotFoundException();
+    throw NotFoundException();
   }
 }
 
