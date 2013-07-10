@@ -216,13 +216,14 @@ void ZXing::SetFormats(Local<String> prop, Local<Value> value, const AccessorInf
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
     if (value->IsObject()) {
         Local<Object> format = value->ToObject();
+        bool tryHarder = obj->hints_.getTryHarder();
         obj->hints_.clear();
+        obj->hints_.setTryHarder(tryHarder);
         for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
             if (format->Get(String::NewSymbol(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]))->BooleanValue()) {
                 obj->hints_.addFormat(BARCODEFORMATS[i]);
             }
         }
-        obj->reader_->setHints(obj->hints_);
     } else {
         THROW(TypeError, "value must be of type object");
     }
