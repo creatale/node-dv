@@ -314,7 +314,13 @@ Handle<Value> Image::Add(const Arguments &args)
         Pix *otherPix = Image::Pixels(args[0]->ToObject());
         Pix *pixd;
         if(obj->pix_->d >= 8) {
-            pixd = pixAddGray(NULL, obj->pix_, otherPix);
+            if (obj->pix_ == otherPix) {
+                otherPix = pixCopy(NULL, otherPix);
+                pixd = pixAddGray(NULL, obj->pix_, otherPix);
+                pixDestroy(&otherPix);
+            } else {
+                pixd = pixAddGray(NULL, obj->pix_, otherPix);
+            }
         } else {
             pixd = pixOr(NULL, obj->pix_, otherPix);
         }
@@ -335,7 +341,13 @@ Handle<Value> Image::Subtract(const Arguments &args)
         Pix *otherPix = Image::Pixels(args[0]->ToObject());
         Pix *pixd;
         if(obj->pix_->d >= 8) {
-            pixd = pixSubtractGray(NULL, obj->pix_, otherPix);
+          if (obj->pix_ == otherPix) {
+                otherPix = pixCopy(NULL, otherPix);
+                pixd = pixSubtractGray(NULL, obj->pix_, otherPix);
+                pixDestroy(&otherPix);
+            } else {
+                pixd = pixSubtractGray(NULL, obj->pix_, otherPix);
+            }
         } else {
             pixd = pixSubtract(NULL, obj->pix_, otherPix);
         }
