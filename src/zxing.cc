@@ -46,10 +46,10 @@ public:
     zxing::ArrayRef<char> getMatrix() const;
 
     bool isCropSupported() const;
-    zxing::Ref<zxing::LuminanceSource> crop(int left, int top, int width, int height);
+    zxing::Ref<zxing::LuminanceSource> crop(int left, int top, int width, int height) const;
 
     bool isRotateSupported() const;
-    zxing::Ref<zxing::LuminanceSource> rotateCounterClockwise();
+    zxing::Ref<zxing::LuminanceSource> rotateCounterClockwise() const;
 
 private:
     PIX* pix_;
@@ -105,7 +105,7 @@ bool PixSource::isRotateSupported() const
     return true;
 }
 
-zxing::Ref<zxing::LuminanceSource> PixSource::rotateCounterClockwise()
+zxing::Ref<zxing::LuminanceSource> PixSource::rotateCounterClockwise() const
 {
     // Rotate 90 degree counterclockwise.
     if (pix_->w != 0 && pix_->h != 0) {
@@ -121,7 +121,7 @@ bool PixSource::isCropSupported() const
     return true;
 }
 
-zxing::Ref<zxing::LuminanceSource> PixSource::crop(int left, int top, int width, int height)
+zxing::Ref<zxing::LuminanceSource> PixSource::crop(int left, int top, int width, int height) const
 {
     BOX *box = boxCreate(left, top, width, height);
     PIX *croppedPix = pixClipRectangle(pix_, box, 0);
@@ -255,7 +255,7 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
         zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
         zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
-        zxing::Ref<zxing::Result> result(obj->reader_->decodeWithState(binary));
+        zxing::Ref<zxing::Result> result(obj->reader_->decode(binary, obj->hints_));
         Local<Object> object = Object::New();
         std::string resultStr = result->getText()->getText();
         object->Set(String::NewSymbol("type"), String::New(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]));
@@ -290,7 +290,6 @@ Handle<Value> ZXing::FindCode(const Arguments &args)
 ZXing::ZXing()
     : hints_(zxing::DecodeHints::DEFAULT_HINT), reader_(new zxing::MultiFormatReader)
 {
-    reader_->setHints(hints_);
 }
 
 ZXing::~ZXing()
