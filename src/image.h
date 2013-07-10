@@ -77,6 +77,7 @@ private:
     static v8::Handle<v8::Value> DistanceFunction(const v8::Arguments& args);
     static v8::Handle<v8::Value> ClearBox(const v8::Arguments& args);
     static v8::Handle<v8::Value> DrawBox(const v8::Arguments& args);
+    static v8::Handle<v8::Value> DrawImage(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToBuffer(const v8::Arguments& args);
 
     Image(Pix *pix);

@@ -137,6 +137,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(ClearBox)->GetFunction());
     proto->Set(String::NewSymbol("drawBox"),
                FunctionTemplate::New(DrawBox)->GetFunction());
+    proto->Set(String::NewSymbol("drawImage"),
+               FunctionTemplate::New(DrawImage)->GetFunction());
     proto->Set(String::NewSymbol("toBuffer"),
                FunctionTemplate::New(ToBuffer)->GetFunction());
     target->Set(String::NewSymbol("Image"),
@@ -197,6 +199,12 @@ Handle<Value> Image::New(const Arguments &args)
             msg << "invalid bufffer format '" << *format << "'";
             return THROW(Error, msg.str().c_str());
         }
+    } else if (args.Length() == 3 && args[0]->IsNumber() && args[1]->IsNumber()
+               && args[2]->IsNumber()) {
+        int32_t width = args[0]->Int32Value();
+        int32_t height = args[1]->Int32Value();
+        int32_t depth = args[2]->Int32Value();
+        pix = pixCreate(width, height, depth);
     } else if (args.Length() == 4 && Buffer::HasInstance(args[1])) {
         String::AsciiValue format(args[0]->ToString());
         Local<Object> buffer = args[1]->ToObject();
@@ -341,7 +349,7 @@ Handle<Value> Image::Subtract(const Arguments &args)
         Pix *otherPix = Image::Pixels(args[0]->ToObject());
         Pix *pixd;
         if(obj->pix_->d >= 8) {
-          if (obj->pix_ == otherPix) {
+            if (obj->pix_ == otherPix) {
                 otherPix = pixCopy(NULL, otherPix);
                 pixd = pixSubtractGray(NULL, obj->pix_, otherPix);
                 pixDestroy(&otherPix);
@@ -890,8 +898,8 @@ Handle<Value> Image::DrawBox(const Arguments &args)
         } else if (args[boxEnd + 2]->IsInt32() && args[boxEnd + 3]->IsInt32()
                    && args[boxEnd + 4]->IsInt32()) {
             if (obj->pix_->d < 32) {
-                return THROW(TypeError, "Not a 32bpp Image");
                 boxDestroy(&box);
+                return THROW(TypeError, "Not a 32bpp Image");
             }
             uint8_t r = args[boxEnd + 2]->Int32Value();
             uint8_t g = args[boxEnd + 3]->Int32Value();
@@ -917,6 +925,25 @@ Handle<Value> Image::DrawBox(const Arguments &args)
         return THROW(TypeError, "expected (box: Box, borderWidth: Int32, "
                      "op: String) or (box: Box, borderWidth: Int32, r: Int32, "
                      "g: Int32, b: Int32, [frac: Number])");
+    }
+}
+
+Handle<Value> Image::DrawImage(const Arguments &args)
+{
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    int boxEnd;
+    BOX *box = toBox(args, 1, &boxEnd);
+    if (Image::HasInstance(args[0]) && box) {
+        PIX *otherPix = Image::Pixels(args[0]->ToObject());
+        int error = pixRasterop(obj->pix_, box->x, box->y, box->w, box->h,
+                                PIX_SRC, otherPix, 0, 0);
+        boxDestroy(&box);
+        if (error) {
+            return THROW(TypeError, "error while drawing image");
+        }
+        return args.This();
+    } else {
+        return THROW(TypeError, "expected (image: Image, box: Box)");
     }
 }
 

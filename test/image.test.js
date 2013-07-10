@@ -48,6 +48,7 @@ describe('Image', function(){
         writeImage('rgba.png', this.rgba);
         writeImage('rgbaBuffer.png', new dv.Image('rgba', this.rgbaBuffer, 128, 256));
         writeImage('rgbBuffer.png', new dv.Image('rgb', this.rgbBuffer, 128, 256));
+        writeImage('whd.png', new dv.Image(128, 128, 8));
     })
     it('should return raw image data using #toBuffer()', function(){
         var buf = new dv.Image('rgb', this.rgbBuffer, 128, 256).toBuffer();
@@ -144,6 +145,11 @@ describe('Image', function(){
         .drawBox(25, 25, 100, 100, 5, 255, 0, 0)
         .drawBox(75, 75, 100, 100, 5, 0, 0, 255, 0.5);
         writeImage('gray-box-color.png', colorCanvas);
+    })
+    it('should #drawImage()', function(){
+        var canvas = new dv.Image(512, 512, 8);
+        canvas.drawImage(this.gray, 128, 128, 256, 256);
+        writeImage('whd-drawImage.png', canvas);   
     })
     it('should #octreeColorQuant()', function() {
         writeImage('rgb-octreeColorQuant-16.png', this.rgb.medianCutQuant(16));
