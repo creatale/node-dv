@@ -67,6 +67,8 @@ private:
     static v8::Handle<v8::Value> Threshold(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToGray(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToColor(const v8::Arguments& args);
+    static v8::Handle<v8::Value> ToHSV(const v8::Arguments& args);
+    static v8::Handle<v8::Value> ToRGB(const v8::Arguments& args);
     static v8::Handle<v8::Value> Erode(const v8::Arguments& args);
     static v8::Handle<v8::Value> Dilate(const v8::Arguments& args);
     static v8::Handle<v8::Value> Open(const v8::Arguments& args);

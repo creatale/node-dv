@@ -105,6 +105,11 @@ describe('Image', function(){
         writeImage('rgba-gray-max.png', this.rgba.toGray('max'));
         writeImage('gray-gray-max.png', this.gray.toGray('max'));
     })
+    it('should #toHSV() and #toRGB()', function(){
+        var hsv = this.rgb.toHSV();
+        writeImage('rgb-hsv.png', hsv);
+        writeImage('rgb-hsv-rgb.png', hsv.toRGB());
+    })
     it('should #erode()', function(){
         writeImage('gray-erode.png', this.gray.erode(3, 3));
     })

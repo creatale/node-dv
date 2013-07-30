@@ -117,6 +117,10 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(ToGray)->GetFunction());
     proto->Set(String::NewSymbol("toColor"),
                FunctionTemplate::New(ToColor)->GetFunction());
+    proto->Set(String::NewSymbol("toHSV"),
+               FunctionTemplate::New(ToHSV)->GetFunction());
+    proto->Set(String::NewSymbol("toRGB"),
+               FunctionTemplate::New(ToRGB)->GetFunction());
     proto->Set(String::NewSymbol("erode"),
                FunctionTemplate::New(Erode)->GetFunction());
     proto->Set(String::NewSymbol("dilate"),
@@ -649,6 +653,30 @@ Handle<Value> Image::ToColor(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     return scope.Close(Image::New(pixConvertTo32(obj->pix_)));
+}
+
+Handle<Value> Image::ToHSV(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    PIX *pixd = pixConvertRGBToHSV(NULL, obj->pix_);
+    if (pixd != NULL) {
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(Error, "error while converting to HSV");
+    }
+}
+
+Handle<Value> Image::ToRGB(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    PIX *pixd = pixConvertHSVToRGB(NULL, obj->pix_);
+    if (pixd != NULL) {
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(Error, "error while converting to RGB");
+    }
 }
 
 Handle<Value> Image::Erode(const Arguments &args)
