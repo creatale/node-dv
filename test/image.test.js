@@ -111,6 +111,12 @@ describe('Image', function(){
     it('should #dilate()', function(){
         writeImage('gray-dilate.png', this.gray.dilate(3, 3));
     })
+    it('should #open()', function(){
+        writeImage('gray-dilate.png', this.gray.open(3, 3));
+    })
+    it('should #close()', function(){
+        writeImage('gray-dilate.png', this.gray.close(3, 3));
+    })
     it('should #thin()', function(){
         writeImage('gray-thin.png', this.gray.thin('fg', 4, 3));
     })

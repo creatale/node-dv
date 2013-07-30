@@ -121,6 +121,10 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Erode)->GetFunction());
     proto->Set(String::NewSymbol("dilate"),
                FunctionTemplate::New(Dilate)->GetFunction());
+    proto->Set(String::NewSymbol("open"),
+               FunctionTemplate::New(Open)->GetFunction());
+    proto->Set(String::NewSymbol("close"),
+               FunctionTemplate::New(Close)->GetFunction());
     proto->Set(String::NewSymbol("thin"),
                FunctionTemplate::New(Thin)->GetFunction());
     proto->Set(String::NewSymbol("maxDynamicRange"),
@@ -684,6 +688,50 @@ Handle<Value> Image::Dilate(const Arguments &args)
         }
         if (pixd == NULL) {
             return THROW(TypeError, "error while dilating");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (width: Number, height: Number)");
+    }
+}
+
+Handle<Value> Image::Open(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsNumber() && args[1]->IsNumber()) {
+        int width = ceil(args[0]->NumberValue());
+        int height = ceil(args[1]->NumberValue());
+        PIX *pixd = 0;
+        if (obj->pix_->d == 1) {
+            pixd = pixOpenBrick(NULL, obj->pix_, width, height);
+        } else {
+            pixd = pixOpenGray(obj->pix_, width, height);
+        }
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while opening");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (width: Number, height: Number)");
+    }
+}
+
+Handle<Value> Image::Close(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsNumber() && args[1]->IsNumber()) {
+        int width = ceil(args[0]->NumberValue());
+        int height = ceil(args[1]->NumberValue());
+        PIX *pixd = 0;
+        if (obj->pix_->d == 1) {
+            pixd = pixCloseBrick(NULL, obj->pix_, width, height);
+        } else {
+            pixd = pixCloseGray(obj->pix_, width, height);
+        }
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while closing");
         }
         return scope.Close(Image::New(pixd));
     } else {
