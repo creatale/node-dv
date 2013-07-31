@@ -33,7 +33,7 @@ using namespace node;
 
 Persistent<FunctionTemplate> Image::constructor_template;
 
-Pix* pixFromSource(uint8_t *pixSource, int32_t width, int32_t height, int32_t depth, int32_t targetDepth)
+PIX *pixFromSource(uint8_t *pixSource, int32_t width, int32_t height, int32_t depth, int32_t targetDepth)
 {
     // Create PIX and copy pixels from source.
     PIX *pix = pixCreateNoInit(width, height, targetDepth);
@@ -50,6 +50,38 @@ Pix* pixFromSource(uint8_t *pixSource, int32_t width, int32_t height, int32_t de
         line += pix->wpl;
     }
     return pix;
+}
+
+PIX *pixInRange(PIX *pixs, l_int32 val1l, l_int32 val2l, l_int32 val3l, l_int32 val1u, l_int32 val2u, l_int32 val3u)
+{
+    if (!pixs || pixGetDepth(pixs) != 32) {
+        return NULL;
+    }
+
+    l_int32 w, h;
+    pixGetDimensions(pixs, &w, &h, NULL);
+    PIX *pixd = pixCreate(w, h, 1);
+    l_uint32 *datas = pixGetData(pixs);
+    l_uint32 *datad = pixGetData(pixd);
+    l_int32 wpls = pixGetWpl(pixs);
+    l_int32 wpld = pixGetWpl(pixd);
+    for (l_int32 i = 0; i < h; i++) {
+        l_uint32 *lines = datas + i * wpls;
+        l_uint32 *lined = datad + i * wpld;
+        for (l_int32 j = 0; j < w; j++) {
+            l_uint32 pixel = lines[j];
+            l_int32 val1 = (pixel >> L_RED_SHIFT) & 0xff;
+            l_int32 val2 = (pixel >> L_GREEN_SHIFT) & 0xff;
+            l_int32 val3 = (pixel >> L_BLUE_SHIFT) & 0xff;
+            if (val1 >= val1l && val1 <= val1u &&
+                    val2 >= val2l && val2 <= val2u &&
+                    val3 >= val3l && val3 <= val3u) {
+                SET_DATA_BIT(lined, j);
+            }
+        }
+    }
+
+    return pixd;
 }
 
 bool Image::HasInstance(Handle<Value> val)
@@ -99,6 +131,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Scale)->GetFunction());
     proto->Set(String::NewSymbol("crop"),
                FunctionTemplate::New(Crop)->GetFunction());
+    proto->Set(String::NewSymbol("inRange"),
+               FunctionTemplate::New(InRange)->GetFunction());
     proto->Set(String::NewSymbol("histogram"),
                FunctionTemplate::New(Histogram)->GetFunction());
     proto->Set(String::NewSymbol("setMasked"),
@@ -467,6 +501,31 @@ Handle<Value> Image::Crop(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (box: Box)");
+    }
+}
+
+Handle<Value> Image::InRange(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsNumber() && args[1]->IsNumber() && args[2]->IsNumber() &&
+            args[3]->IsNumber() && args[4]->IsNumber() && args[5]->IsNumber()) {
+        int32_t val1l = args[0]->Int32Value();
+        int32_t val2l = args[1]->Int32Value();
+        int32_t val3l = args[2]->Int32Value();
+        int32_t val1u = args[3]->Int32Value();
+        int32_t val2u = args[4]->Int32Value();
+        int32_t val3u = args[5]->Int32Value();
+        Pix *pixd = pixInRange(obj->pix_, val1l, val2l, val3l,
+                               val1u, val2u, val3u);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while computing in range mask");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected ("
+                     "lower1: Number, lower2: Number, lower3: Number, "
+                     "upper1: Number, upper2: Number, upper3: Number)");
     }
 }
 

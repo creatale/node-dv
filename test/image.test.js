@@ -95,6 +95,9 @@ describe('Image', function(){
     it('should #crop()', function(){
         writeImage('gray-crop.png', this.gray.crop(100, 100, 100, 100));
     })
+    it('should #inRange()', function(){
+        writeImage('rgb-inrange.png', this.rgb.inRange(0, 0, 0, 255, 10, 10));
+    })
     it('should #rankFilter()', function(){
         writeImage('gray-rankfilter-median.png', this.gray.rankFilter(3, 3, 0.5));
     })
