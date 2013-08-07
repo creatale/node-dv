@@ -28,6 +28,10 @@
 #include <jpgd.h>
 #include <jpge.h>
 
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#endif
+
 using namespace v8;
 using namespace node;
 
@@ -78,6 +82,45 @@ PIX *pixInRange(PIX *pixs, l_int32 val1l, l_int32 val2l, l_int32 val3l, l_int32 
                     val3 >= val3l && val3 <= val3u) {
                 SET_DATA_BIT(lined, j);
             }
+        }
+    }
+
+    return pixd;
+}
+
+PIX *pixCompose(PIX *pix1, PIX *pix2, PIX *pix3)
+{
+    if ((!pix1 && pixGetDepth(pix1) != 8) ||
+            (!pix2 && pixGetDepth(pix2) != 8) ||
+            (!pix3 && pixGetDepth(pix3) != 8)) {
+        return NULL;
+    }
+
+    l_int32 w1, h1, w2, h2, w3, h3;
+    pixGetDimensions(pix1, &w1, &h1, NULL);
+    pixGetDimensions(pix2, &w2, &h2, NULL);
+    pixGetDimensions(pix3, &w3, &h3, NULL);
+    l_int32 w = MIN(MIN(w1, w2), w3);
+    l_int32 h = MIN(MIN(h1, h2), h3);
+    PIX *pixd = pixCreate(w, h, 32);
+    l_uint32 *data1 = pixGetData(pix1);
+    l_uint32 *data2 = pixGetData(pix2);
+    l_uint32 *data3 = pixGetData(pix3);
+    l_uint32 *datad = pixGetData(pixd);
+    l_int32 wpl1 = pixGetWpl(pix1);
+    l_int32 wpl2 = pixGetWpl(pix2);
+    l_int32 wpl3 = pixGetWpl(pix3);
+    l_int32 wpld = pixGetWpl(pixd);
+    for (l_int32 i = 0; i < h; i++) {
+        l_uint32 *line1 = data1 + i * wpl1;
+        l_uint32 *line2 = data2 + i * wpl2;
+        l_uint32 *line3 = data3 + i * wpl3;
+        l_uint32 *lined = datad + i * wpld;
+        for (l_int32 j = 0; j < w; j++) {
+            l_int32 val1 = GET_DATA_BYTE(line1, j);
+            l_int32 val2 = GET_DATA_BYTE(line2, j);
+            l_int32 val3 = GET_DATA_BYTE(line3, j);
+            composeRGBPixel(val1, val2, val3, &lined[j]);
         }
     }
 
@@ -247,6 +290,13 @@ Handle<Value> Image::New(const Arguments &args)
         int32_t height = args[1]->Int32Value();
         int32_t depth = args[2]->Int32Value();
         pix = pixCreate(width, height, depth);
+    } else if (args.Length() == 3 &&
+               (Image::HasInstance(args[0]) || args[0]->IsNull() || args[0]->IsUndefined()) &&
+               (Image::HasInstance(args[1]) || args[1]->IsNull() || args[0]->IsUndefined()) &&
+               (Image::HasInstance(args[2]) || args[2]->IsNull() || args[0]->IsUndefined())) {
+        pix = pixCompose(Image::Pixels(args[0]->ToObject()),
+                Image::Pixels(args[1]->ToObject()),
+                Image::Pixels(args[2]->ToObject()));
     } else if (args.Length() == 4 && Buffer::HasInstance(args[1])) {
         String::AsciiValue format(args[0]->ToString());
         Local<Object> buffer = args[1]->ToObject();
@@ -271,7 +321,8 @@ Handle<Value> Image::New(const Arguments &args)
         }
         pix = pixFromSource(reinterpret_cast<uint8_t*>(Buffer::Data(buffer)), width, height, depth, 32);
     } else {
-        return THROW(TypeError, "expected (image: Image) or (format: String, "
+        return THROW(TypeError, "expected (image: Image) or (image1: Image, "
+                     "image2: Image, image3: Image) or (format: String, "
                      "image: Buffer, [width: Int32, height: Int32]) or no arguments at all");
     }
     Image* obj = new Image(pix);

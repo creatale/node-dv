@@ -49,6 +49,7 @@ describe('Image', function(){
         writeImage('rgbaBuffer.png', new dv.Image('rgba', this.rgbaBuffer, 128, 256));
         writeImage('rgbBuffer.png', new dv.Image('rgb', this.rgbBuffer, 128, 256));
         writeImage('whd.png', new dv.Image(128, 128, 8));
+        writeImage('composed.png', new dv.Image(this.gray, this.textpage, this.textpage));
     })
     it('should return raw image data using #toBuffer()', function(){
         var buf = new dv.Image('rgb', this.rgbBuffer, 128, 256).toBuffer();
