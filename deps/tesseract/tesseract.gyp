@@ -311,6 +311,7 @@
             'link_settings': {
               'libraries': [
                 '-lws2_32.lib',
+                '-lUser32.lib',
               ],
             },
             'configurations': {
