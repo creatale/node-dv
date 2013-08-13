@@ -196,9 +196,21 @@ l_uint32  *lines, *lined;
                 SET_DATA_TWO_BYTES(lined, j, val);
             }
         }
-        else {   /* d == 32; no clipping */
-            for (j = 0; j < w; j++)
-                *(lined + j) += *(lines + j);
+        else {   /* d == 32 */
+            for (j = 0; j < w; j++) {
+                sum = GET_DATA_BYTE(lines + j, COLOR_RED) +
+                    GET_DATA_BYTE(lined + j, COLOR_RED);
+                val = L_MIN(sum, 255);
+                SET_DATA_BYTE(lined + j, COLOR_RED, val);
+                sum = GET_DATA_BYTE(lines + j, COLOR_GREEN) +
+                    GET_DATA_BYTE(lined + j, COLOR_GREEN);
+                val = L_MIN(sum, 255);
+                SET_DATA_BYTE(lined + j, COLOR_GREEN, val);
+                sum = GET_DATA_BYTE(lines + j, COLOR_BLUE) +
+                    GET_DATA_BYTE(lined + j, COLOR_BLUE);
+                val = L_MIN(sum, 255);
+                SET_DATA_BYTE(lined + j, COLOR_BLUE, val);
+            }
         }
     }
 
