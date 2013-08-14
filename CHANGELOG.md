@@ -1,3 +1,10 @@
+## v1.4.0 (August 14, 2013)
+
+- Added Image#open() and Image#close()
+- Added Image#toHSV() and Image#toRGB()
+- Added Image#inRange() and Image() constructor for channel composition
+- Bugfixes
+
 ## v1.3.0 (July 10, 2013)
 - **Moved tesseract data** to dv.data package
 - Added Image#drawImage() and Image#Image(width, height, depth)
