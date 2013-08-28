@@ -24,16 +24,7 @@
 
 #include "allheaders.h"
 
-#ifdef USING_GETTEXT
-#include <libintl.h>
-#include <locale.h>
-#define _(x) gettext(x)
-#else
-#define _(x) (x)
-#endif
-
 #include "baseapi.h"
-
 #include "resultiterator.h"
 #include "mutableiterator.h"
 #include "thresholder.h"
@@ -50,7 +41,6 @@
 #include "equationdetect.h"
 #include "tessbox.h"
 #include "imgs.h"
-#include "imgtiff.h"
 #include "makerow.h"
 #include "permute.h"
 #include "otsuthr.h"
@@ -62,12 +52,14 @@
 #include <windows.h>
 #include <stdlib.h>
 #else
-#include <glob.h>
+#include <dirent.h>
 #include <libgen.h>
 #include <string.h>
 #endif
 
+#if defined(_WIN32) && !defined(VERSION)
 #include "version.h"
+#endif
 
 namespace tesseract {
 
@@ -200,7 +192,7 @@ void TessBaseAPI::PrintVariables(FILE *fp) const {
   ParamUtils::PrintParams(fp, tesseract_->params());
 }
 
-/** 
+/**
  * The datapath must be the name of the data directory (no ending /) or
  * some other file in which the data directory resides (for instance argv[0].)
  * The language is (usually) an ISO 639-3 string or NULL will default to eng.
@@ -256,7 +248,7 @@ int TessBaseAPI::Init(const char* datapath, const char* language,
   return 0;
 }
 
-/** 
+/**
  * Returns the languages string used in the last valid initialization.
  * If the last initialization specified "deu+hin" then that will be
  * returned. If hin loaded eng automatically as well, then that will
@@ -292,8 +284,8 @@ void TessBaseAPI::GetAvailableLanguagesAsVector(
     GenericVector<STRING>* langs) const {
   langs->clear();
   if (tesseract_ != NULL) {
-    STRING pattern = tesseract_->datadir + "/*." + kTrainedDataSuffix;
 #ifdef _WIN32
+    STRING pattern = tesseract_->datadir + "/*." + kTrainedDataSuffix;
     char fname[_MAX_FNAME];
     WIN32_FIND_DATA data;
     BOOL result = TRUE;
@@ -306,18 +298,27 @@ void TessBaseAPI::GetAvailableLanguagesAsVector(
       FindClose(handle);
     }
 #else
-    glob_t pglob;
-    char **paths;
-    char *path, *dot;
-    if (glob(pattern.string(), 0, NULL, &pglob) == 0) {
-      for (paths = pglob.gl_pathv; *paths != NULL; paths++) {
-        path = basename(*paths);
-        if ((dot = strchr(path, '.'))) {
-          *dot = '\0';
-          langs->push_back(STRING(path));
+    DIR *dir;
+    struct dirent *dirent;
+    char *dot;
+
+    STRING extension = STRING(".") + kTrainedDataSuffix;
+
+    dir = opendir(tesseract_->datadir.string());
+    if (dir != NULL) {
+      while ((dirent = readdir(dir))) {
+        // Skip '.', '..', and hidden files
+        if(dirent->d_name[0] != '.') {
+          if(strstr(dirent->d_name, extension.string()) != NULL) {
+            dot = strrchr(dirent->d_name, '.');
+            // This ensures that .traineddata is at the end of the file name
+            if (strncmp(dot, extension.string(), strlen(extension.string())) == 0) {
+              *dot = '\0';
+              langs->push_back(STRING(dirent->d_name));
+            }
+          }
         }
       }
-      globfree(&pglob);
     }
 #endif
   }
@@ -806,11 +807,18 @@ bool TessBaseAPI::ProcessPages(const char* filename,
     page = 0;
   FILE* fp = fopen(filename, "rb");
   if (fp == NULL) {
-    tprintf(_("Image file %s cannot be opened!\n"), filename);
+    tprintf("Image file %s cannot be opened!\n", filename);
     return false;
   }
   // Find the number of pages if a tiff file, or zero otherwise.
-  int npages = CountTiffPages(fp);
+  int npages;
+  int format;
+  Pix *pix;
+  pix = pixRead(filename);
+  format = pixGetInputFormat(pix);
+  if (format == IFF_TIFF || format == IFF_TIFF_G4 ||
+      format == IFF_TIFF_G3 || format == IFF_TIFF_PACKBITS)
+    tiffGetCount(fp, &npages);
   fclose(fp);
 
   if (tesseract_->tessedit_create_hocr) {
@@ -821,22 +829,21 @@ bool TessBaseAPI::ProcessPages(const char* filename,
         "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" "
         "lang=\"en\">\n <head>\n  <title></title>\n"
         "  <meta http-equiv=\"Content-Type\" content=\"text/html; "
-		"charset=utf-8\" />\n"
+        "charset=utf-8\" />\n"
         "  <meta name='ocr-system' content='tesseract " VERSION "' />\n"
         "  <meta name='ocr-capabilities' content='ocr_page ocr_carea ocr_par"
-        " ocr_line ocrx_word'/>\n"
+        " ocr_line ocrx_word ocrp_lang ocrp_dir'/>\n"
         " </head>\n <body>\n";
   } else {
     *text_out = "";
   }
 
   bool success = true;
-  Pix *pix;
   if (npages > 0) {
     for (; page < npages && (pix = pixReadTiff(filename, page)) != NULL;
          ++page) {
       if ((page >= 0) && (npages > 1))
-        tprintf(_("Page %d of %d\n"), page + 1, npages);
+        tprintf("Page %d of %d\n", page + 1, npages);
       char page_str[kMaxIntSize];
       snprintf(page_str, kMaxIntSize - 1, "%d", page);
       SetVariable("applybox_page", page_str);
@@ -849,7 +856,6 @@ bool TessBaseAPI::ProcessPages(const char* filename,
     }
   } else {
     // The file is not a tiff file, so use the general pixRead function.
-    pix = pixRead(filename);
     if (pix != NULL) {
       success &= ProcessPage(pix, 0, filename, retry_config,
                              timeout_millisec, text_out);
@@ -858,10 +864,10 @@ bool TessBaseAPI::ProcessPages(const char* filename,
       // The file is not an image file, so try it as a list of filenames.
       FILE* fimg = fopen(filename, "rb");
       if (fimg == NULL) {
-        tprintf(_("File %s cannot be opened!\n"), filename);
+        tprintf("File %s cannot be opened!\n", filename);
         return false;
       }
-      tprintf(_("Reading %s as a list of filenames...\n"), filename);
+      tprintf("Reading %s as a list of filenames...\n", filename);
       char pagename[MAX_PATH];
       // Skip to the requested page number.
       for (int i = 0; i < page &&
@@ -871,11 +877,11 @@ bool TessBaseAPI::ProcessPages(const char* filename,
         chomp_string(pagename);
         pix = pixRead(pagename);
         if (pix == NULL) {
-          tprintf(_("Image file %s cannot be read!\n"), pagename);
+          tprintf("Image file %s cannot be read!\n", pagename);
           fclose(fimg);
           return false;
         }
-        tprintf(_("Page %d : %s\n"), page, pagename);
+        tprintf("Page %d : %s\n", page, pagename);
         success &= ProcessPage(pix, page, pagename, retry_config,
                                timeout_millisec, text_out);
         pixDestroy(&pix);
@@ -1063,6 +1069,20 @@ char* TessBaseAPI::GetHOCRText(int page_number) {
   if (input_file_ == NULL)
       SetInputName(NULL);
 
+  #ifdef _WIN32
+      // convert input name from ANSI encoding to utf-8
+      int str16_len = MultiByteToWideChar(CP_ACP, 0, input_file_->string(), -1, NULL, NULL);
+      wchar_t *uni16_str = new WCHAR[str16_len];
+      str16_len = MultiByteToWideChar(CP_ACP, 0, input_file_->string(), -1, uni16_str, str16_len);
+
+      int utf8_len = WideCharToMultiByte(CP_UTF8, 0, uni16_str, str16_len, NULL, NULL, NULL, NULL);
+      char *utf8_str = new char[utf8_len];
+      WideCharToMultiByte(CP_UTF8, 0, uni16_str, str16_len, utf8_str, utf8_len, NULL, NULL);
+      *input_file_ = utf8_str;
+      delete[] uni16_str;
+      delete[] utf8_str;
+  #endif
+
   hocr_str.add_str_int("  <div class='ocr_page' id='page_", page_id);
   hocr_str += "' title='image \"";
   hocr_str += input_file_ ? *input_file_ : "unknown";
@@ -1101,7 +1121,24 @@ char* TessBaseAPI::GetHOCRText(int page_number) {
 
     // Now, process the word...
     hocr_str.add_str_int("<span class='ocrx_word' id='word_", wcnt);
-    AddBoxTohOCR(res_it, RIL_WORD, &hocr_str);
+    int left, top, right, bottom;
+    res_it->BoundingBox(RIL_WORD, &left, &top, &right, &bottom);
+    hocr_str.add_str_int("' title='bbox ", left);
+    hocr_str.add_str_int(" ", top);
+    hocr_str.add_str_int(" ", right);
+    hocr_str.add_str_int(" ", bottom);
+    hocr_str.add_str_int("; x_wconf ", res_it->Confidence(RIL_WORD));
+    hocr_str += "'";
+    if (res_it->WordRecognitionLanguage()) {
+      hocr_str += " lang='";
+      hocr_str += res_it->WordRecognitionLanguage();
+      hocr_str += "'";
+    }
+    switch (res_it->WordDirection()) {
+      case DIR_LEFT_TO_RIGHT: hocr_str += " dir='ltr'"; break;
+      case DIR_RIGHT_TO_LEFT: hocr_str += " dir='rtl'"; break;
+    }
+    hocr_str += ">";
     const char *font_name;
     bool bold, italic, underlined, monospace, serif, smallcaps;
     int pointsize, font_id;

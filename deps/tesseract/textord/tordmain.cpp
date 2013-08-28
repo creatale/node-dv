@@ -16,7 +16,6 @@
  ** limitations under the License.
  *
  **********************************************************************/
-#include "mfcpch.h"
 #ifdef __UNIX__
 #include <assert.h>
 #endif
@@ -346,12 +345,12 @@ float Textord::filter_noise_blobs(
       size_stats.add (height, 1);
   }
   max_height = size_stats.ile (textord_initialasc_ile);
-  //      printf("max_y=%g, min_y=%g, initial_x=%g, max_height=%g,",
+  //      tprintf("max_y=%g, min_y=%g, initial_x=%g, max_height=%g,",
   //              max_y,min_y,initial_x,max_height);
   max_height *= tesseract::CCStruct::kXHeightCapRatio;
   if (max_height > initial_x)
     initial_x = max_height;
-  //      printf(" ret=%g\n",initial_x);
+  //      tprintf(" ret=%g\n",initial_x);
   return initial_x;
 }
 

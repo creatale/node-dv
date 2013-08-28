@@ -170,6 +170,10 @@ Handle<Value> Tesseract::GetPageSegMode(Local<String> prop, const AccessorInfo &
         return String::New("circle_word");
     case tesseract::PSM_SINGLE_CHAR:
         return String::New("single_char");
+    case tesseract::PSM_SPARSE_TEXT:
+        return String::New("sparse_text");
+    case tesseract::PSM_SPARSE_TEXT_OSD:
+        return String::New("sparse_text_osd");
     default:
         return THROW(Error, "cannot convert internal PSM to String");
     }
@@ -201,6 +205,10 @@ void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const Acc
         obj->api_.SetPageSegMode(tesseract::PSM_CIRCLE_WORD);
     } else if (strcmp("single_char", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_SINGLE_CHAR);
+    } else if (strcmp("sparse_text", *pageSegMode) == 0) {
+        obj->api_.SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
+    } else if (strcmp("sparse_text_osd", *pageSegMode) == 0) {
+        obj->api_.SetPageSegMode(tesseract::PSM_SPARSE_TEXT_OSD);
     } else {
         THROW(TypeError, "value must be of type String. "
               "Valid values are: "
