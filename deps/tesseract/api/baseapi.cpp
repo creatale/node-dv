@@ -57,9 +57,7 @@
 #include <string.h>
 #endif
 
-#if defined(_WIN32) && !defined(VERSION)
 #include "version.h"
-#endif
 
 namespace tesseract {
 
