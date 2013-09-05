@@ -1,3 +1,8 @@
+## v1.5.0 (September 5, 2013)
+
+- Updated ZXing (bugfixes, performance)
+- Updated TesseractOCR (sparse text mode)
+
 ## v1.4.0 (August 14, 2013)
 
 - Added Image#open() and Image#close()
