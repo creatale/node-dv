@@ -25,7 +25,7 @@ var tesseract = new dv.Tesseract('eng', image);
 console.log(tesseract.findText('plain'));
 ```
 
-## Whats next?
+## What's next?
 
 Here are some quick links to help you get started:
 
