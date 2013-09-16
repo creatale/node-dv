@@ -214,7 +214,8 @@ void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const Acc
               "Valid values are: "
               "osd_only, auto_osd, auto_only, auto, single_column, "
               "single_block_vert_text, single_block, single_line, "
-              "single_word, circle_word, single_char");
+              "single_word, circle_word, single_char, sparse_text, "
+              "sparse_text_osd");
     }
 }
 
