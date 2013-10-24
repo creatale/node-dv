@@ -23,6 +23,7 @@
 #include "image.h"
 #include "util.h"
 #include <sstream>
+#include <algorithm>
 #include <strngs.h>
 #include <resultiterator.h>
 
@@ -136,6 +137,14 @@ void Tesseract::SetRectangle(Local<String> prop, Local<Value> value, const Acces
             obj->rectangle_.Clear();
         }
         obj->rectangle_ = Persistent<Object>::New(rect);
+        if (!obj->image_.IsEmpty()) {
+            // WORKAROUND: clamp rectangle to prevent occasional crashes.
+            PIX* pix = Image::Pixels(obj->image_);
+            rect->Set(x, Int32::New(std::max(rect->Get(x)->Int32Value(), 0)));
+            rect->Set(y, Int32::New(std::max(rect->Get(y)->Int32Value(), 0)));
+            rect->Set(width, Int32::New(std::min(rect->Get(width)->Int32Value(), (int)pix->w)));
+            rect->Set(height, Int32::New(std::min(rect->Get(height)->Int32Value(), (int)pix->h)));          
+        }
         obj->api_.SetRectangle(rect->Get(x)->Int32Value(), rect->Get(y)->Int32Value(),
                                rect->Get(width)->Int32Value(), rect->Get(height)->Int32Value());
     } else {
