@@ -24,6 +24,7 @@
 #include "util.h"
 #include <sstream>
 #include <algorithm>
+#include <cmath>
 #include <strngs.h>
 #include <resultiterator.h>
 
