@@ -126,27 +126,25 @@ void Tesseract::SetRectangle(Local<String> prop, Local<Value> value, const Acces
 {
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     Local<Object> rect = value->ToObject();
-    Handle<String> x = String::NewSymbol("x");
-    Handle<String> y = String::NewSymbol("y");
-    Handle<String> width = String::NewSymbol("width");
-    Handle<String> height = String::NewSymbol("height");
-    if (value->IsObject() && rect->Has(x) && rect->Has(y) &&
-            rect->Has(width) && rect->Has(height)) {
+    if (value->IsObject()) {
         if (!obj->rectangle_.IsEmpty()) {
             obj->rectangle_.Dispose();
             obj->rectangle_.Clear();
         }
         obj->rectangle_ = Persistent<Object>::New(rect);
+        int x = floor(rect->Get(String::NewSymbol("x"))->ToNumber()->Value());
+        int y = floor(rect->Get(String::NewSymbol("y"))->ToNumber()->Value());
+        int width = ceil(rect->Get(String::NewSymbol("width"))->ToNumber()->Value());
+        int height = ceil(rect->Get(String::NewSymbol("height"))->ToNumber()->Value());
         if (!obj->image_.IsEmpty()) {
             // WORKAROUND: clamp rectangle to prevent occasional crashes.
             PIX* pix = Image::Pixels(obj->image_);
-            rect->Set(x, Int32::New(std::max(rect->Get(x)->Int32Value(), 0)));
-            rect->Set(y, Int32::New(std::max(rect->Get(y)->Int32Value(), 0)));
-            rect->Set(width, Int32::New(std::min(rect->Get(width)->Int32Value(), (int)pix->w)));
-            rect->Set(height, Int32::New(std::min(rect->Get(height)->Int32Value(), (int)pix->h)));          
+            x = std::max(x, 0);
+            y = std::max(y, 0);
+            width = std::min(width, (int)pix->w - x);
+            height = std::min(height, (int)pix->h - y);
         }
-        obj->api_.SetRectangle(rect->Get(x)->Int32Value(), rect->Get(y)->Int32Value(),
-                               rect->Get(width)->Int32Value(), rect->Get(height)->Int32Value());
+        obj->api_.SetRectangle(x, y, width, height);
     } else {
         THROW(TypeError, "value must be of type Object with at least "
               "x, y, width and height properties");
