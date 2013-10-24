@@ -1,4 +1,4 @@
-## v1.5.1 (October 24, 2013)
+## v1.5.1 and v1.5.2 (October 24, 2013)
 
 - Fixed Tesseract crashes related to rectangles and best first search.
 - Added `sparse_text` and `sparse_text_osd` to error messages.
