@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-#include <limits>
 #include <zxing/pdf417/detector/Detector.h>
 #include <zxing/pdf417/detector/LinesSampler.h>
 #include <zxing/common/GridSampler.h>
 #include <zxing/common/detector/JavaMath.h>
 #include <zxing/common/detector/MathUtils.h>
+#include <limits>
+#include <algorithm>
 
 using std::max;
 using std::abs;

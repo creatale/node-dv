@@ -22,6 +22,8 @@
 #include <zxing/NotFoundException.h>
 #include <math.h>
 #include <limits.h>
+#include <typeinfo>
+#include <algorithm>
 
 using std::vector;
 using zxing::Ref;
@@ -63,8 +65,6 @@ Ref<Result> OneDReader::decode(Ref<BinaryBitmap> image, DecodeHints hints) {
     }
   }
 }
-
-#include <typeinfo>
 
 Ref<Result> OneDReader::doDecode(Ref<BinaryBitmap> image, DecodeHints hints) {
   int width = image->getWidth();
