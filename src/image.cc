@@ -255,8 +255,10 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(ConnectedComponents)->GetFunction());
     proto->Set(String::NewSymbol("distanceFunction"),
                FunctionTemplate::New(DistanceFunction)->GetFunction());
-    proto->Set(String::NewSymbol("clearBox"),
+    proto->Set(String::NewSymbol("clearBox"), //TODO: remove (deprecated).
                FunctionTemplate::New(ClearBox)->GetFunction());
+    proto->Set(String::NewSymbol("fillBox"),
+               FunctionTemplate::New(FillBox)->GetFunction());
     proto->Set(String::NewSymbol("drawBox"),
                FunctionTemplate::New(DrawBox)->GetFunction());
     proto->Set(String::NewSymbol("drawImage"),
@@ -1125,6 +1127,57 @@ Handle<Value> Image::ClearBox(const Arguments &args)
         return args.This();
     } else {
         return THROW(TypeError, "expected (box: Box) signature");
+    }
+}
+
+Handle<Value> Image::FillBox(const Arguments &args)
+{
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    int boxEnd;
+    BOX *box = toBox(args, 0, &boxEnd);
+    if (box) {
+        int error = 0;
+        if (args[boxEnd + 1]->IsInt32() && !args[boxEnd + 2]->IsInt32()) {
+            if (obj->pix_->d != 8 && obj->pix_->d != 1) {
+                boxDestroy(&box);
+                return THROW(TypeError, "Not a 8bpp or 1bpp Image");
+            }
+            int value = args[boxEnd + 1]->Int32Value();
+            error = pixSetInRectArbitrary(obj->pix_, box, value);
+        }
+        else if (args[boxEnd + 1]->IsInt32() && args[boxEnd + 2]->IsInt32()
+                 && args[boxEnd + 3]->IsInt32()) {
+            if (obj->pix_->d < 32) {
+                boxDestroy(&box);
+                return THROW(TypeError, "Not a 32bpp Image");
+            }
+            uint8_t r = args[boxEnd + 1]->Int32Value();
+            uint8_t g = args[boxEnd + 2]->Int32Value();
+            uint8_t b = args[boxEnd + 3]->Int32Value();
+            l_uint32 pixel;
+            composeRGBPixel(r, g, b, &pixel);
+            if (args[boxEnd + 4]->IsNumber()) {
+                float fract = static_cast<float>(args[boxEnd + 4]->NumberValue());
+                error = pixBlendInRect(obj->pix_, box, pixel, fract);
+            }
+            else {
+                error = pixSetInRectArbitrary(obj->pix_, box, pixel);
+            }
+        }
+        else {
+            boxDestroy(&box);
+            return THROW(TypeError, "expected (box: Box, value: Int32) or "
+                         "(box: Box, r: Int32, g: Int32, b: Int32, [frac: Number])");
+        }
+        boxDestroy(&box);
+        if (error) {
+            return THROW(TypeError, "error while drawing box");
+        }
+        return args.This();
+    }
+    else {
+        return THROW(TypeError, "expected (box: Box, value: Int32) or "
+                     "(box: Box, r: Int32, g: Int32, b: Int32, [frac: Number])");
     }
 }
 

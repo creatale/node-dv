@@ -150,6 +150,16 @@ describe('Image', function(){
         var distanceMap = this.rgb.toGray().distanceFunction(4);
         writeImage('distance-map.png', distanceMap.maxDynamicRange('log'));
     })
+	it('should #fillBox()', function(){
+        var canvas = new dv.Image(this.gray)
+        .fillBox(100, 100, 100, 100, 192)
+        .fillBox(150, 150, 100, 100, 64)
+        writeImage('gray-box2.png', canvas);
+        var colorCanvas = canvas.toColor()
+        .fillBox(25, 25, 100, 100, 255, 0, 0)
+        .fillBox(75, 75, 100, 100, 0, 0, 255, 0.5);
+        writeImage('gray-box2-color.png', colorCanvas);
+    })
     it('should #drawBox()', function(){
         var canvas = new dv.Image(this.gray)
         .drawBox(50, 50, 100, 100, 5, 'set')
