@@ -21,16 +21,13 @@
  */
 #include "image.h"
 #include "util.h"
-#include <cmath>
 #include <sstream>
+#include <algorithm>
+#include <cmath>
 #include <node_buffer.h>
 #include <lodepng.h>
 #include <jpgd.h>
 #include <jpge.h>
-
-#ifndef MIN
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#endif
 
 using namespace v8;
 using namespace node;
@@ -100,8 +97,8 @@ PIX *pixCompose(PIX *pix1, PIX *pix2, PIX *pix3)
     pixGetDimensions(pix1, &w1, &h1, NULL);
     pixGetDimensions(pix2, &w2, &h2, NULL);
     pixGetDimensions(pix3, &w3, &h3, NULL);
-    l_int32 w = MIN(MIN(w1, w2), w3);
-    l_int32 h = MIN(MIN(h1, h2), h3);
+    l_int32 w = std::min(std::min(w1, w2), w3);
+    l_int32 h = std::min(std::min(h1, h2), h3);
     PIX *pixd = pixCreate(w, h, 32);
     l_uint32 *data1 = pixGetData(pix1);
     l_uint32 *data2 = pixGetData(pix2);
@@ -125,6 +122,44 @@ PIX *pixCompose(PIX *pix1, PIX *pix2, PIX *pix3)
     }
 
     return pixd;
+}
+
+enum ProjectionMode
+{
+    Horizontal = 1,
+    Vertical = 2
+};
+
+void pixProjection(std::vector<uint32_t> &values, PIX *pix, ProjectionMode mode)
+{
+    uint32_t *line = pix->data;
+    if (mode == Horizontal) {
+        values.assign(pix->w, 0);
+    }
+    else if (mode == Vertical) {
+        values.assign(pix->h, 0);
+    }
+    for (uint32_t y = 0; y < pix->h; ++y) {
+        for (uint32_t x = 0; x < pix->w; ++x) {
+            if (mode == Horizontal) {
+                if (pix->d == 1) {
+                    values[x] += GET_DATA_BIT(line, x);
+                }
+                else {
+                    values[x] += GET_DATA_BYTE(line, x);
+                }
+            }
+            else if (mode == Vertical) {
+                if (pix->d == 1) {
+                    values[y] += GET_DATA_BIT(line, x);
+                }
+                else {
+                    values[y] += GET_DATA_BYTE(line, x);
+                }
+            }
+        }
+        line += pix->wpl;
+    }
 }
 
 bool Image::HasInstance(Handle<Value> val)
@@ -178,6 +213,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(InRange)->GetFunction());
     proto->Set(String::NewSymbol("histogram"),
                FunctionTemplate::New(Histogram)->GetFunction());
+    proto->Set(String::NewSymbol("projection"),
+               FunctionTemplate::New(Projection)->GetFunction());
     proto->Set(String::NewSymbol("setMasked"),
                FunctionTemplate::New(SetMasked)->GetFunction());
     proto->Set(String::NewSymbol("applyCurve"),
@@ -466,8 +503,8 @@ Handle<Value> Image::Convolve(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && args[1]->IsNumber()) {
-        int width = ceil(args[0]->NumberValue());
-        int height = ceil(args[1]->NumberValue());
+        int width = static_cast<int>(ceil(args[0]->NumberValue()));
+        int height = static_cast<int>(ceil(args[1]->NumberValue()));
         Pix *pixs;
         if(obj->pix_->d == 1) {
             pixs = pixConvert1To8(NULL, obj->pix_, 0, 255);
@@ -490,8 +527,8 @@ Handle<Value> Image::Unsharp(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && args[1]->IsNumber()) {
-        int halfWidth = ceil(args[0]->NumberValue());
-        float fract = args[1]->NumberValue();
+        int halfWidth = static_cast<int>(ceil(args[0]->NumberValue()));
+        float fract = static_cast<float>(args[1]->NumberValue());
         Pix *pixd = pixUnsharpMasking(obj->pix_, halfWidth, fract);
         if (pixd == NULL) {
             return THROW(TypeError, "error while applying unsharp");
@@ -507,8 +544,8 @@ Handle<Value> Image::Rotate(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber()) {
-        const float deg2rad = 3.1415926535 / 180.;
-        float angle = args[0]->NumberValue();
+        const float deg2rad = 3.1415926535f / 180.0f;
+        float angle = static_cast<float>(args[0]->NumberValue());
         Pix *pixd = pixRotate(obj->pix_, deg2rad * angle,
                               L_ROTATE_AREA_MAP, L_BRING_IN_WHITE,
                               obj->pix_->w, obj->pix_->h);
@@ -526,8 +563,8 @@ Handle<Value> Image::Scale(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && (args.Length() != 2 || args[1]->IsNumber())) {
-        float scaleX = args[0]->NumberValue();
-        float scaleY = args.Length() == 2 ? args[1]->NumberValue() : scaleX;
+        float scaleX = static_cast<float>(args[0]->NumberValue());
+        float scaleY = static_cast<float>(args.Length() == 2 ? args[1]->NumberValue() : scaleX);
         Pix *pixd = pixScale(obj->pix_, scaleX, scaleY);
         if (pixd == NULL) {
             return THROW(TypeError, "error while scaling");
@@ -593,16 +630,48 @@ Handle<Value> Image::Histogram(const Arguments &args)
         return THROW(TypeError, "error while computing histogram");
     }
     int len = numaGetCount(hist);
-    unsigned int count = 0;
+    l_float32 total = 0;
     for (int i = 0; i < len; i++) {
-        count += hist->array[i];
+        total += hist->array[i];
     }
     Local<Array> result = Array::New(len);
     for (int i = 0; i < len; i++) {
-        result->Set(i, Number::New(hist->array[i] / count));
+        result->Set(i, Number::New(hist->array[i] / total));
     }
     numaDestroy(&hist);
     return scope.Close(result);
+}
+
+Handle<Value> Image::Projection(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsString()) {
+        String::AsciiValue mode(args[0]->ToString());
+        ProjectionMode modeEnum;
+        if (strcmp("horizontal", *mode) == 0) {
+            modeEnum = Horizontal;
+        }
+        else if (strcmp("vertical", *mode) == 0) {
+            modeEnum = Vertical;
+        }
+        else {
+            return THROW(Error, "expected mode to be 'horizontal' or 'vertical'");
+        }
+        if (obj->pix_->d != 8 && obj->pix_->d != 1) {
+            return THROW(Error, "expected 8bpp or 1bpp image");
+        }
+        std::vector<uint32_t> values;
+        pixProjection(values, obj->pix_, modeEnum);
+        Local<Array> result = Array::New(static_cast<int>(values.size()));
+        for (int i = 0; i < values.size(); i++) {
+            result->Set(i, Number::New(values[i]));
+        }
+        return scope.Close(result);
+    }
+    else {
+        return THROW(TypeError, "expected (mode: String)");
+    }
 }
 
 Handle<Value> Image::SetMasked(const Arguments &args)
@@ -627,7 +696,7 @@ Handle<Value> Image::ApplyCurve(const Arguments &args)
             args[0]->ToObject()->Get(String::New("length"))->Uint32Value() == 256) {
         NUMA *numa = numaCreate(256);
         for (int i = 0; i < 256; i++) {
-            numaAddNumber(numa, args[0]->ToObject()->Get(i)->ToInt32()->Value());
+            numaAddNumber(numa, (l_float32)args[0]->ToObject()->Get(i)->ToInt32()->Value());
         }
         PIX *mask = NULL;
         if (args.Length() >= 2 && Image::HasInstance(args[1])) {
@@ -648,9 +717,9 @@ Handle<Value> Image::RankFilter(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && args[1]->IsNumber() && args[2]->IsNumber()) {
-        int width = ceil(args[0]->NumberValue());
-        int height = ceil(args[1]->NumberValue());
-        float rank = args[2]->NumberValue();
+        int width = static_cast<int>(ceil(args[0]->NumberValue()));
+        int height = static_cast<int>(ceil(args[1]->NumberValue()));
+        float rank = static_cast<float>(args[2]->NumberValue());
         PIX *pixd = pixRankFilter(obj->pix_, width, height, rank);
         if (pixd == NULL) {
             return THROW(TypeError, "error while applying rank filter");
@@ -742,9 +811,9 @@ Handle<Value> Image::ToGray(const Arguments &args)
         }
     } else if (args.Length() == 3 && args[0]->IsNumber()
                && args[1]->IsNumber() && args[2]->IsNumber()) {
-        float rwt = args[0]->NumberValue();
-        float gwt = args[1]->NumberValue();
-        float bwt = args[2]->NumberValue();
+        float rwt = static_cast<float>(args[0]->NumberValue());
+        float gwt = static_cast<float>(args[1]->NumberValue());
+        float bwt = static_cast<float>(args[2]->NumberValue());
         PIX *grayPix = pixConvertRGBToGray(
                     obj->pix_, rwt, gwt, bwt);
         if (grayPix != NULL) {
@@ -794,8 +863,8 @@ Handle<Value> Image::Erode(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && args[1]->IsNumber()) {
-        int width = ceil(args[0]->NumberValue());
-        int height = ceil(args[1]->NumberValue());
+        int width = static_cast<int>(ceil(args[0]->NumberValue()));
+        int height = static_cast<int>(ceil(args[1]->NumberValue()));
         PIX *pixd = 0;
         if (obj->pix_->d == 1) {
             pixd = pixErodeBrick(NULL, obj->pix_, width, height);
@@ -816,8 +885,8 @@ Handle<Value> Image::Dilate(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && args[1]->IsNumber()) {
-        int width = ceil(args[0]->NumberValue());
-        int height = ceil(args[1]->NumberValue());
+        int width = static_cast<int>(ceil(args[0]->NumberValue()));
+        int height = static_cast<int>(ceil(args[1]->NumberValue()));
         PIX *pixd = 0;
         if (obj->pix_->d == 1) {
             pixd = pixDilateBrick(NULL, obj->pix_, width, height);
@@ -838,8 +907,8 @@ Handle<Value> Image::Open(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && args[1]->IsNumber()) {
-        int width = ceil(args[0]->NumberValue());
-        int height = ceil(args[1]->NumberValue());
+        int width = static_cast<int>(ceil(args[0]->NumberValue()));
+        int height = static_cast<int>(ceil(args[1]->NumberValue()));
         PIX *pixd = 0;
         if (obj->pix_->d == 1) {
             pixd = pixOpenBrick(NULL, obj->pix_, width, height);
@@ -860,8 +929,8 @@ Handle<Value> Image::Close(const Arguments &args)
     HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsNumber() && args[1]->IsNumber()) {
-        int width = ceil(args[0]->NumberValue());
-        int height = ceil(args[1]->NumberValue());
+        int width = static_cast<int>(ceil(args[0]->NumberValue()));
+        int height = static_cast<int>(ceil(args[1]->NumberValue()));
         PIX *pixd = 0;
         if (obj->pix_->d == 1) {
             pixd = pixCloseBrick(NULL, obj->pix_, width, height);
@@ -942,7 +1011,7 @@ Handle<Value> Image::OtsuAdaptiveThreshold(const Arguments &args)
         int32_t sy = args[1]->Int32Value();
         int32_t smoothx = args[2]->Int32Value();
         int32_t smoothy = args[3]->Int32Value();
-        float scorefact = args[4]->NumberValue();
+        float scorefact = static_cast<float>(args[4]->NumberValue());
         PIX *ppixth;
         PIX *ppixd;
         int error = pixOtsuAdaptiveThreshold(
@@ -1091,7 +1160,7 @@ Handle<Value> Image::DrawBox(const Arguments &args)
             uint8_t g = args[boxEnd + 3]->Int32Value();
             uint8_t b = args[boxEnd + 4]->Int32Value();
             if (args[boxEnd + 5]->IsNumber()) {
-                float fract = args[boxEnd + 5]->NumberValue();;
+                float fract = static_cast<float>(args[boxEnd + 5]->NumberValue());
                 error = pixRenderBoxBlend(obj->pix_, box, borderWidth, r, g, b, fract);
             } else {
                 error = pixRenderBoxArb(obj->pix_, box, borderWidth, r, g, b);
@@ -1218,7 +1287,7 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
                 state.info_raw.palette = new unsigned char[1024];
                 for (size_t i = 0; i < state.info_png.color.palettesize * 4; i += 4) {
                     int32_t r, g, b;
-                    pixcmapGetColor(obj->pix_->colormap, i / 4, &r, &g, &b);
+                    pixcmapGetColor(obj->pix_->colormap, static_cast<l_int32>(i / 4), &r, &g, &b);
                     state.info_png.color.palette[i+0] = r;
                     state.info_png.color.palette[i+1] = g;
                     state.info_png.color.palette[i+2] = b;

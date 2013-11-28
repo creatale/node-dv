@@ -183,6 +183,12 @@ describe('Image', function(){
         result[128].should.be.within(0.00, 0.01);
         result[255].should.be.within(0.44, 0.45);
     })
+	it('should #projection()', function() {
+        var horizontal = this.gray.threshold(254).projection('horizontal');
+        horizontal.length.should.equal(400);
+        var vertical = this.gray.threshold(254).projection('vertical');
+        vertical.length.should.equal(669);
+    })
     it('should #applyCurve() and #setMasked()', function() {
         var curve = new Array(256);
         for (var i = 0; i < 256; i++)

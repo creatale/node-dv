@@ -60,6 +60,7 @@ private:
     static v8::Handle<v8::Value> Crop(const v8::Arguments& args);
     static v8::Handle<v8::Value> InRange(const v8::Arguments& args);
     static v8::Handle<v8::Value> Histogram(const v8::Arguments &args);
+    static v8::Handle<v8::Value> Projection(const v8::Arguments &args);
     static v8::Handle<v8::Value> SetMasked(const v8::Arguments &args);
     static v8::Handle<v8::Value> ApplyCurve(const v8::Arguments &args);
     static v8::Handle<v8::Value> RankFilter(const v8::Arguments& args);
