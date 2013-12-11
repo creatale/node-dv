@@ -1,5 +1,5 @@
 /*
-LodePNG version 20130415
+LodePNG version 20131115
 
 Copyright (c) 2005-2013 Lode Vandevenne
 
@@ -497,13 +497,12 @@ See the reference manual at the end of this header file to see which color conve
 return value = LodePNG error code (0 if all went ok, an error if the conversion isn't supported)
 The out buffer must have size (w * h * bpp + 7) / 8, where bpp is the bits per pixel
 of the output color type (lodepng_get_bpp)
-The fix_png value makes it ignore out of bound palette indices.
+The fix_png value works as described in struct LodePNGDecoderSettings.
 Note: for 16-bit per channel colors, uses big endian format like PNG does.
 */
 unsigned lodepng_convert(unsigned char* out, const unsigned char* in,
-                         LodePNGColorMode* mode_out, LodePNGColorMode* mode_in,
+                         LodePNGColorMode* mode_out, const LodePNGColorMode* mode_in,
                          unsigned w, unsigned h, unsigned fix_png);
-
 
 #ifdef LODEPNG_COMPILE_DECODER
 /*
@@ -515,7 +514,16 @@ typedef struct LodePNGDecoderSettings
   LodePNGDecompressSettings zlibsettings; /*in here is the setting to ignore Adler32 checksums*/
 
   unsigned ignore_crc; /*ignore CRC checksums*/
-  unsigned fix_png; /*if 1, try to parse some broken PNG images, e.g. with out of bound palette.*/
+  /*
+  The fix_png setting, if 1, makes the decoder tolerant towards some PNG images
+  that do not correctly follow the PNG specification. This only supports errors
+  that are fixable, were found in images that are actually used on the web, and
+  are silently tolerated by other decoders as well. Currently only one such fix
+  is implemented: if a palette index is out of bounds given the palette size,
+  interpret it as opaque black.
+  By default this value is 0, which makes it stop with an error on such images.
+  */
+  unsigned fix_png;
   unsigned color_convert; /*whether to convert the PNG to the color type you want. Default: yes*/
 
 #ifdef LODEPNG_COMPILE_ANCILLARY_CHUNKS
@@ -570,6 +578,17 @@ typedef enum LodePNGAutoConvert
   LAC_AUTO_NO_NIBBLES_NO_PALETTE
 } LodePNGAutoConvert;
 
+
+/*
+Automatically chooses color type that gives smallest amount of bits in the
+output image, e.g. grey if there are only greyscale pixels, palette if there
+are less than 256 colors, ...
+The auto_convert parameter allows limiting it to not use palette, ...
+*/
+unsigned lodepng_auto_choose_color(LodePNGColorMode* mode_out,
+                                   const unsigned char* image, unsigned w, unsigned h,
+                                   const LodePNGColorMode* mode_in,
+                                   LodePNGAutoConvert auto_convert);
 
 /*Settings for the encoder.*/
 typedef struct LodePNGEncoderSettings
