@@ -98,12 +98,14 @@ Handle<Value> Tesseract::New(const Arguments &args)
 
 Handle<Value> Tesseract::GetImage(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
-    return obj->image_;
+    return scope.Close(obj->image_);
 }
 
 void Tesseract::SetImage(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     if (Image::HasInstance(value)) {
         if (!obj->image_.IsEmpty()) {
@@ -119,12 +121,14 @@ void Tesseract::SetImage(Local<String> prop, Local<Value> value, const AccessorI
 
 Handle<Value> Tesseract::GetRectangle(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
-    return obj->rectangle_;
+    return scope.Close(obj->rectangle_);
 }
 
 void Tesseract::SetRectangle(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     Local<Object> rect = value->ToObject();
     if (value->IsObject()) {
@@ -229,12 +233,14 @@ void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const Acc
 
 Handle<Value> Tesseract::GetSymbolWhitelist(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
-    return String::New(obj->api_.GetStringVariable("tessedit_char_whitelist"));
+    return scope.Close(String::New(obj->api_.GetStringVariable("tessedit_char_whitelist")));
 }
 
 void Tesseract::SetSymbolWhitelist(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     if (value->IsString()) {
         String::AsciiValue whitelist(value);

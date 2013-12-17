@@ -181,12 +181,14 @@ Handle<Value> ZXing::New(const Arguments &args)
 
 Handle<Value> ZXing::GetImage(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    return obj->image_;
+    return scope.Close(obj->image_);
 }
 
 void ZXing::SetImage(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
+    HandleScope scope;
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
     if (Image::HasInstance(value)) {
         if (!obj->image_.IsEmpty()) {
@@ -213,6 +215,7 @@ Handle<Value> ZXing::GetFormats(Local<String> prop, const AccessorInfo &info)
 
 void ZXing::SetFormats(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
+    HandleScope scope;
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
     if (value->IsObject()) {
         Local<Object> format = value->ToObject();
@@ -231,12 +234,14 @@ void ZXing::SetFormats(Local<String> prop, Local<Value> value, const AccessorInf
 
 Handle<Value> ZXing::GetTryHarder(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    return Boolean::New(obj->hints_.getTryHarder());
+    return scope.Close(Boolean::New(obj->hints_.getTryHarder()));
 }
 
 void ZXing::SetTryHarder(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
+    HandleScope scope;
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
     if (value->IsBoolean()) {
         obj->hints_.setTryHarder(value->BooleanValue());

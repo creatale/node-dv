@@ -371,20 +371,23 @@ Handle<Value> Image::New(const Arguments &args)
 
 Handle<Value> Image::GetWidth(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(info.This());
-    return Number::New(obj->pix_->w);
+    return scope.Close(Number::New(obj->pix_->w));
 }
 
 Handle<Value> Image::GetHeight(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(info.This());
-    return Number::New(obj->pix_->h);
+    return scope.Close(Number::New(obj->pix_->h));
 }
 
 Handle<Value> Image::GetDepth(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(info.This());
-    return Number::New(obj->pix_->d);
+    return scope.Close(Number::New(obj->pix_->d));
 }
 
 Handle<Value> Image::Invert(const Arguments &args)
@@ -678,6 +681,7 @@ Handle<Value> Image::Projection(const Arguments &args)
 
 Handle<Value> Image::SetMasked(const Arguments &args)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (Image::HasInstance(args[0]) && args[1]->IsNumber()) {
         Pix *mask = Image::Pixels(args[0]->ToObject());
@@ -693,6 +697,7 @@ Handle<Value> Image::SetMasked(const Arguments &args)
 
 Handle<Value> Image::ApplyCurve(const Arguments &args)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsArray() &&
             args[0]->ToObject()->Get(String::New("length"))->Uint32Value() == 256) {
@@ -1132,6 +1137,7 @@ Handle<Value> Image::ClearBox(const Arguments &args)
 
 Handle<Value> Image::FillBox(const Arguments &args)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     int boxEnd;
     BOX *box = toBox(args, 0, &boxEnd);
@@ -1183,6 +1189,7 @@ Handle<Value> Image::FillBox(const Arguments &args)
 
 Handle<Value> Image::DrawBox(const Arguments &args)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     int boxEnd;
     BOX *box = toBox(args, 0, &boxEnd);
@@ -1238,6 +1245,7 @@ Handle<Value> Image::DrawBox(const Arguments &args)
 
 Handle<Value> Image::DrawImage(const Arguments &args)
 {
+    HandleScope scope;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     int boxEnd;
     BOX *box = toBox(args, 1, &boxEnd);
@@ -1257,6 +1265,7 @@ Handle<Value> Image::DrawImage(const Arguments &args)
 
 Handle<Value> Image::ToBuffer(const Arguments &args)
 {
+    HandleScope scope;
     const int FORMAT_RAW = 0;
     const int FORMAT_PNG = 1;
     const int FORMAT_JPG = 2;
