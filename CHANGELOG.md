@@ -1,3 +1,9 @@
+## v1.6.0 (December 17, 2013)
+- Added Image#projection() and Image#fillBox.
+- Update ZXing to 2.3.0.
+- Update LodePNG to 20131115.
+- Fixed several issues of unfreeable memory/leaks.
+
 ## v1.5.1 and v1.5.2 (October 24, 2013)
 
 - Fixed Tesseract crashes related to rectangles and best first search.
