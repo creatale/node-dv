@@ -107,13 +107,17 @@ void Tesseract::SetImage(Local<String> prop, Local<Value> value, const AccessorI
 {
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
-    if (Image::HasInstance(value)) {
+    if (Image::HasInstance(value) || value->IsNull()) {
         if (!obj->image_.IsEmpty()) {
             obj->image_.Dispose();
             obj->image_.Clear();
         }
-        obj->image_ = Persistent<Object>::New(value->ToObject());
-        obj->api_.SetImage(Image::Pixels(obj->image_));
+        if (!value->IsNull()) {
+            obj->image_ = Persistent<Object>::New(value->ToObject());
+            obj->api_.SetImage(Image::Pixels(obj->image_));
+        } else {
+            obj->api_.Clear();
+        }
     } else {
         THROW(TypeError, "value must be of type Image");
     }
@@ -158,6 +162,7 @@ void Tesseract::SetRectangle(Local<String> prop, Local<Value> value, const Acces
 
 Handle<Value> Tesseract::GetPageSegMode(Local<String> prop, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     switch (obj->api_.GetPageSegMode()) {
     case tesseract::PSM_OSD_ONLY:
@@ -193,6 +198,7 @@ Handle<Value> Tesseract::GetPageSegMode(Local<String> prop, const AccessorInfo &
 
 void Tesseract::SetPageSegMode(Local<String> prop, Local<Value> value, const AccessorInfo &info)
 {
+    HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     String::AsciiValue pageSegMode(value);
     if (strcmp("osd_only", *pageSegMode) == 0) {
@@ -371,6 +377,7 @@ Tesseract::~Tesseract()
 
 Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, const Arguments &args)
 {
+    HandleScope scope;
     bool recognize = true;
     if (args.Length() >= 1 && args[0]->IsBoolean()) {
         recognize = args[0]->BooleanValue();
@@ -386,7 +393,7 @@ Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, con
     }
     Local<Array> results = Array::New();
     if (it == NULL) {
-        return results;
+        return scope.Close(results);
     }
     int index = 0;
     do {
@@ -442,5 +449,5 @@ Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, con
         results->Set(index++, result);
     } while (it->Next(level));
     delete it;
-    return results;
+    return scope.Close(results);
 }

@@ -167,8 +167,7 @@ bool Image::HasInstance(Handle<Value> val)
     if (!val->IsObject()) {
         return false;
     }
-    Local<Object> obj = val->ToObject();
-    return constructor_template->HasInstance(obj);
+    return constructor_template->HasInstance(val->ToObject());
 }
 
 Pix *Image::Pixels(Handle<Object> obj)
@@ -1414,13 +1413,13 @@ Handle<Value> Image::ToBuffer(const Arguments &args)
         return THROW(Error, msg.str().c_str());
     }
     if (formatInt == FORMAT_PNG) {
-        return Buffer::New(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_;
+        return scope.Close(Buffer::New(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_);
     } else if (formatInt == FORMAT_JPG) {
         Handle<Value> buffer = Buffer::New(jpgData, jpgDataSize)->handle_;
         free(jpgData);
-        return buffer;
+        return scope.Close(buffer);
     } else {
-        return Buffer::New(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_;
+        return scope.Close(Buffer::New(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_);
     }
 }
 

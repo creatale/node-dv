@@ -10,13 +10,17 @@ describe('ZXing', function(){
         this.barcode2 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode2.png'));
         this.barcode3 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode3.png'));
     })
-    it('should have no image set', function(){
+    it('should have no #image set', function(){
         should.not.exist(this.zxing.image);
     })
-    it('should have formats set', function(){
+    it('should set #image to null', function(){
+        this.zxing.image = null;
+        should.not.exist(this.zxing.image);
+    })
+    it('should have #formats set', function(){
         should.exist(this.zxing.formats);
     })
-    it('should have tryHarder', function(){
+    it('should have #tryHarder', function(){
         should.exist(this.zxing.tryHarder);
     })
     describe('#findCode()', function(){

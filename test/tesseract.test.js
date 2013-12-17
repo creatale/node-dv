@@ -41,6 +41,10 @@ describe('Tesseract', function(){
     it('should #clearAdaptiveClassifier()', function(){
         this.tesseract.clearAdaptiveClassifier();
     })
+    it('should set #image to null', function(){
+        this.tesseract.image = null;
+        this.tesseract.image = this.textPage300;
+    })
     it('should set #image', function(){
         this.tesseract.image = this.textPage300;
     })

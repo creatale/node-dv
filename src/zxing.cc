@@ -190,12 +190,14 @@ void ZXing::SetImage(Local<String> prop, Local<Value> value, const AccessorInfo 
 {
     HandleScope scope;
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    if (Image::HasInstance(value)) {
+    if (Image::HasInstance(value) || value->IsNull()) {
         if (!obj->image_.IsEmpty()) {
             obj->image_.Dispose();
             obj->image_.Clear();
         }
-        obj->image_ = Persistent<Object>::New(value->ToObject());
+        if (!value->IsNull()) {
+            obj->image_ = Persistent<Object>::New(value->ToObject());
+        }
     } else {
         THROW(TypeError, "value must be of type Image");
     }
