@@ -1,3 +1,6 @@
+## v1.6.1 (January 8, 2014)
+- Fixed reporting too little memory consumption to V8.
+
 ## v1.6.0 (December 17, 2013)
 - Added Image#projection() and Image#fillBox.
 - Update ZXing to 2.3.0.
