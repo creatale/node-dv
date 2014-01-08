@@ -274,6 +274,9 @@ Handle<Value> Image::New(Pix *pix)
     Local<Object> instance = constructor_template->GetFunction()->NewInstance();
     Image *obj = ObjectWrap::Unwrap<Image>(instance);
     obj->pix_ = pix;
+    if (obj->pix_) {
+        V8::AdjustAmountOfExternalAllocatedMemory(obj->size());
+    }
     return scope.Close(instance);
 }
 
