@@ -1,4 +1,4 @@
-# DocumentVision
+# DocumentVision [![Build Status](https://travis-ci.org/creatale/node-dv.png)](https://travis-ci.org/creatale/node-dv) [![devDependency Status](https://david-dm.org/creatale/node-dv/dev-status.png?theme=shields.io)](https://david-dm.org/creatale/node-dv#info=devDependencies)
 
 DocumentVision is a [node.js](http://nodejs.org) library for processing and understanding scanned documents.
 
