@@ -7,11 +7,11 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 - Image loading using [jpeg-compressor](http://code.google.com/p/jpeg-compressor/), [LodePNG](http://lodev.org/lodepng/) and pixel buffers
 - Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69)
 - OCR using [Tesseract](http://code.google.com/p/tesseract-ocr/) (Version 3.02, SVN r866)
-- OMR for Barcodes using [ZXing](http://code.google.com/p/zxing/) (Version 2.3.0)
+- OMR for Barcodes using [ZXing](https://github.com/zxing/zxing) (Version 2.3.0)
 
 ## Installation
 
-	[sudo] npm install [-g] dv
+[![npm install dv](https://nodei.co/npm/dv.png?compact=true)](https://nodei.co/npm/dv/)
 
 ## Quick Start
 
