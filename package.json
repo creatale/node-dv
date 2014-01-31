@@ -16,6 +16,9 @@
   },
   "author": "Christoph Schulz <christoph.schulz@creatale.de>",
   "main": "./lib/dv",
+  "scripts": {
+    "test": "mocha test"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/creatale/node-dv.git"
