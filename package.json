@@ -6,6 +6,8 @@
     "graphics",
     "vision",
     "image",
+    "barcode",
+    "ocr",
     "leptonica",
     "tesseract",
     "zxing"
@@ -16,12 +18,12 @@
   },
   "author": "Christoph Schulz <christoph.schulz@creatale.de>",
   "main": "./lib/dv",
-  "scripts": {
-    "test": "mocha test"
-  },
   "repository": {
     "type": "git",
     "url": "git://github.com/creatale/node-dv.git"
+  },
+  "scripts": {
+    "test": "mocha test"
   },
   "dependencies": {
     "dv.data": "=1.2.1"
