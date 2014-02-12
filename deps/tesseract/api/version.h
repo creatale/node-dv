@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////
 // File:        version.h
-// Description: define version identifier
+// Description: define version identifier for Windows
 // Author:      zdenop@gmail.com
 // Created:     Fri Nov 19 21:05:06 CET 2010
 //
@@ -17,9 +17,9 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef API_VERSION_H_
-#define API_VERSION_H_
+#ifndef           VS2008_PORT_VERSION_H_
+#define           VS2008_PORT_VERSION_H_
 
-#define VERSION "3.02"
+#define VERSION "3.03"
 
-#endif // API_VERSION_H_
+#endif  // VS2008_PORT_VERSION_H_
