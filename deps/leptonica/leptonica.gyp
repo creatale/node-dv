@@ -171,9 +171,8 @@
         'src/webpio.c',
         'src/webpiostub.c',
         'src/writefile.c',
-        'src/xtractprotos.c',
         'src/zlibmem.c',
-        'src/zlibmemstub.c'
+        'src/zlibmemstub.c',
       ],
     },
   ]
