@@ -1,3 +1,6 @@
+## v1.6.2 (May 25, 2014)
+- `npm install` removes the build directy after install to free up space.
+
 ## v1.6.1 (January 8, 2014)
 - Fixed reporting too little memory consumption to V8.
 
