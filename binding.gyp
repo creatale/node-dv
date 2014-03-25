@@ -58,8 +58,19 @@
               },
             },
           }
-        ]
-      ]
+        ],
+      ],
     },
-  ]
+    {
+      "target_name": "dvBinding_post",
+      "type": "none",
+      "dependencies": [ "dvBinding" ],
+      "copies": [
+        {
+          "files": [ "<(PRODUCT_DIR)/dvBinding.node" ],
+          "destination": "./lib"
+        }
+      ],
+    },
+  ],
 }
