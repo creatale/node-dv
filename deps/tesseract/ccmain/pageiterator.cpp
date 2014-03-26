@@ -546,14 +546,15 @@ void PageIterator::BeginWord(int offset) {
     // Recognition has been done, so we are using the box_word, which
     // is already baseline denormalized.
     word_length_ = word_res->best_choice->length();
-    ASSERT_HOST(word_res->box_word != NULL);
-    if (word_res->box_word->length() != word_length_) {
-      tprintf("Corrupted word! best_choice[len=%d] = %s, box_word[len=%d]: ",
-              word_length_, word_res->best_choice->unichar_string().string(),
-              word_res->box_word->length());
-      word_res->box_word->bounding_box().print();
+    if (word_res->box_word != NULL) {
+      if (word_res->box_word->length() != word_length_) {
+        tprintf("Corrupted word! best_choice[len=%d] = %s, box_word[len=%d]: ",
+                word_length_, word_res->best_choice->unichar_string().string(),
+                word_res->box_word->length());
+        word_res->box_word->bounding_box().print();
+      }
+      ASSERT_HOST(word_res->box_word->length() == word_length_);
     }
-    ASSERT_HOST(word_res->box_word->length() == word_length_);
     word_ = NULL;
     // We will be iterating the box_word.
     if (cblob_it_ != NULL) {
