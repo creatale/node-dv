@@ -53,6 +53,28 @@ describe('Tesseract', function(){
         this.tesseract.symbolWhitelist.should.equal('0123456789');
         this.tesseract.symbolWhitelist = '';
     })
+    it('should set/get variables', function(){
+        var variables = [
+            "tessedit_bigram_debug",
+            "tessedit_redo_xheight",
+            "min_orientation_margin",
+            "tessedit_char_blacklist",
+            "tessedit_bigram_debug",
+            "tessedit_fix_hyphens",
+            "tessedit_adaption_debug",
+            "quality_outline_pc",
+            "numeric_punctuation",
+        ];
+        for (var i = 0; i < variables.length; i++) {
+            var value = this.tesseract[variables[i]];
+            this.tesseract[variables[i]].should.exist;
+            this.tesseract[variables[i]] = value;
+            this.tesseract[variables[i]].should.equal(value);
+        }
+        should.exist(this.tesseract.words_default_fixed_space);
+        should.exist(this.tesseract.words_default_prop_nonspace);
+        should.not.exist(this.tesseract.none_existing_variable);
+    })
     it('should #findRegions()', function(){
         writeImageBoxes('textpage300-regions.png', this.textPage300, this.tesseract.findRegions());
     })
@@ -92,5 +114,28 @@ describe('Tesseract', function(){
         var result = this.tesseract.findText('plain', true);
         compareTextParagraph(result.text);
         result.confidence.should.be.above(90);
+    })
+    it('should #findText(\'unlv\')', function(){
+        this.tesseract.image = this.textPage300;
+        this.tesseract.findText('unlv').should.have.length.above(100);
+    })
+    it('should #findText(\'unlv\', true)', function(){
+        this.tesseract.image = this.textPage300;
+        var result = this.tesseract.findText('unlv', true);
+        result.text.should.have.length.above(100);
+        result.confidence.should.be.above(90);
+    })
+    it('should #findText(\'hocr\', 0)', function(){
+        this.tesseract.image = this.textPage300;
+        this.tesseract.findText('hocr', 0).should.have.length.above(100);
+    })
+    it('should #findText(\'box\', 0)', function(){
+        this.tesseract.image = this.textPage300;
+        this.tesseract.findText('box', 0).should.have.length.above(100);
+    })
+    it('should generate hOCR without recognition', function(){
+        this.tesseract.image = this.textPage300;
+        this.tesseract.tessedit_make_boxes_from_boxes = true;
+        this.tesseract.findText('hocr', 0);
     })
 })
