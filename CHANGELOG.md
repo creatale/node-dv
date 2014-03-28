@@ -1,3 +1,10 @@
+## v1.7.0 (May 28, 2014)
+- Added Tesseract#&lt;variable&gt; accessor
+- Fixed assert (see [Tesseract r878](http://code.google.com/p/tesseract-ocr/source/detail?r=878))
+- Fixed wrong error message for  Tesseract#findText() 
+
+Thanks to: Huang Xin
+
 ## v1.6.2 (May 25, 2014)
 - `npm install` removes the build directy after install to free up space.
 
