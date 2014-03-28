@@ -28,9 +28,9 @@ using namespace v8;
 
 extern "C" void init(Handle<Object> target) 
 {
-    Image::Init(target);
-    Tesseract::Init(target);
-    ZXing::Init(target);
+    binding::Image::Init(target);
+    binding::Tesseract::Init(target);
+    binding::ZXing::Init(target);
 }
 
 NODE_MODULE(dvBinding, init)

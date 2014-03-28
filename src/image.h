@@ -26,6 +26,8 @@
 #include <node.h>
 #include <allheaders.h>
 
+namespace binding {
+
 class Image : public node::ObjectWrap
 {
 public:
@@ -94,5 +96,7 @@ private:
 
     Pix *pix_;
 };
+
+}
 
 #endif

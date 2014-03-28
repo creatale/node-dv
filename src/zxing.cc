@@ -36,6 +36,8 @@
 using namespace v8;
 using namespace node;
 
+namespace binding {
+
 class PixSource : public zxing::LuminanceSource
 {
 public:
@@ -302,4 +304,6 @@ ZXing::ZXing()
 
 ZXing::~ZXing()
 {
+}
+
 }

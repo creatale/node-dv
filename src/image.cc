@@ -32,6 +32,8 @@
 using namespace v8;
 using namespace node;
 
+namespace binding {
+
 Persistent<FunctionTemplate> Image::constructor_template;
 
 PIX *pixFromSource(uint8_t *pixSource, int32_t width, int32_t height, int32_t depth, int32_t targetDepth)
@@ -1445,4 +1447,6 @@ Image::~Image()
 int Image::size() const
 {
     return pix_->h * pix_->wpl * sizeof(uint32_t);
+}
+
 }

@@ -19,9 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include "tesseractclass.h"
 #include "tesseract.h"
-#include "params.h"
 #include "image.h"
 #include "util.h"
 #include <sstream>
@@ -29,9 +27,14 @@
 #include <cmath>
 #include <strngs.h>
 #include <resultiterator.h>
+#include <image.h>
+#include <tesseractclass.h>
+#include <params.h>
 
 using namespace v8;
 using namespace node;
+
+namespace binding {
 
 void Tesseract::Init(Handle<Object> target)
 {
@@ -526,4 +529,6 @@ Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, con
     } while (it->Next(level));
     delete it;
     return scope.Close(results);
+}
+
 }

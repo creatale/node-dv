@@ -26,6 +26,8 @@
 #include <node.h>
 #include <baseapi.h>
 
+namespace binding {
+
 class Tesseract : public node::ObjectWrap
 {
 public:
@@ -69,5 +71,7 @@ private:
     v8::Persistent<v8::Object> image_;
     v8::Persistent<v8::Object> rectangle_;
 };
+
+}
 
 #endif

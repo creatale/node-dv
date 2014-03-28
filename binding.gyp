@@ -48,6 +48,13 @@
         ],
         ['OS=="win"',
           {
+            'defines': [
+              '__MSW32__',
+              '_CRT_SECURE_NO_WARNINGS',
+            ],
+            'include_dirs': [
+              'deps/tesseract/port',
+            ],
             'configurations': {
               'Release': {
                 'msvs_settings': {

@@ -27,6 +27,8 @@
 #include <zxing/DecodeHints.h>
 #include <zxing/MultiFormatReader.h>
 
+namespace binding {
+
 class ZXing : public node::ObjectWrap
 {
 public:
@@ -56,5 +58,7 @@ private:
     zxing::DecodeHints hints_;
     zxing::Ref<zxing::MultiFormatReader> reader_;
 };
+
+}
 
 #endif
