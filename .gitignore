@@ -2,7 +2,9 @@
 [Tt]humbs.db
 
 *~
+*.bak
 *.log
+core
 
 build
 lib/*.node
