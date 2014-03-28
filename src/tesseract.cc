@@ -411,6 +411,7 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
             withConfidence = args[2]->BooleanValue();
         }
         const char *text = NULL;
+        bool modeValid = true;
         if (strcmp("plain", *mode) == 0) {
             text = obj->api_.GetUTF8Text();
         } else if (strcmp("unlv", *mode) == 0) {
@@ -419,20 +420,23 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
             text = obj->api_.GetHOCRText(args[1]->Int32Value());
         } else if (strcmp("box", *mode) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
             text = obj->api_.GetBoxText(args[1]->Int32Value());
-        }
-        if (!text) {
-            return THROW(Error, "Internal tesseract error");
-        }
-        if (withConfidence) {
-            Handle<Object> result = Object::New();
-            result->Set(String::NewSymbol("text"), String::New(text));
-            // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
-            result->Set(String::NewSymbol("confidence"), Number::New(obj->api_.MeanTextConf()));
-            return scope.Close(result);
         } else {
-            Local<String> textString = String::New(text);
-            // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
-            return scope.Close(textString);
+            modeValid = false;
+        }
+        if (modeValid) {
+            if (!text) {
+                return THROW(Error, "Internal tesseract error");
+            } else if (withConfidence) {
+                Handle<Object> result = Object::New();
+                result->Set(String::NewSymbol("text"), String::New(text));
+                // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
+                result->Set(String::NewSymbol("confidence"), Number::New(obj->api_.MeanTextConf()));
+                return scope.Close(result);
+            } else {
+                Local<String> textString = String::New(text);
+                // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
+                return scope.Close(textString);
+            }
         }
     }
     return THROW(TypeError, "cannot convert argument list to "
