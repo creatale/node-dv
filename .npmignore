@@ -2,7 +2,6 @@
 *.bak
 *.log
 .travis.yml
-core
 
 build/
 lib/*.node
