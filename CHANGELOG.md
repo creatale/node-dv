@@ -1,3 +1,6 @@
+## v1.7.1 (May 29, 2014)
+- Fix broken .npmignore
+
 ## v1.7.0 (May 28, 2014)
 - Added Tesseract#&lt;variable&gt; accessor
 - Fixed assert (see [Tesseract r878](http://code.google.com/p/tesseract-ocr/source/detail?r=878))
