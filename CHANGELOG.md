@@ -1,14 +1,17 @@
-## v1.7.1 (May 29, 2014)
+## v1.7.2 (May 27, 2014)
+- Fix encoding issues for Tesseract variables
+
+## v1.7.1 (March 29, 2014)
 - Fix broken .npmignore
 
-## v1.7.0 (May 28, 2014)
+## v1.7.0 (March 28, 2014)
 - Added Tesseract#&lt;variable&gt; accessor
 - Fixed assert (see [Tesseract r878](http://code.google.com/p/tesseract-ocr/source/detail?r=878))
 - Fixed wrong error message for  Tesseract#findText() 
 
 Thanks to: Huang Xin
 
-## v1.6.2 (May 25, 2014)
+## v1.6.2 (March 25, 2014)
 - `npm install` removes the build directy after install to free up space.
 
 ## v1.6.1 (January 8, 2014)
