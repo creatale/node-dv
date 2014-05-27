@@ -45,7 +45,7 @@ void Tesseract::Init(Handle<Object> target)
     proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
     proto->SetAccessor(String::NewSymbol("rectangle"), GetRectangle, SetRectangle);
     proto->SetAccessor(String::NewSymbol("pageSegMode"), GetPageSegMode, SetPageSegMode);
-    proto->SetAccessor(String::NewSymbol("symbolWhitelist"), GetSymbolWhitelist, SetSymbolWhitelist);
+    proto->SetAccessor(String::NewSymbol("symbolWhitelist"), GetSymbolWhitelist, SetSymbolWhitelist); //TODO: remove (deprecated).
     tesseract::Tesseract* tesseract_ = new tesseract::Tesseract;
     GenericVector<tesseract::IntParam *> global_int_vec = GlobalParams()->int_params;
     GenericVector<tesseract::IntParam *> member_int_vec = tesseract_->params()->int_params;
@@ -279,7 +279,7 @@ void Tesseract::SetSymbolWhitelist(Local<String> prop, Local<Value> value, const
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     if (value->IsString()) {
-        String::AsciiValue whitelist(value);
+        String::Utf8Value whitelist(value);
         obj->api_.SetVariable("tessedit_char_whitelist", *whitelist);
     } else {
         THROW(TypeError, "value must be of type string");
@@ -291,7 +291,7 @@ void Tesseract::SetVariable(Local<String> prop, Local<Value> value, const Access
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     String::AsciiValue name(prop);
-    String::AsciiValue val(value);
+    String::Utf8Value val(value);
     obj->api_.SetVariable(*name, *val);
 }
 

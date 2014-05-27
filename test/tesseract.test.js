@@ -48,11 +48,6 @@ describe('Tesseract', function(){
     it('should set #image', function(){
         this.tesseract.image = this.textPage300;
     })
-    it('should set/get #symbolWhitelist', function(){
-        this.tesseract.symbolWhitelist = '0123456789';
-        this.tesseract.symbolWhitelist.should.equal('0123456789');
-        this.tesseract.symbolWhitelist = '';
-    })
     it('should set/get variables', function(){
         var variables = [
             "tessedit_bigram_debug",
@@ -74,6 +69,11 @@ describe('Tesseract', function(){
         should.exist(this.tesseract.words_default_fixed_space);
         should.exist(this.tesseract.words_default_prop_nonspace);
         should.not.exist(this.tesseract.none_existing_variable);
+    })
+    it('should set/get a whitelist', function(){
+        this.tesseract.tessedit_char_whitelist = 'äöü123456789';
+        this.tesseract.tessedit_char_whitelist.should.equal('äöü123456789');
+        this.tesseract.tessedit_char_whitelist = '';
     })
     it('should #findRegions()', function(){
         writeImageBoxes('textpage300-regions.png', this.textPage300, this.tesseract.findRegions());
