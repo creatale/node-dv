@@ -15,7 +15,7 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 ## Quick Start
 
-Once you've installed, download [that image](https://github.com/creatale/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snipped to recognize text from your image:
+Once you've installed, download [that image](https://github.com/creatale/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snippet to recognize text from your image:
 
 ```javascript
 var dv = require('dv');
