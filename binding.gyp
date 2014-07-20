@@ -8,6 +8,8 @@
         'deps/lodepng/lodepng.gyp:lodepng',
         'deps/tesseract/tesseract.gyp:libtesseract',
         'deps/zxing/zxing.gyp:libzxing',
+        'deps/opencv/opencv.gyp:libopencv',
+        'deps/lswms/lswms.gyp:liblswms',
       ],
       'include_dirs': [
         'deps/jpg',
@@ -25,7 +27,12 @@
         'deps/tesseract/viewer',
         'deps/tesseract/wordrec',
         'deps/zxing/core/src',
-      ],
+        'deps/opencv/include',
+        'deps/opencv/modules/core/include',
+        'deps/opencv/modules/dynamicuda/include',
+        'deps/opencv/modules/imgproc/include',
+        'deps/lswms',
+       ],
       'sources': [
         'src/image.cc',
         'src/tesseract.cc',

@@ -137,6 +137,15 @@ describe('Image', function(){
         skew.angle.should.equal(-0.703125);
         skew.confidence.should.equal(4.957831859588623);
     })
+    it('should #lineSegments(), #drawLine()', function(){
+        var segments = this.gray.lineSegments(0, false);
+        var canvas = new dv.Image(this.gray);
+        for (var i in segments) {
+            var segment = segments[i];
+            canvas.drawLine(segment.p1, segment.p2, 2);
+        }
+        writeImage('gray-line-segments.png', canvas);
+    })
     it('should #connectedComponents()', function(){
         var binaryImage = this.textpage.otsuAdaptiveThreshold(32, 32, 0, 0, 0.1).image;
         var boxes = binaryImage.connectedComponents(4);

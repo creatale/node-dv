@@ -28,6 +28,8 @@
 #include <lodepng.h>
 #include <jpgd.h>
 #include <jpge.h>
+#include <opencv2/core/core.hpp>
+#include <LSWMS.h>
 
 using namespace v8;
 using namespace node;
@@ -164,6 +166,19 @@ void pixProjection(std::vector<uint32_t> &values, PIX *pix, ProjectionMode mode)
     }
 }
 
+cv::Mat pix8ToMat(PIX *pix8)
+{
+    cv::Mat mat(cv::Size(pix8->w, pix8->h), CV_8UC1);
+    uint32_t *line = pix8->data;
+    for (uint32_t y = 0; y < pix8->h; ++y) {
+        for (uint32_t x = 0; x < pix8->w; ++x) {
+            mat.at<uchar>(y, x) = GET_DATA_BYTE(line, x);
+        }
+        line += pix8->wpl;
+    }
+    return mat;
+}
+
 bool Image::HasInstance(Handle<Value> val)
 {
     if (!val->IsObject()) {
@@ -250,6 +265,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(MaxDynamicRange)->GetFunction());
     proto->Set(String::NewSymbol("otsuAdaptiveThreshold"),
                FunctionTemplate::New(OtsuAdaptiveThreshold)->GetFunction());
+    proto->Set(String::NewSymbol("lineSegments"),
+               FunctionTemplate::New(LineSegments)->GetFunction());
     proto->Set(String::NewSymbol("findSkew"),
                FunctionTemplate::New(FindSkew)->GetFunction());
     proto->Set(String::NewSymbol("connectedComponents"),
@@ -264,6 +281,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(DrawBox)->GetFunction());
     proto->Set(String::NewSymbol("drawImage"),
                FunctionTemplate::New(DrawImage)->GetFunction());
+    proto->Set(String::NewSymbol("drawLine"),
+               FunctionTemplate::New(DrawLine)->GetFunction());
     proto->Set(String::NewSymbol("toBuffer"),
                FunctionTemplate::New(ToBuffer)->GetFunction());
     target->Set(String::NewSymbol("Image"),
@@ -1042,6 +1061,41 @@ Handle<Value> Image::OtsuAdaptiveThreshold(const Arguments &args)
     }
 }
 
+Handle<Value> Image::LineSegments(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsInt32() && args[1]->IsBoolean()) {
+        if (obj->pix_->d != 8) {
+            return THROW(TypeError, "Not a 8bpp Image");
+        }
+        int numMaxLSegs = args[0]->Int32Value();
+        bool useWMS = args[0]->BooleanValue();
+        LSWMS lswms(cv::Size(obj->pix_->w, obj->pix_->h), 3, numMaxLSegs, useWMS, false);
+        cv::Mat img(pix8ToMat(obj->pix_));
+        std::vector<LSWMS::LSEG> lSegs;
+        std::vector<double> errors;
+        lswms.run(img, lSegs, errors);
+        Local<Array> results = Array::New();
+        for(size_t i = 0; i < lSegs.size(); i++) {
+            Handle<Object> p1 = Object::New();
+            p1->Set(String::NewSymbol("x"), Int32::New(lSegs[i][0].x));
+            p1->Set(String::NewSymbol("y"), Int32::New(lSegs[i][0].y));
+            Handle<Object> p2 = Object::New();
+            p2->Set(String::NewSymbol("x"), Int32::New(lSegs[i][1].x));
+            p2->Set(String::NewSymbol("y"), Int32::New(lSegs[i][1].y));
+            Handle<Object> result = Object::New();
+            result->Set(String::NewSymbol("p1"), p1);
+            result->Set(String::NewSymbol("p2"), p2);
+            result->Set(String::NewSymbol("error"), Number::New(errors[i]));
+            results->Set(i, result);
+        }
+        return scope.Close(results);
+    } else {
+        return THROW(TypeError, "expected (maxLSegs: Int32, useWeightedMeanShift: Boolean)");
+    }
+}
+
 Handle<Value> Image::FindSkew(const Arguments &args)
 {
     HandleScope scope;
@@ -1244,6 +1298,28 @@ Handle<Value> Image::DrawBox(const Arguments &args)
         return THROW(TypeError, "expected (box: Box, borderWidth: Int32, "
                      "op: String) or (box: Box, borderWidth: Int32, r: Int32, "
                      "g: Int32, b: Int32, [frac: Number])");
+    }
+}
+
+Handle<Value> Image::DrawLine(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsObject() && args[1]->IsObject() && args[2]->IsInt32()) {
+        Handle<Object> p1 = args[0]->ToObject();
+        Handle<Object> p2 = args[1]->ToObject();
+        l_int32 x1 = round(p1->Get(String::NewSymbol("x"))->ToNumber()->Value());
+        l_int32 y1 = round(p1->Get(String::NewSymbol("y"))->ToNumber()->Value());
+        l_int32 x2 = round(p2->Get(String::NewSymbol("x"))->ToNumber()->Value());
+        l_int32 y2 = round(p2->Get(String::NewSymbol("y"))->ToNumber()->Value());
+        l_int32 width = args[2]->Int32Value();
+        l_int32 error = pixRenderLine(obj->pix_, x1, y1, x2, y2, width, L_FLIP_PIXELS);
+        if (error) {
+            return THROW(TypeError, "error while drawing line");
+        }
+        return args.This();
+    } else {
+        return THROW(TypeError, "expected (p1: Point, p2: Point, width: Int32)");
     }
 }
 
