@@ -1,3 +1,8 @@
+## v1.8.0 (July 21, 2014)
+- Upgrade to Tesseract 3.03
+- Added Image#lineSegments()
+- Added Image#drawLine()
+
 ## v1.7.2 (May 27, 2014)
 - Fix encoding issues for Tesseract variables
 
