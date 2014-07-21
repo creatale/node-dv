@@ -31,5 +31,6 @@
 
 v8::Handle<v8::Object> createBox(Box* box);
 Box* toBox(const v8::Arguments &args, int start, int* end = 0);
+int toOp(v8::Local<v8::Value> value);
 
 #endif

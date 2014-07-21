@@ -27,9 +27,14 @@
 #include <cmath>
 #include <strngs.h>
 #include <resultiterator.h>
+#include <image.h>
+#include <tesseractclass.h>
+#include <params.h>
 
 using namespace v8;
 using namespace node;
+
+namespace binding {
 
 void Tesseract::Init(Handle<Object> target)
 {
@@ -40,7 +45,32 @@ void Tesseract::Init(Handle<Object> target)
     proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
     proto->SetAccessor(String::NewSymbol("rectangle"), GetRectangle, SetRectangle);
     proto->SetAccessor(String::NewSymbol("pageSegMode"), GetPageSegMode, SetPageSegMode);
-    proto->SetAccessor(String::NewSymbol("symbolWhitelist"), GetSymbolWhitelist, SetSymbolWhitelist);
+    proto->SetAccessor(String::NewSymbol("symbolWhitelist"), GetSymbolWhitelist, SetSymbolWhitelist); //TODO: remove (deprecated).
+    tesseract::Tesseract* tesseract_ = new tesseract::Tesseract;
+    GenericVector<tesseract::IntParam *> global_int_vec = GlobalParams()->int_params;
+    GenericVector<tesseract::IntParam *> member_int_vec = tesseract_->params()->int_params;
+    GenericVector<tesseract::BoolParam *> global_bool_vec = GlobalParams()->bool_params;
+    GenericVector<tesseract::BoolParam *> member_bool_vec = tesseract_->params()->bool_params;
+    GenericVector<tesseract::DoubleParam *> global_double_vec = GlobalParams()->double_params;
+    GenericVector<tesseract::DoubleParam *> member_double_vec = tesseract_->params()->double_params;
+    GenericVector<tesseract::StringParam *> global_string_vec = GlobalParams()->string_params;
+    GenericVector<tesseract::StringParam *> member_string_vec = tesseract_->params()->string_params;
+    for (int i = 0; i < global_int_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(global_int_vec[i]->name_str()), GetIntVariable, SetVariable);
+    for (int i = 0; i < member_int_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(member_int_vec[i]->name_str()), GetIntVariable, SetVariable);
+    for (int i = 0; i < global_bool_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(global_bool_vec[i]->name_str()), GetBoolVariable, SetVariable);
+    for (int i = 0; i < member_bool_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(member_bool_vec[i]->name_str()), GetBoolVariable, SetVariable);
+    for (int i = 0; i < global_double_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(global_double_vec[i]->name_str()), GetDoubleVariable, SetVariable);
+    for (int i = 0; i < member_double_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(member_double_vec[i]->name_str()), GetDoubleVariable, SetVariable);
+    for (int i = 0; i < global_string_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(global_string_vec[i]->name_str()), GetStringVariable, SetVariable);
+    for (int i = 0; i < member_string_vec.size(); ++i)
+        proto->SetAccessor(String::NewSymbol(member_string_vec[i]->name_str()), GetStringVariable, SetVariable);
     proto->Set(String::NewSymbol("clear"),
                FunctionTemplate::New(Clear)->GetFunction());
     proto->Set(String::NewSymbol("clearAdaptiveClassifier"),
@@ -249,11 +279,60 @@ void Tesseract::SetSymbolWhitelist(Local<String> prop, Local<Value> value, const
     HandleScope scope;
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
     if (value->IsString()) {
-        String::AsciiValue whitelist(value);
+        String::Utf8Value whitelist(value);
         obj->api_.SetVariable("tessedit_char_whitelist", *whitelist);
     } else {
         THROW(TypeError, "value must be of type string");
     }
+}
+
+void Tesseract::SetVariable(Local<String> prop, Local<Value> value, const AccessorInfo &info)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
+    String::AsciiValue name(prop);
+    String::Utf8Value val(value);
+    obj->api_.SetVariable(*name, *val);
+}
+
+Handle<Value> Tesseract::GetIntVariable(Local<String> prop, const AccessorInfo &info)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
+    String::AsciiValue name(prop);
+    int value;
+    return scope.Close(obj->api_.GetIntVariable(*name, &value) ? Number::New(value) : Null());
+}
+
+Handle<Value> Tesseract::GetBoolVariable(Local<String> prop, const AccessorInfo &info)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
+    String::AsciiValue name(prop);
+    bool value;
+    if (obj->api_.GetBoolVariable(*name, &value)) {
+        return scope.Close(Boolean::New(value));
+    } else {
+        return scope.Close(Null());
+    }
+}
+
+Handle<Value> Tesseract::GetDoubleVariable(Local<String> prop, const AccessorInfo &info)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
+    String::AsciiValue name(prop);
+    double value;
+    return scope.Close(obj->api_.GetDoubleVariable(*name, &value) ? Number::New(value) : Null());
+}
+
+Handle<Value> Tesseract::GetStringVariable(Local<String> prop, const AccessorInfo &info)
+{
+    HandleScope scope;
+    Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(info.This());
+    String::AsciiValue name(prop);
+    const char *p = obj->api_.GetStringVariable(*name);
+    return scope.Close((p != NULL) ? String::New(p) : Null());
 }
 
 Handle<Value> Tesseract::Clear(const Arguments &args)
@@ -332,6 +411,7 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
             withConfidence = args[2]->BooleanValue();
         }
         const char *text = NULL;
+        bool modeValid = true;
         if (strcmp("plain", *mode) == 0) {
             text = obj->api_.GetUTF8Text();
         } else if (strcmp("unlv", *mode) == 0) {
@@ -340,20 +420,23 @@ Handle<Value> Tesseract::FindText(const Arguments &args)
             text = obj->api_.GetHOCRText(args[1]->Int32Value());
         } else if (strcmp("box", *mode) == 0 && args.Length() == 2 && args[1]->IsInt32()) {
             text = obj->api_.GetBoxText(args[1]->Int32Value());
-        }
-        if (!text) {
-            return THROW(Error, "Internal tesseract error");
-        }
-        if (withConfidence) {
-            Handle<Object> result = Object::New();
-            result->Set(String::NewSymbol("text"), String::New(text));
-            // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
-            result->Set(String::NewSymbol("confidence"), Number::New(obj->api_.MeanTextConf()));
-            return scope.Close(result);
         } else {
-            Local<String> textString = String::New(text);
-            // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
-            return scope.Close(textString);
+            modeValid = false;
+        }
+        if (modeValid) {
+            if (!text) {
+                return THROW(Error, "Internal tesseract error");
+            } else if (withConfidence) {
+                Handle<Object> result = Object::New();
+                result->Set(String::NewSymbol("text"), String::New(text));
+                // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
+                result->Set(String::NewSymbol("confidence"), Number::New(obj->api_.MeanTextConf()));
+                return scope.Close(result);
+            } else {
+                Local<String> textString = String::New(text);
+                // Don't "delete[] text;": it breaks Tesseract 3.02 (documentation bug?)
+                return scope.Close(textString);
+            }
         }
     }
     return THROW(TypeError, "cannot convert argument list to "
@@ -450,4 +533,6 @@ Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, con
     } while (it->Next(level));
     delete it;
     return scope.Close(results);
+}
+
 }

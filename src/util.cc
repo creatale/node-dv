@@ -63,3 +63,19 @@ Box* toBox(const Arguments &args, int start, int* end)
         return 0;
     }
 }
+
+int toOp(v8::Local<v8::Value> value)
+{
+    int result  = L_FLIP_PIXELS;
+    String::AsciiValue op(value->ToString());
+    if (strcmp("set", *op) == 0) {
+        result = L_SET_PIXELS;
+    } else if (strcmp("clear", *op) == 0) {
+        result = L_CLEAR_PIXELS;
+    } else if (strcmp("flip", *op) == 0) {
+        result = L_FLIP_PIXELS;
+    } else {
+        result = -1;
+    }
+    return result;
+}

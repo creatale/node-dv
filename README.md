@@ -5,7 +5,8 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 ## Features
 
 - Image loading using [jpeg-compressor](http://code.google.com/p/jpeg-compressor/), [LodePNG](http://lodev.org/lodepng/) and pixel buffers
-- Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69)
+- Image manipulation using [Leptonica](http://www.leptonica.com/) (Version 1.69) and [OpenCV](http://opencv.org/) (Version 2.4.9)
+- Line Segment Detection using [LSWMS](http://sourceforge.net/projects/lswms/)
 - OCR using [Tesseract](http://code.google.com/p/tesseract-ocr/) (Version 3.02, SVN r866)
 - OMR for Barcodes using [ZXing](https://github.com/zxing/zxing) (Version 2.3.0)
 
@@ -15,7 +16,7 @@ DocumentVision is a [node.js](http://nodejs.org) library for processing and unde
 
 ## Quick Start
 
-Once you've installed, download [that image](https://github.com/creatale/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snipped to recognize text from your image:
+Once you've installed, download [that image](https://github.com/creatale/node-dv/blob/master/test/fixtures/textpage300.png). You can use any other image containing simple text at 300dpi or higher. Now run the following code snippet to recognize text from your image:
 
 ```javascript
 var dv = require('dv');
@@ -47,4 +48,5 @@ DocumentVision is maintained under the [Semantic Versioning](http://semver.org/)
 
 ## License
 
-Licensed under the incredibly [permissive](http://en.wikipedia.org/wiki/Permissive_free_software_licence) [MIT License](http://creativecommons.org/licenses/MIT/). Copyright &copy; 2012 Christoph Schulz.
+Licensed under the incredibly [permissive](http://en.wikipedia.org/wiki/Permissive_free_software_licence) [MIT License](http://creativecommons.org/licenses/MIT/). Copyright &copy; 2012-2014 Christoph Schulz. <br>
+Dependencies may be licensed diffrently.

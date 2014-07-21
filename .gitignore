@@ -1,8 +1,12 @@
-*.log
 .DS_Store
+[Tt]humbs.db
+
+*~
+*.bak
+*.log
 
 build
+lib/*.node
 node_modules
 test/fixtures_out/*.png
 test/fixtures_out/*.jpg
-

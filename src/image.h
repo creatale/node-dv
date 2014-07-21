@@ -26,6 +26,8 @@
 #include <node.h>
 #include <allheaders.h>
 
+namespace binding {
+
 class Image : public node::ObjectWrap
 {
 public:
@@ -78,12 +80,14 @@ private:
     static v8::Handle<v8::Value> Thin(const v8::Arguments& args);
     static v8::Handle<v8::Value> MaxDynamicRange(const v8::Arguments &args);
     static v8::Handle<v8::Value> OtsuAdaptiveThreshold(const v8::Arguments& args);
+    static v8::Handle<v8::Value> LineSegments(const v8::Arguments& args);
     static v8::Handle<v8::Value> FindSkew(const v8::Arguments& args);
     static v8::Handle<v8::Value> ConnectedComponents(const v8::Arguments& args);
     static v8::Handle<v8::Value> DistanceFunction(const v8::Arguments& args);
     static v8::Handle<v8::Value> ClearBox(const v8::Arguments& args);
     static v8::Handle<v8::Value> FillBox(const v8::Arguments &args);
     static v8::Handle<v8::Value> DrawBox(const v8::Arguments& args);
+    static v8::Handle<v8::Value> DrawLine(const v8::Arguments& args);
     static v8::Handle<v8::Value> DrawImage(const v8::Arguments& args);
     static v8::Handle<v8::Value> ToBuffer(const v8::Arguments& args);
 
@@ -94,5 +98,7 @@ private:
 
     Pix *pix_;
 };
+
+}
 
 #endif
