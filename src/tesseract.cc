@@ -27,7 +27,6 @@
 #include <cmath>
 #include <strngs.h>
 #include <resultiterator.h>
-#include <image.h>
 #include <tesseractclass.h>
 #include <params.h>
 
