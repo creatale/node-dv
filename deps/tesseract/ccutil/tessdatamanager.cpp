@@ -25,6 +25,7 @@
 
 #include <stdio.h>
 
+#include "helpers.h"
 #include "serialis.h"
 #include "strngs.h"
 #include "tprintf.h"
@@ -35,6 +36,7 @@ namespace tesseract {
 bool TessdataManager::Init(const char *data_file_name, int debug_level) {
   int i;
   debug_level_ = debug_level;
+  data_file_name_ = data_file_name;
   data_file_ = fopen(data_file_name, "rb");
   if (data_file_ == NULL) {
     tprintf("Error opening data file %s\n", data_file_name);
@@ -45,14 +47,15 @@ bool TessdataManager::Init(const char *data_file_name, int debug_level) {
   fread(&actual_tessdata_num_entries_, sizeof(inT32), 1, data_file_);
   swap_ = (actual_tessdata_num_entries_ > kMaxNumTessdataEntries);
   if (swap_) {
-    actual_tessdata_num_entries_ = reverse32(actual_tessdata_num_entries_);
+    ReverseN(&actual_tessdata_num_entries_,
+             sizeof(actual_tessdata_num_entries_));
   }
   ASSERT_HOST(actual_tessdata_num_entries_ <= TESSDATA_NUM_ENTRIES);
   fread(offset_table_, sizeof(inT64),
         actual_tessdata_num_entries_, data_file_);
   if (swap_) {
     for (i = 0 ; i < actual_tessdata_num_entries_; ++i) {
-      offset_table_[i] = reverse64(offset_table_[i]);
+      ReverseN(&offset_table_[i], sizeof(offset_table_[i]));
     }
   }
   if (debug_level_) {
@@ -187,8 +190,8 @@ bool TessdataManager::OverwriteComponents(
 
   // Open the files with the new components.
   for (i = 0; i < num_new_components; ++i) {
-    TessdataTypeFromFileName(component_filenames[i], &type, &text_file);
-    file_ptr[type] = fopen(component_filenames[i], "rb");
+    if (TessdataTypeFromFileName(component_filenames[i], &type, &text_file))
+      file_ptr[type] = fopen(component_filenames[i], "rb");
   }
 
   // Write updated data to the output traineddata file.
@@ -244,7 +247,7 @@ bool TessdataManager::ExtractToFile(const char *filename) {
 
   FILE *output_file = fopen(filename, "wb");
   if (output_file == NULL) {
-    tprintf("Error openning %s\n", filename);
+    tprintf("Error opening %s\n", filename);
     exit(1);
   }
   inT64 begin_offset = ftell(GetDataFilePtr());

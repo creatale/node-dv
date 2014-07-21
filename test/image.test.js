@@ -78,6 +78,7 @@ describe('Image', function(){
         this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
         writeImage('gray-arith-add.png', red.add(cyan));
         writeImage('gray-arith-subtract.png', red.subtract(cyan));
+        writeImage('color-arith-add.png', this.rgb.add(this.rgb));
     })
     it('should #convolve()', function(){
         writeImage('gray-convolve.png', this.gray.convolve(15, 15));

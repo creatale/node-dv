@@ -41,19 +41,15 @@ namespace tesseract {
 bool ParamUtils::ReadParamsFile(const char *file,
                                 SetParamConstraint constraint,
                                 ParamsVectors *member_params) {
-  char flag;                     // file flag
   inT16 nameoffset;              // offset for real name
   FILE *fp;                      // file pointer
                                  // iterators
 
   if (*file == PLUS) {
-    flag = PLUS;                 // file has flag
     nameoffset = 1;
   } else if (*file == MINUS) {
-    flag = MINUS;
     nameoffset = 1;
   } else {
-    flag = EQUAL;
     nameoffset = 0;
   }
 
@@ -62,8 +58,9 @@ bool ParamUtils::ReadParamsFile(const char *file,
     tprintf("read_params_file: Can't open %s\n", file + nameoffset);
     return true;
   }
-  return ReadParamsFromFp(fp, -1, constraint, member_params);
+  const bool anyerr = ReadParamsFromFp(fp, -1, constraint, member_params);
   fclose(fp);
+  return anyerr;
 }
 
 bool ParamUtils::ReadParamsFromFp(FILE *fp, inT64 end_offset,
@@ -203,6 +200,27 @@ void ParamUtils::PrintParams(FILE *fp, const ParamsVectors *member_params) {
     for (int i = 0; i < vec->double_params.size(); ++i) {
       fprintf(fp, "%s\t%g\n", vec->double_params[i]->name_str(),
               (double)(*vec->double_params[i]));
+    }
+  }
+}
+
+// Resets all parameters back to default values;
+void ParamUtils::ResetToDefaults(ParamsVectors* member_params) {
+  int v, i;
+  int num_iterations = (member_params == NULL) ? 1 : 2;
+  for (v = 0; v < num_iterations; ++v) {
+    ParamsVectors *vec = (v == 0) ? GlobalParams() : member_params;
+    for (i = 0; i < vec->int_params.size(); ++i) {
+      vec->int_params[i]->ResetToDefault();
+    }
+    for (i = 0; i < vec->bool_params.size(); ++i) {
+      vec->bool_params[i]->ResetToDefault();
+    }
+    for (int i = 0; i < vec->string_params.size(); ++i) {
+      vec->string_params[i]->ResetToDefault();
+    }
+    for (int i = 0; i < vec->double_params.size(); ++i) {
+      vec->double_params[i]->ResetToDefault();
     }
   }
 }

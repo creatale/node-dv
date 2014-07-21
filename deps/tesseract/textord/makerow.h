@@ -40,6 +40,7 @@ enum ROW_CATEGORY {
   ROW_INVALID,
 };
 
+extern BOOL_VAR_H(textord_heavy_nr, FALSE, "Vigorously remove noise");
 extern BOOL_VAR_H (textord_show_initial_rows, FALSE,
 "Display row accumulation");
 extern BOOL_VAR_H (textord_show_parallel_rows, FALSE,
@@ -65,8 +66,8 @@ extern BOOL_VAR_H (textord_fix_makerow_bug, TRUE,
 extern BOOL_VAR_H (textord_cblob_blockocc, TRUE,
 "Use new projection for underlines");
 extern BOOL_VAR_H (textord_debug_xheights, FALSE, "Test xheight algorithms");
-extern INT_VAR_H (textord_test_x, 0, "coord of test pt");
-extern INT_VAR_H (textord_test_y, 0, "coord of test pt");
+extern INT_VAR_H (textord_test_x, -MAX_INT32, "coord of test pt");
+extern INT_VAR_H (textord_test_y, -MAX_INT32, "coord of test pt");
 extern INT_VAR_H (textord_min_blobs_in_row, 4,
 "Min blobs before gradient counted");
 extern INT_VAR_H (textord_spline_minblobs, 8,
@@ -110,6 +111,7 @@ extern double_VAR_H (textord_xheight_error_margin, 0.1, "Accepted variation");
 extern INT_VAR_H (textord_lms_line_trials, 12, "Number of linew fits to do");
 extern BOOL_VAR_H (textord_new_initial_xheight, TRUE,
 "Use test xheight mechanism");
+extern BOOL_VAR_H(textord_debug_blob, FALSE, "Print test blob information");
 
 inline void get_min_max_xheight(int block_linesize,
                                 int *min_height, int *max_height) {
@@ -143,6 +145,7 @@ void fit_lms_line(TO_ROW *row);
 void compute_page_skew(TO_BLOCK_LIST *blocks,  // list of blocks
                        float &page_m,          // average gradient
                        float &page_err);       // average error
+void vigorous_noise_removal(TO_BLOCK* block);
 void cleanup_rows_making(ICOORD page_tr,     // top right
                          TO_BLOCK *block,    // block to do
                          float gradient,     // gradient to fit

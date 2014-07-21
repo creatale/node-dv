@@ -24,8 +24,11 @@
 
 #include <assert.h>
 // Size of buffer needed to host the decimal representation of the maximum
-// possible length of an int (in 64 bits, being -<20 digits>.
+// possible length of an int (in 64 bits), being -<20 digits>.
 const int kMaxIntSize = 22;
+// Size of buffer needed to host the decimal representation of the maximum
+// possible length of a %.8g being -0.12345678e+999<nul> = 15.
+const int kMaxDoubleSize = 15;
 
 /**********************************************************************
  * STRING_HEADER provides metadata about the allocated buffer,
@@ -128,7 +131,7 @@ STRING::~STRING() {
 bool STRING::Serialize(FILE* fp) const {
   inT32 len = length();
   if (fwrite(&len, sizeof(len), 1, fp) != 1) return false;
-  if (fwrite(GetCStr(), 1, len, fp) != len) return false;
+  if (static_cast<int>(fwrite(GetCStr(), 1, len, fp)) != len) return false;
   return true;
 }
 // Reads from the given file. Returns false in case of error.
@@ -139,7 +142,7 @@ bool STRING::DeSerialize(bool swap, FILE* fp) {
   if (swap)
     ReverseN(&len, sizeof(len));
   truncate_at(len);
-  if (fread(GetCStr(), 1, len, fp) != len) return false;
+  if (static_cast<int>(fread(GetCStr(), 1, len, fp)) != len) return false;
   return true;
 }
 
@@ -161,6 +164,10 @@ const char* STRING::string() const {
   // cast away the const and mutate the string directly.
   header->used_ = -1;
   return GetCStr();
+}
+
+const char* STRING::c_str() const {
+  return string();
 }
 
 /******
@@ -220,6 +227,8 @@ void STRING::erase_range(inT32 index, int len) {
 
 #else
 void STRING::truncate_at(inT32 index) {
+  ASSERT_HOST(index >= 0);
+  FixHeader();
   char* this_cstr = ensure_cstr(index + 1);
   this_cstr[index] = '\0';
   GetHeader()->used_ = index + 1;
@@ -337,6 +346,16 @@ void STRING::add_str_int(const char* str, int number) {
   char num_buffer[kMaxIntSize];
   snprintf(num_buffer, kMaxIntSize - 1, "%d", number);
   num_buffer[kMaxIntSize - 1] = '\0';
+  *this += num_buffer;
+}
+// Appends the given string and double (as a %.8g) to this.
+void STRING::add_str_double(const char* str, double number) {
+  if (str != NULL)
+    *this += str;
+  // Allow space for the maximum possible length of %8g.
+  char num_buffer[kMaxDoubleSize];
+  snprintf(num_buffer, kMaxDoubleSize - 1, "%.8g", number);
+  num_buffer[kMaxDoubleSize - 1] = '\0';
   *this += num_buffer;
 }
 

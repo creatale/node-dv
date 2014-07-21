@@ -303,16 +303,22 @@ bool PageIterator::BoundingBoxInternal(PageIteratorLevel level,
 bool PageIterator::BoundingBox(PageIteratorLevel level,
                                int* left, int* top,
                                int* right, int* bottom) const {
+  return BoundingBox(level, 0, left, top, right, bottom);
+}
+
+bool PageIterator::BoundingBox(PageIteratorLevel level, const int padding,
+                               int* left, int* top,
+                               int* right, int* bottom) const {
   if (!BoundingBoxInternal(level, left, top, right, bottom))
     return false;
   // Convert to the coordinate system of the original image.
-  *left = ClipToRange(*left / scale_ + rect_left_,
+  *left = ClipToRange(*left / scale_ + rect_left_ - padding,
                       rect_left_, rect_left_ + rect_width_);
-  *top = ClipToRange(*top / scale_ + rect_top_,
+  *top = ClipToRange(*top / scale_ + rect_top_ - padding,
                      rect_top_, rect_top_ + rect_height_);
-  *right = ClipToRange((*right + scale_ - 1) / scale_ + rect_left_,
+  *right = ClipToRange((*right + scale_ - 1) / scale_ + rect_left_ + padding,
                        *left, rect_left_ + rect_width_);
-  *bottom = ClipToRange((*bottom + scale_ - 1) / scale_ + rect_top_,
+  *bottom = ClipToRange((*bottom + scale_ - 1) / scale_ + rect_top_ + padding,
                         *top, rect_top_ + rect_height_);
   return true;
 }
@@ -333,6 +339,26 @@ PolyBlockType PageIterator::BlockType() const {
   if (it_->block()->block->poly_block() == NULL)
     return PT_FLOWING_TEXT;  // No layout analysis used - assume text.
   return it_->block()->block->poly_block()->isA();
+}
+
+/** Returns the polygon outline of the current block. The returned Pta must
+ *  be ptaDestroy-ed after use. */
+Pta* PageIterator::BlockPolygon() const {
+  if (it_->block() == NULL || it_->block()->block == NULL)
+    return NULL;  // Already at the end!
+  if (it_->block()->block->poly_block() == NULL)
+    return NULL;  // No layout analysis used - no polygon.
+  ICOORDELT_IT it(it_->block()->block->poly_block()->points());
+  Pta* pta = ptaCreate(it.length());
+  int num_pts = 0;
+  for (it.mark_cycle_pt(); !it.cycled_list(); it.forward(), ++num_pts) {
+    ICOORD* pt = it.data();
+    // Convert to top-down coords within the input image.
+    float x = static_cast<float>(pt->x()) / scale_ + rect_left_;
+    float y = rect_top_ + rect_height_ - static_cast<float>(pt->y()) / scale_;
+    ptaAddPt(pta, x, y);
+  }
+  return pta;
 }
 
 /**
@@ -572,6 +598,15 @@ void PageIterator::BeginWord(int offset) {
   for (blob_index_ = 0; blob_index_ < offset; ++blob_index_) {
     if (cblob_it_ != NULL)
       cblob_it_->forward();
+  }
+}
+
+bool PageIterator::SetWordBlamerBundle(BlamerBundle *blamer_bundle) {
+  if (it_->word() != NULL) {
+    it_->word()->blamer_bundle = blamer_bundle;
+    return true;
+  } else {
+    return false;
   }
 }
 

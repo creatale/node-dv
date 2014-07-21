@@ -28,26 +28,13 @@
 /*
  *  utils.c
  *
- *       Error, warning and info procs; all invoked by macros
+ *       Control of error, warning and info messages
+ *           l_int32    setMsgSeverity()
+ *
+ *       Error return functions, invoked by macros
  *           l_int32    returnErrorInt()
  *           l_float32  returnErrorFloat()
  *           void      *returnErrorPtr()
- *           void       l_error()
- *           void       l_errorString()
- *           void       l_errorInt()
- *           void       l_errorFloat()
- *           void       l_warning()
- *           void       l_warningString()
- *           void       l_warningInt()
- *           void       l_warningInt2()
- *           void       l_warningFloat()
- *           void       l_warningFloat2()
- *           void       l_info()
- *           void       l_infoString()
- *           void       l_infoInt()
- *           void       l_infoInt2()
- *           void       l_infoFloat()
- *           void       l_infoFloat2()
  *
  *       Safe string procs
  *           char      *stringNew()
@@ -95,17 +82,18 @@
  *           l_uint16   convertOnLittleEnd16()
  *           l_uint32   convertOnLittleEnd32()
  *
- *       Opening file streams
+ *       Cross-platform functions for opening file streams
  *           FILE      *fopenReadStream()
  *           FILE      *fopenWriteStream()
  *
- *       Functions to avoid C-runtime boundary crossing with Windows DLLs
+ *       Cross-platform functions that avoid C-runtime boundary crossing
+ *       with Windows DLLs
  *           FILE      *lept_fopen()
  *           l_int32    lept_fclose()
  *           void       lept_calloc()
  *           void       lept_free()
  *
- *       Cross-platform file system operations
+ *       Cross-platform file system operations in temp directories
  *           l_int32    lept_mkdir()
  *           l_int32    lept_rmdir()
  *           l_int32    lept_direxists()
@@ -118,14 +106,22 @@
  *           l_int32    splitPathAtExtension()
  *           char      *pathJoin()
  *           char      *genPathname()
+ *           l_int32    makeTempDirname()
  *           char      *genTempFilename()
  *           l_int32    extractNumberFromFilename()
+ *
+ *       File corruption operation
+ *           l_int32    fileCorruptByDeletion()
  *
  *       Generate random integer in given range
  *           l_int32    genRandomIntegerInRange()
  *
  *       Simple math function
  *           l_int32    lept_roundftoi()
+ *
+ *       Gray code conversion
+ *           l_uint32   convertBinaryToGrayCode()
+ *           l_uint32   convertGrayToBinaryCode()
  *
  *       Leptonica version number
  *           char      *getLeptonicaVersion()
@@ -138,23 +134,22 @@
  *           void       l_getCurrentTime()
  *           void       l_getFormattedDate()
  *
- *       Deprecated binary read functions  (don't use these!)
- *           l_uint8   *arrayRead()
- *           l_uint8   *arrayReadStream()
- *
- *
  *  Notes on cross-platform development
  *  -----------------------------------
+ *  This is important if your applications must work on Windows.
  *  (1) With the exception of splitPathAtDirectory() and
  *      splitPathAtExtension(), all input pathnames must have unix separators.
  *  (2) The conversion from unix to windows pathnames happens in genPathname().
  *  (3) Use fopenReadStream() and fopenWriteStream() to open files,
  *      because these use genPathname() to find the platform-dependent
  *      filenames.  Likewise for l_binaryRead() and l_binaryWrite().
- *  (4) For moving, copying and removing files and directories,
- *      use the lept_*() file system shell wrappers:
+ *  (4) For moving, copying and removing files and directories that are in
+ *      /tmp or subdirectories of /tmp, use the lept_*() file system
+ *      shell wrappers:
  *         lept_mkdir(), lept_rmdir(), lept_mv(), lept_rm() and lept_cp().
- *  (5) Use the lept_*() C library wrappers:
+ *  (5) Use the lept_*() C library wrappers.  These work properly on
+ *      Windows, where the same DLL must perform complementary operations
+ *      on file streams (open/close) and heap memory (malloc/free):
  *         lept_fopen(), lept_fclose(), lept_calloc() and lept_free().
  */
 
@@ -172,25 +167,75 @@
 
 #ifdef _WIN32
 #include <windows.h>
-static const char sepchar = '\\';
+static const char path_sepchar = '\\';
 #else
 #include <sys/stat.h>  /* for mkdir(2) */
 #include <sys/types.h>
-static const char sepchar = '/';
+static const char path_sepchar = '/';
 #endif
 
 
+    /* Global for controlling message output at runtime */
+LEPT_DLL l_int32  LeptMsgSeverity = DEFAULT_SEVERITY;
+
+    /* Subdirectory of /tmp into which files are written by default */
+static char Lept_Subdir[] = "lept";
+
+
 /*----------------------------------------------------------------------*
- *                 Error, warning and info message procs                *
+ *                Control of error, warning and info messages           *
+ *----------------------------------------------------------------------*/
+/*!
+ *  setMsgSeverity()
+ *
+ *      Input:  newsev
+ *      Return: oldsev
+ *
+ *  Notes:
+ *      (1) setMsgSeverity() allows the user to specify the desired
+ *          message severity threshold.  Messages of equal or greater
+ *          severity will be output.  The previous message severity is
+ *          returned when the new severity is set.
+ *      (2) If L_SEVERITY_EXTERNAL is passed, then the severity will be
+ *          obtained from the LEPT_MSG_SEVERITY environment variable.
+ *          If the environmental variable is not set, a warning is issued.
+ */
+l_int32
+setMsgSeverity(l_int32  newsev)
+{
+l_int32  oldsev;
+char    *envsev;
+
+    PROCNAME("setMsgSeverity");
+
+    oldsev = LeptMsgSeverity;
+    if (newsev == L_SEVERITY_EXTERNAL) {
+        envsev = getenv("LEPT_MSG_SEVERITY");
+        if (envsev) {
+            LeptMsgSeverity = atoi(envsev);
+            L_INFO("message severity set to external\n", procName);
+        } else {
+            L_WARNING("environment var LEPT_MSG_SEVERITY not defined\n",
+                      procName);
+        }
+    } else {
+        LeptMsgSeverity = newsev;
+        L_INFO("message severity set to %d\n", procName, newsev);
+    }
+
+    return oldsev;
+}
+
+
+/*----------------------------------------------------------------------*
+ *                Error return functions, invoked by macros             *
  *                                                                      *
- *            ---------------------  N.B. ---------------------         *
- *                                                                      *
- *    (1) These functions all print messages to stderr.                 *
- *                                                                      *
- *    (2) They must be invoked only by macros, which are in             *
- *        environ.h, so that the print output can be disabled           *
- *        at compile time, using -DNO_CONSOLE_IO.                       *
- *                                                                      *
+ *    (1) These error functions print messages to stderr and allow      *
+ *        exit from the function that called them.                      *
+ *    (2) They must be invoked only by the macros ERROR_INT,            *
+ *        ERROR_FLOAT and ERROR_PTR, which are in environ.h             *
+ *    (3) The print output can be disabled at compile time, either      *
+ *        by using -DNO_CONSOLE_IO or by setting LeptMsgSeverity.       *
  *----------------------------------------------------------------------*/
 /*!
  *  returnErrorInt()
@@ -198,7 +243,7 @@ static const char sepchar = '/';
  *      Input:  msg (error message)
  *              procname
  *              ival (return val)
- *      Return: ival (typically 1)
+ *      Return: ival (typically 1 for an error return)
  */
 l_int32
 returnErrorInt(const char  *msg,
@@ -244,500 +289,6 @@ returnErrorPtr(const char  *msg,
     fprintf(stderr, "Error in %s: %s\n", procname, msg);
     return pval;
 }
-
-
-/*!
- *  l_error()
- *
- *      Input: msg (error message)
- *             procname
- */
-void
-l_error(const char  *msg,
-        const char  *procname)
-{
-    fprintf(stderr, "Error in %s: %s\n", procname, msg);
-    return;
-}
-
-
-/*!
- *  l_errorString()
- *
- *      Input: msg (error message; must include '%s')
- *             procname
- *             str (embedded in error message via %s)
- */
-void
-l_errorString(const char  *msg,
-              const char  *procname,
-              const char  *str)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname || !str) {
-        L_ERROR("msg, procname or str not defined in l_errorString()",
-                procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_errorString()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Error in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, str);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_errorInt()
- *
- *      Input: msg (error message; must include '%d')
- *             procname
- *             ival (embedded in error message via %d)
- */
-void
-l_errorInt(const char  *msg,
-           const char  *procname,
-           l_int32      ival)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_errorInt()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_errorInt()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Error in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, ival);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_errorFloat()
- *
- *      Input: msg (error message; must include '%f')
- *             procname
- *             fval (embedded in error message via %f)
- */
-void
-l_errorFloat(const char  *msg,
-             const char  *procname,
-             l_float32    fval)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_errorFloat()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_errorFloat()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Error in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, fval);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_warning()
- *
- *      Input: msg (warning message)
- *             procname
- */
-void
-l_warning(const char  *msg,
-          const char  *procname)
-{
-    fprintf(stderr, "Warning in %s: %s\n", procname, msg);
-    return;
-}
-
-
-/*!
- *  l_warningString()
- *
- *      Input: msg (warning message; must include '%s')
- *             procname
- *             str (embedded in warning message via %s)
- */
-void
-l_warningString(const char  *msg,
-                const char  *procname,
-                const char  *str)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname || !str) {
-        L_ERROR("msg, procname or str not defined in l_warningString()",
-                procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_warningString()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Warning in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, str);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_warningInt()
- *
- *      Input: msg (warning message; must include '%d')
- *             procname
- *             ival (embedded in warning message via %d)
- */
-void
-l_warningInt(const char  *msg,
-             const char  *procname,
-             l_int32      ival)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_warningInt()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_warningInt()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Warning in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, ival);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_warningInt2()
- *
- *      Input: msg (warning message; must include '%d')
- *             procname
- *             ival1, ival2 (two args, embedded in message via %d)
- */
-void
-l_warningInt2(const char  *msg,
-              const char  *procname,
-              l_int32      ival1,
-              l_int32      ival2)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_warningInt2()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_warningInt()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Warning in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, ival1, ival2);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_warningFloat()
- *
- *      Input: msg (warning message; must include '%f')
- *             procname
- *             fval (embedded in warning message via %f)
- */
-void
-l_warningFloat(const char  *msg,
-               const char  *procname,
-               l_float32    fval)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_warningFloat()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_warningFloat()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Warning in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, fval);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_warningFloat2()
- *
- *      Input: msg (warning message; must include '%f')
- *             procname
- *             fval1, fval2 (two args, embedded in message via %f)
- */
-void
-l_warningFloat2(const char  *msg,
-                const char  *procname,
-                l_float32    fval1,
-                l_float32    fval2)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_warningFloat2()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_warningFloat()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Warning in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, fval1, fval2);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_info()
- *
- *      Input: msg (info message)
- *             procname
- */
-void
-l_info(const char  *msg,
-       const char  *procname)
-{
-    fprintf(stderr, "Info in %s: %s\n", procname, msg);
-    return;
-}
-
-
-/*!
- *  l_infoString()
- *
- *      Input: msg (info message; must include '%s')
- *             procname
- *             str (embedded in warning message via %s)
- */
-void
-l_infoString(const char  *msg,
-             const char  *procname,
-             const char  *str)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname || !str) {
-        L_ERROR("msg, procname or str not defined in l_infoString()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_infoString()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Info in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, str);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_infoInt()
- *
- *      Input: msg (info message; must include '%d')
- *             procname
- *             ival (embedded in info message via %d)
- */
-void
-l_infoInt(const char  *msg,
-          const char  *procname,
-          l_int32      ival)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_infoInt()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_infoInt()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Info in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, ival);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_infoInt2()
- *
- *      Input: msg (info message; must include two '%d')
- *             procname
- *             ival1, ival2 (two args, embedded in info message via %d)
- */
-void
-l_infoInt2(const char  *msg,
-           const char  *procname,
-           l_int32      ival1,
-           l_int32      ival2)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_infoInt2()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_infoInt2()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Info in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, ival1, ival2);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_infoFloat()
- *
- *      Input: msg (info message; must include '%f')
- *             procname
- *             fval (embedded in info message via %f)
- */
-void
-l_infoFloat(const char  *msg,
-            const char  *procname,
-            l_float32    fval)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_infoFloat()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_infoFloat()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Info in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, fval);
-
-    FREE(charbuf);
-    return;
-}
-
-
-/*!
- *  l_infoFloat2()
- *
- *      Input: msg (info message; must include two '%f')
- *             procname
- *             fval1, fval2 (two args, embedded in info message via %f)
- */
-void
-l_infoFloat2(const char  *msg,
-             const char  *procname,
-             l_float32    fval1,
-             l_float32    fval2)
-{
-l_int32  bufsize;
-char    *charbuf;
-
-    if (!msg || !procname) {
-        L_ERROR("msg or procname not defined in l_infoFloat2()", procname);
-        return;
-    }
-
-    bufsize = strlen(msg) + strlen(procname) + 128;
-    if ((charbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL) {
-        L_ERROR("charbuf not made in l_infoFloat()", procname);
-        return;
-    }
-
-    sprintf(charbuf, "Info in %s: %s\n", procname, msg);
-    fprintf(stderr, charbuf, fval1, fval2);
-
-    FREE(charbuf);
-    return;
-}
-
 
 
 /*--------------------------------------------------------------------*
@@ -841,9 +392,9 @@ l_int32  len;
             return ERROR_INT("scopy not made", procName, 1);
         stringCopy(scopy, src, len);
         *pdest = scopy;
-    }
-    else
+    } else {
         *pdest = NULL;
+    }
 
     return 0;
 }
@@ -1386,13 +937,13 @@ L_DNA   *da;
     while (1) {
         arrayFindSequence(data + start, datalen - start, sequence, seqlen,
                           &offset, &found);
-        if (found == TRUE) {
-            realoffset = start + offset;
-            l_dnaAddNumber(da, realoffset);
-            start = realoffset + seqlen;
-            if (start >= datalen) break;
-        }
-        else  /* no more */
+        if (found == FALSE)
+            break;
+
+        realoffset = start + offset;
+        l_dnaAddNumber(da, realoffset);
+        start = realoffset + seqlen;
+        if (start >= datalen)
             break;
     }
 
@@ -1471,8 +1022,8 @@ l_int32  i, j, found, lastpos;
  *  reallocNew()
  *
  *      Input:  &indata (<optional>; nulls indata)
- *              size of input data to be copied (bytes)
- *              size of data to be reallocated (bytes)
+ *              oldsize (size of input data to be copied, in bytes)
+ *              newsize (size of data to be reallocated in bytes)
  *      Return: ptr to new data, or null on error
  *
  *  Action: !N.B. (3) and (4)!
@@ -1514,8 +1065,7 @@ void    *newdata;
         return NULL;
     }
 
-    if (!indata)   /* nonstandard usage */
-    {
+    if (!indata) {  /* nonstandard usage */
         if ((newdata = (void *)CALLOC(1, newsize)) == NULL)
             return ERROR_PTR("newdata not made", procName, NULL);
         return newdata;
@@ -2143,7 +1693,7 @@ lept_free(void *ptr)
 /*!
  *  lept_mkdir()
  *
- *      Input:  subdir
+ *      Input:  subdir (of /tmp or its equivalent on Windows)
  *      Return: 0 on success, non-zero on failure
  *
  *  Notes:
@@ -2233,7 +1783,7 @@ char    *newpath;
 
         /* List all the files in temp subdir */
     if ((sa = getFilenamesInDirectory(dir)) == NULL) {
-        L_ERROR_STRING("directory %s does not exist!!", procName, dir);
+        L_ERROR("directory %s does not exist!!\n", procName, dir);
         FREE(dir);
         return 1;
     }
@@ -2279,8 +1829,6 @@ void
 lept_direxists(const char  *dirname,
                l_int32     *pexists)
 {
-    PROCNAME("lept_direxists");
-
     if (!pexists) return;
     *pexists = 0;
     if (!dirname) return;
@@ -2295,12 +1843,17 @@ lept_direxists(const char  *dirname,
     }
 #else  /* _WIN32 */
     {
-    HANDLE  hFind = INVALID_HANDLE_VALUE;
-    WIN32_FIND_DATAA  ffd;
-        hFind = FindFirstFileA(dirname, &ffd);
-        if (hFind != INVALID_HANDLE_VALUE) {
-            *pexists = 1;
-            FindClose(hFind);
+    char  *fulldirname;
+        fulldirname = genPathname(dirname, NULL);
+        if (fulldirname) {
+            HANDLE  hFind = INVALID_HANDLE_VALUE;
+            WIN32_FIND_DATAA  ffd;
+            hFind = FindFirstFileA(fulldirname, &ffd);
+            if (hFind != INVALID_HANDLE_VALUE) {
+                *pexists = 1;
+                FindClose(hFind);
+            }
+            FREE(fulldirname);
         }
     }
 #endif  /* _WIN32 */
@@ -2314,14 +1867,15 @@ lept_direxists(const char  *dirname,
  *
  *      Input:  subdir (can be NULL, in which case the removed file is
  *                      in /tmp)
- *              filename (without the directory)
+ *              filename (with or without the directory)
  *      Return: 0 on success, non-zero on failure
  *
  *  Notes:
  *      (1) This removes the named file in /tmp or a subdirectory of /tmp.
  *          If the file is in /tmp, use NULL for the subdir.
- *      (2) Use unix pathname separators.
- *      (3) On Windows, the file is in either <Temp>/leptonica, or
+ *      (2) @filename can include directories in the path, but they are ignored.
+ *      (3) Use unix pathname separators.
+ *      (4) On Windows, the file is in either <Temp>/leptonica, or
  *          a subdirectory of this, where <Temp> is the Windows temp dir.
  *          The name translation is: /tmp  -->   <Temp>/leptonica
  */
@@ -2329,7 +1883,7 @@ l_int32
 lept_rm(const char  *subdir,
         const char  *filename)
 {
-char    *dir, *pathname;
+char    *dir, *pathname, *tail;
 l_int32  ret;
 #ifdef _WIN32
 char    *newpath;
@@ -2337,18 +1891,18 @@ char    *newpath;
 
     PROCNAME("lept_rm");
 
-    if (!filename)
-        return ERROR_INT("filename not defined", procName, 1);
-    if ((strlen(filename) == 0) || (filename[0] == '.') || (filename[0] == '/'))
-        return ERROR_INT("filename cannot contain a path", procName, 1);
+    if (!filename || strlen(filename) == 0)
+        return ERROR_INT("filename undefined or empty", procName, 1);
 
+    splitPathAtDirectory(filename, NULL, &tail);
     if (subdir) {
         dir = pathJoin("/tmp", subdir);
-        pathname = pathJoin(dir, filename);
+        pathname = pathJoin(dir, tail);
         FREE(dir);
+    } else {
+        pathname = pathJoin("/tmp", tail);
     }
-    else
-        pathname = pathJoin("/tmp", filename);
+    FREE(tail);
     if (!pathname)
         return ERROR_INT("pathname not made", procName, 1);
 
@@ -2542,18 +2096,24 @@ l_uint32  attributes;
  *          tail ptr.
  *      (3) This function makes decisions based only on the lexical
  *          structure of the input.  Examples:
- *            /usr/tmp/abc  -->  dir: /usr/tmp/   tail: abc
- *            /usr/tmp/  -->  dir: /usr/tmp/   tail: [empty string]
- *            /usr/tmp  -->  dir: /usr/   tail: tmp
- *      (4) N.B. The input pathname must have unix directory separators
- *          for unix and windows directory separators for windows.
+ *            /usr/tmp/abc  -->  dir: /usr/tmp/       tail: abc
+ *            /usr/tmp/     -->  dir: /usr/tmp/       tail: [empty string]
+ *            /usr/tmp      -->  dir: /usr/           tail: tmp
+ *            abc           -->  dir: [empty string]  tail: abc
+ *      (4) For unix, the input pathname must have unix directory
+ *          separators (i.e., forward slashes).  For windows, we allow
+ *          both forward and backward slash separators, because Win32
+ *          pathname functions generally accept either slash form.
+ *          Note, however, that the windows command line interpreter
+ *          only accepts backward slashes, because forward slashes are
+ *          used to demarcate switches (vs. dashes in unix).
  */
 l_int32
 splitPathAtDirectory(const char  *pathname,
                      char       **pdir,
                      char       **ptail)
 {
-char  *cpathname, *lastslash;
+char  *cpathname, *lastslash, *fwdslash;
 
     PROCNAME("splitPathAtDirectory");
 
@@ -2565,17 +2125,25 @@ char  *cpathname, *lastslash;
         return ERROR_INT("pathname not defined", procName, 1);
 
     cpathname = stringNew(pathname);
-    if ((lastslash = strrchr(cpathname, sepchar))) {
+    lastslash = strrchr(cpathname, path_sepchar);
+#ifdef _WIN32  /* allow both types of slash for win32 */
+    if ((fwdslash = strrchr(cpathname, '/')) != NULL) {
+        if (lastslash)
+            lastslash = L_MAX(lastslash, fwdslash);
+        else
+            lastslash = fwdslash;
+    }
+#endif  /* _WIN32 */
+    if (lastslash) {
         if (ptail)
             *ptail = stringNew(lastslash + 1);
         if (pdir) {
             *(lastslash + 1) = '\0';
             *pdir = cpathname;
-        }
-        else
+        } else {
             FREE(cpathname);
-    }
-    else {  /* no directory */
+        }
+    } else {  /* no directory */
         if (pdir)
             *pdir = stringNew("");
         if (ptail)
@@ -2605,10 +2173,10 @@ char  *cpathname, *lastslash;
  *          for the extension ptr.
  *      (3) This function makes decisions based only on the lexical
  *          structure of the input.  Examples:
- *            /usr/tmp/abc.jpg  -->  basename: /usr/tmp/abc   ext: .jpg
- *            /usr/tmp/.jpg  -->  basename: /usr/tmp/   tail: .jpg
- *            /usr/tmp.jpg/  -->  basename: /usr/tmp.jpg/   tail: [empty str]
- *            ./.jpg  -->  basename: ./   tail: .jpg
+ *            /usr/tmp/abc.jpg  -->  basename: /usr/tmp/abc    ext: .jpg
+ *            /usr/tmp/.jpg     -->  basename: /usr/tmp/       ext: .jpg
+ *            /usr/tmp.jpg/     -->  basename: /usr/tmp.jpg/   ext: [empty str]
+ *            ./.jpg            -->  basename: ./              ext: .jpg
  *      (4) N.B. The input pathname must have unix directory separators
  *          for unix and windows directory separators for windows.
  */
@@ -2641,8 +2209,7 @@ char   empty[4] = "";
             *lastdot = '\0';
             *pbasename = stringJoin(dir, tail);
         }
-    }
-    else {
+    } else {
         if (pextension)
             *pextension = stringNew(empty);
         if (pbasename)
@@ -2664,15 +2231,16 @@ char   empty[4] = "";
  *  Notes:
  *      (1) Use unix-style pathname separators ('/').
  *      (2) @fname can be the entire path, or part of the path containing
- *          at least one directory, or a tail without a directory, or NULL.
+ *          at least one directory, or a tail without a directory, or null.
  *      (3) It produces a path that strips multiple slashes to a single
  *          slash, joins @dir and @fname by a slash, and has no trailing
  *          slashes (except in the cases where @dir == "/" and
  *          @fname == NULL, or v.v.).
  *      (4) If both @dir and @fname are null, produces an empty string.
- *      (5) The result is not canonicalized or tested  for correctness:
- *          garbage in (e.g., ...), garbage out.
- *      (6) Examples:
+ *      (5) Neither @dir nor @fname can begin with '.'.
+ *      (6) The result is not canonicalized or tested for correctness:
+ *          garbage in (e.g., /&%), garbage out.
+ *      (7) Examples:
  *             //tmp// + //abc/  -->  /tmp/abc
  *             tmp/ + /abc/      -->  tmp/abc
  *             tmp/ + abc/       -->  tmp/abc
@@ -2686,6 +2254,8 @@ char   empty[4] = "";
  *             NULL + NULL       -->  (empty string)
  *             "" + ""           -->  (empty string)
  *             "" + /            -->  /
+ *             ".." + /etc/foo   -->  NULL
+ *             /tmp + ".."       -->  NULL
  */
 char *
 pathJoin(const char  *dir,
@@ -2698,8 +2268,14 @@ size_t    size;
 SARRAY   *sa1, *sa2;
 L_BYTEA  *ba;
 
+    PROCNAME("pathJoin");
+
     if (!dir && !fname)
         return stringNew("");
+    if (dir && dir[0] == '.')
+        return (char *)ERROR_PTR("dir starts with '.'", procName, NULL);
+    if (fname && fname[0] == '.')
+        return (char *)ERROR_PTR("fname starts with '.'", procName, NULL);
 
     sa1 = sarrayCreate(0);
     sa2 = sarrayCreate(0);
@@ -2775,6 +2351,11 @@ genPathname(const char  *dir,
 {
 char    *cdir, *pathout;
 l_int32  dirlen, namelen, size;
+#ifdef _WIN32
+char     dirt[MAX_PATH];
+char    *tempdir;
+l_int32  tdirlen;
+#endif  /* _WIN32 */
 
     PROCNAME("genPathname");
 
@@ -2795,32 +2376,25 @@ l_int32  dirlen, namelen, size;
         return (char *)ERROR_PTR("pathout not made", procName, NULL);
 
 #ifdef _WIN32
-    {
-        char  dirt[MAX_PATH];
-        if (stringFindSubstr(cdir, "/", NULL) > 0) {
-            char    *tempdir;
-            l_int32  tdirlen;
-            tempdir = stringReplaceEachSubstr(cdir, "/", "\\", NULL);
-            tdirlen = strlen(tempdir);
-            if (strncmp(dir, "/tmp", 4) == 0) {  /* get temp directory */
-                GetTempPath(sizeof(dirt), dirt);
-                stringCopy(pathout, dirt, strlen(dirt) - 1);
-                stringCat(pathout, size, "\\leptonica");
-                if (tdirlen > 4)
-                    stringCat(pathout, size, tempdir + 4);
+    if (stringFindSubstr(cdir, "/", NULL) > 0) {
+        tempdir = stringReplaceEachSubstr(cdir, "/", "\\", NULL);
+        tdirlen = strlen(tempdir);
+        if (strncmp(dir, "/tmp", 4) == 0) {  /* get temp directory */
+            GetTempPath(sizeof(dirt), dirt);
+            stringCopy(pathout, dirt, strlen(dirt) - 1);
+            stringCat(pathout, size, "\\leptonica");
+            if (tdirlen > 4)
+                stringCat(pathout, size, tempdir + 4);
 
-                    /* Set an extra null byte.  Otherwise, when setting
-                       sepchar later, no trailing null byte remains. */
-                pathout[strlen(pathout) + 1] = '\0';
-            }
-            else {
-                stringCopy(pathout, tempdir, tdirlen);
-            }
-            FREE(tempdir);
+                /* Set an extra null byte.  Otherwise, when setting
+                   path_sepchar later, no trailing null byte remains. */
+            pathout[strlen(pathout) + 1] = '\0';
+        } else {
+            stringCopy(pathout, tempdir, tdirlen);
         }
-        else {  /* no '/' characters; OK as is */
-            stringCopy(pathout, cdir, dirlen);
-        }
+        FREE(tempdir);
+    } else {  /* no '/' characters; OK as is */
+        stringCopy(pathout, cdir, dirlen);
     }
 #else
     stringCopy(pathout, cdir, dirlen);
@@ -2828,11 +2402,68 @@ l_int32  dirlen, namelen, size;
 
     if (fname && strlen(fname) > 0) {
         dirlen = strlen(pathout);
-        pathout[dirlen] = sepchar;  /* append sepchar */
+        pathout[dirlen] = path_sepchar;  /* append path_sepchar */
         strncat(pathout, fname, namelen);
     }
     FREE(cdir);
     return pathout;
+}
+
+
+/*!
+ *  makeTempDirname()
+ *
+ *      Input:  result (preallocated and passed in)
+ *              nbytes (size of result array, in bytes)
+ *              subdir (<optional>)
+ *      Return: 0 if OK, 1 on error
+ *
+ *  Notes:
+ *      (1) This generates a platform-specific (Unix or Windows) directory
+ *          name for output tempfiles, written into the char buffer @result.
+ *      (2) Caller must allocate @result on the stack.  It must be large
+ *          enough to hold <temp>/lept/<subdir>, where <temp> is "/tmp" on
+ *          unix and some other path on windows, determined by the windows
+ *          function GenTempPath().  For example,
+ *              char  result[256];
+ *              makeTempDirname(result, 256, "golden");
+ */
+l_int32
+makeTempDirname(char        *result,
+                size_t       nbytes,
+                const char  *subdir)
+{
+#ifdef _WIN32
+char  dirt[MAX_PATH];
+#endif  /* _WIN32 */
+
+    PROCNAME("makeTempDirname");
+
+    if (!result)
+        return ERROR_INT("result not defined", procName, 1);
+
+        /* Start with <temp> directory */
+#ifdef _WIN32
+    GetTempPath(sizeof(dirt), dirt);
+    snprintf(result, nbytes, "%s\\", dirt);
+#else
+    snprintf(result, nbytes, "%s", "/tmp/");
+#endif  /* _WIN32 */
+
+        /* Add standard subdirectory */
+    strcat(result, Lept_Subdir);
+
+        /* Optionally add input subdirectory */
+    if (subdir) {
+#ifdef _WIN32
+        strcat(result, "\\");
+#else
+        strcat(result, "/");
+#endif  /* _WIN32 */
+        strcat(result, subdir);
+    }
+
+    return 0;
 }
 
 
@@ -2849,10 +2480,12 @@ l_int32  dirlen, namelen, size;
  *      Return: temp filename, or null on error
  *
  *  Notes:
- *      (1) Use unix-style pathname separators ('/').
- *      (2) Specifying the root directory (@dir == "/") is invalid.
- *      (3) Specifying a @tail containing '/' is invalid.
- *      (4) The most general form (@usetime = @usepid = 1) is:
+ *      (1) This makes a filename that is as unique as desired, and which
+ *          can optionally include both the time and pid in the name.
+ *      (2) Use unix-style pathname separators ('/').
+ *      (3) Specifying the root directory (@dir == "/") is invalid.
+ *      (4) Specifying a @tail containing '/' is invalid.
+ *      (5) The most general form (@usetime = @usepid = 1) is:
  *              <dir>/<usec>_<pid>_<tail>
  *          When @usetime = 1, @usepid = 0, the output filename is:
  *              <dir>/<usec>_<tail>
@@ -2863,15 +2496,15 @@ l_int32  dirlen, namelen, size;
  *          Note: It is not valid to have @tail = null or empty and have
  *          both @usetime = @usepid = 0.  That is, there must be
  *          some non-empty tail name.
- *      (5) N.B. The caller is responsible for freeing the returned filename.
+ *      (6) N.B. The caller is responsible for freeing the returned filename.
  *          For windows, to avoid C-runtime boundary crossing problems
  *          when using DLLs, you must use lept_free() to free the name.
- *      (6) For windows, if the caller requests the directory '/tmp',
+ *      (7) For windows, if the caller requests the directory '/tmp',
  *          this uses GetTempPath() to select the actual directory,
  *          avoiding platform-conditional code in use.  The directory
  *          selected is <Temp>/leptonica, where <Temp> is the Windows
  *          temp directory.
- *      (7) Set @usetime = @usepid = 1 when
+ *      (8) Set @usetime = @usepid = 1 when
  *          (a) more than one process is writing and reading temp files, or
  *          (b) multiple threads from a single process call this function, or
  *          (c) there is the possiblity of an attack where the intruder
@@ -2923,9 +2556,9 @@ l_int32  ret;
             ret = (CreateDirectory(newpath, NULL) ? 0 : 1);
         }
         FREE(newpath);
-    }
-    else
+    } else {
         snprintf(dirt, sizeof(dirt), "%s\\", dir);  /* add trailing '\' */
+    }
 
     if (usetime && usepid)
         snprintf(buf, buflen, "%s%d_%d_", dirt, usec, pid);
@@ -2961,10 +2594,9 @@ l_int32  ret;
  *                   not found
  *
  *  Notes:
- *      (1) Use unix-style pathname separators ('/').
- *      (2) The number is to be found in the basename, which is the
+ *      (1) The number is to be found in the basename, which is the
  *          filename without either the directory or the last extension.
- *      (3) When a number is found, it is non-negative.  If no number
+ *      (2) When a number is found, it is non-negative.  If no number
  *          is found, this returns -1, without an error message.  The
  *          caller needs to check.
  */
@@ -2999,6 +2631,67 @@ l_int32  len, nret, num;
         return num;
     else
         return -1;  /* not found */
+}
+
+
+/*---------------------------------------------------------------------*
+ *                       File corruption operation                     *
+ *---------------------------------------------------------------------*/
+/*!
+ *  fileCorruptByDeletion()
+ *
+ *      Input:  filein
+ *              loc (fractional location of start of deletion)
+ *              size (fractional size of deletion)
+ *              fileout (corrupted file)
+ *      Return: 0 if OK, 1 on error
+ *
+ *  Notes:
+ *      (1) This is useful for testing robustness of I/O wrappers with image
+ *          file corruption.
+ *      (2) Deletion size adjusts automatically to avoid array transgressions.
+ */
+l_int32
+fileCorruptByDeletion(const char  *filein,
+                      l_float32    loc,
+                      l_float32    size,
+                      const char  *fileout)
+{
+l_int32   i, locb, sizeb, rembytes;
+size_t    inbytes, outbytes;
+l_uint8  *datain, *dataout;
+
+    PROCNAME("fileCorruptByDeletion");
+
+    if (!filein || !fileout)
+        return ERROR_INT("filein and fileout not both specified", procName, 1);
+    if (loc < 0.0 || loc >= 1.0)
+        return ERROR_INT("loc must be in [0.0 ... 1.0)", procName, 1);
+    if (size <= 0.0)
+        return ERROR_INT("size must be > 0.0", procName, 1);
+    if (loc + size > 1.0)
+        size = 1.0 - loc;
+
+    datain = l_binaryRead(filein, &inbytes);
+    locb = (l_int32)(loc * inbytes + 0.5);
+    locb = L_MIN(locb, inbytes - 1);
+    sizeb = (l_int32)(size * inbytes + 0.5);
+    sizeb = L_MAX(1, sizeb);
+    sizeb = L_MIN(sizeb, inbytes - locb);  /* >= 1 */
+    L_INFO("Removed %d bytes at location %d\n", procName, sizeb, locb);
+    rembytes = inbytes - locb - sizeb;  /* >= 0; to be copied, after excision */
+
+    outbytes = inbytes - sizeb;
+    dataout = (l_uint8 *)CALLOC(outbytes, 1);
+    for (i = 0; i < locb; i++)
+        dataout[i] = datain[i];
+    for (i = 0; i < rembytes; i++)
+        dataout[locb + i] = datain[locb + sizeb + i];
+    l_binaryWrite(fileout, "w", dataout, outbytes);
+
+    FREE(datain);
+    FREE(dataout);
+    return 0;
 }
 
 
@@ -3060,6 +2753,43 @@ lept_roundftoi(l_float32  fval)
 
 
 /*---------------------------------------------------------------------*
+ *                         Gray code conversion                        *
+ *---------------------------------------------------------------------*/
+/*!
+ *  convertBinaryToGrayCode()
+ *
+ *      Input:  val
+ *      Return: gray code value
+ *
+ *  Notes:
+ *      (1) Gray code values corresponding to integers differ by
+ *          only one bit transition between successive integers.
+ */
+l_uint32
+convertBinaryToGrayCode(l_uint32 val)
+{
+    return (val >> 1) ^ val;
+}
+
+
+/*!
+ *  convertGrayCodeToBinary()
+ *
+ *      Input:  gray code value
+ *      Return: binary value
+ */
+l_uint32
+convertGrayCodeToBinary(l_uint32 val)
+{
+l_uint32  shift;
+
+    for (shift = 1; shift < 32; shift <<= 1)
+        val ^= val >> shift;
+    return val;
+}
+
+
+/*---------------------------------------------------------------------*
  *                       Leptonica version number                      *
  *---------------------------------------------------------------------*/
 /*!
@@ -3087,11 +2817,11 @@ getLeptonicaVersion()
     char debugStr[] = "Release";
   #endif
   #ifdef _M_IX86
-    char bitStr[] = " 32 bit";
+    char bitStr[] = " x86";
   #elif _M_X64
-    char bitStr[] = " 64 bit";
+    char bitStr[] = " x64";
   #else
-    char bitStr[] = ""
+    char bitStr[] = "";
   #endif
     snprintf(version, 100, "leptonica-%d.%d (%s, %s) [MSC v.%d %s %s%s]",
              LIBLEPT_MAJOR_VERSION, LIBLEPT_MINOR_VERSION,
@@ -3327,73 +3057,3 @@ struct tm  *tmp2;
     return stringNew(buf);
 }
 
-
-/*--------------------------------------------------------------------*
- *                  Deprecated binary read functions                  *
- *--------------------------------------------------------------------*/
-/*   Don't use these: they use l_int32 instead of size_t              */
-/*!
- *  arrayRead()
- *
- *      Input:  filename
- *              &nbytes (<return> number of bytes read)
- *      Return: array, or null on error
- */
-l_uint8 *
-arrayRead(const char  *fname,
-          l_int32     *pnbytes)
-{
-l_uint8  *data;
-FILE     *fp;
-
-    PROCNAME("arrayRead");
-
-    if (!fname)
-        return (l_uint8 *)ERROR_PTR("fname not defined", procName, NULL);
-    if (!pnbytes)
-        return (l_uint8 *)ERROR_PTR("pnbytes not defined", procName, NULL);
-    *pnbytes = 0;
-
-    if ((fp = fopenReadStream(fname)) == NULL)
-        return (l_uint8 *)ERROR_PTR("file stream not opened", procName, NULL);
-
-    data = arrayReadStream(fp, pnbytes);
-    fclose(fp);
-
-    return data;
-}
-
-
-/*!
- *  arrayReadStream()
- *
- *      Input:  stream
- *              &nbytes (<return> number of bytes read)
- *      Return: null-terminated array, or null on error
- *              (reading 0 bytes is not an error)
- *
- *  Notes:
- *      (1) N.B.: as a side effect, this always re-positions the
- *          stream ptr to the beginning of the file.
- */
-l_uint8 *
-arrayReadStream(FILE     *fp,
-                l_int32  *pnbytes)
-{
-l_int32   ignore;
-l_uint8  *data;
-
-    PROCNAME("arrayReadStream");
-
-    if (!fp)
-        return (l_uint8 *)ERROR_PTR("stream not defined", procName, NULL);
-    if (!pnbytes)
-        return (l_uint8 *)ERROR_PTR("ptr to nbytes not defined",
-                                    procName, NULL);
-
-    *pnbytes = fnbytesInFile(fp);
-    if ((data = (l_uint8 *)CALLOC(1, *pnbytes + 1)) == NULL)
-        return (l_uint8 *)ERROR_PTR("CALLOC fail for data", procName, NULL);
-    ignore = fread(data, 1, *pnbytes, fp);
-    return data;
-}

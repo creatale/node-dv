@@ -479,7 +479,9 @@ Handle<Value> Image::Add(const Arguments &args)
     if (Image::HasInstance(args[0])) {
         Pix *otherPix = Image::Pixels(args[0]->ToObject());
         Pix *pixd;
-        if(obj->pix_->d >= 8) {
+        if (obj->pix_->d == 32) {
+            pixd = pixAddRGB(obj->pix_, otherPix);
+        } else if (obj->pix_->d >= 8) {
             if (obj->pix_ == otherPix) {
                 otherPix = pixCopy(NULL, otherPix);
                 pixd = pixAddGray(NULL, obj->pix_, otherPix);
