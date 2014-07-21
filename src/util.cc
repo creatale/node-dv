@@ -21,6 +21,7 @@
  */
 #include "util.h"
 #include <cmath>
+#include <cstring>
 
 using namespace v8;
 
