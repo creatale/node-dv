@@ -3,6 +3,7 @@ var dv = require('../lib/dv');
 var fs = require('fs');
 
 describe('ZXing', function(){
+    this.timeout(10000);
     before(function(){
         this.zxing = new dv.ZXing();
         this.textpage300 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/textpage300.png'));

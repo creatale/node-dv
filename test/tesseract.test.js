@@ -30,6 +30,7 @@ var writeImageBoxes = function(basename, image, array){
 }
 
 describe('Tesseract', function(){
+    this.timeout(10000);
     before(function(){
         this.textPage300 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
         this.tesseract = new dv.Tesseract();
