@@ -31,6 +31,12 @@
 #include <opencv2/core/core.hpp>
 #include <LSWMS.h>
 
+#if _MSC_VER <= 1700
+int round(double x) {
+    return(x > 0.0) ? std::floor(x + 0.5) : std::floor(x - 0.5);
+}
+#endif
+
 using namespace v8;
 using namespace node;
 
