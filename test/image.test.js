@@ -16,6 +16,7 @@ var writeImage = function(basename, image){
 
 describe('Image', function(){
     this.timeout(3000);
+    this.slow(250);
     before(function(){
         this.gray = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/dave.png'));
         this.rgb = new dv.Image('jpg', fs.readFileSync(__dirname + '/fixtures/rgb.jpg'));
