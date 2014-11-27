@@ -37,7 +37,7 @@
     "node-gyp": "0.13.0"
   },
   "devDependencies": {
-    "mocha": "1.x",
+    "mocha": "2.x",
     "chai": "1.x"
   },
   "engines": {
