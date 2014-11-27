@@ -1,3 +1,7 @@
+## v1.8.1 (November 27, 2014)
+- Fixed dependencies for Node.js 0.8
+- Fixed build for MSVC 2012
+
 ## v1.8.0 (July 21, 2014)
 - Upgrade to Tesseract 3.03
 - Added Image#lineSegments()
