@@ -92,6 +92,10 @@ describe('Image', function(){
         writeImage('gray-rotate.png', this.gray.rotate(-0.703125));
         writeImage('gray-rotate45.png', this.gray.rotate(45));
     })
+    it('should #resize()', function(){
+        writeImage('gray-resize50100.png', this.gray.resize(50, 100));
+        writeImage('gray-resize20.png', this.gray.resize(20));
+    })
     it('should #scale()', function(){
         writeImage('gray-scale2.png', this.gray.scale(2.0, 2.0));
         writeImage('gray-scale05.png', this.gray.scale(0.5));
