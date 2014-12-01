@@ -230,6 +230,8 @@ void Image::Init(Handle<Object> target)
                FunctionTemplate::New(Unsharp)->GetFunction());
     proto->Set(String::NewSymbol("rotate"),
                FunctionTemplate::New(Rotate)->GetFunction());
+    proto->Set(String::NewSymbol("resize"),
+               FunctionTemplate::New(Resize)->GetFunction());
     proto->Set(String::NewSymbol("scale"),
                FunctionTemplate::New(Scale)->GetFunction());
     proto->Set(String::NewSymbol("crop"),
@@ -594,6 +596,23 @@ Handle<Value> Image::Rotate(const Arguments &args)
         return scope.Close(Image::New(pixd));
     } else {
         return THROW(TypeError, "expected (angle: Number)");
+    }
+}
+
+Handle<Value> Image::Resize(const Arguments &args)
+{
+    HandleScope scope;
+    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    if (args[0]->IsInt32() && (args.Length() != 2 || args[1]->IsInt32())) {
+        float resizeX = static_cast<float>(args[0]->Int32Value());
+        float resizeY = static_cast<float>(args.Length() == 2 ? args[1]->Int32Value() : resizeX);
+        Pix *pixd = pixResizeToMatch(obj->pix_, NULL, resizeX, resizeY);
+        if (pixd == NULL) {
+            return THROW(TypeError, "error while resizing");
+        }
+        return scope.Close(Image::New(pixd));
+    } else {
+        return THROW(TypeError, "expected (resizeX: Int32, [resizeY: Int32])");
     }
 }
 
