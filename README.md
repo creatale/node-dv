@@ -47,5 +47,6 @@ DocumentVision is maintained under the [Semantic Versioning](http://semver.org/)
 
 ## License
 
-Licensed under the incredibly [permissive](http://en.wikipedia.org/wiki/Permissive_free_software_licence) [MIT License](http://creativecommons.org/licenses/MIT/). Copyright &copy; 2012-2014 Christoph Schulz. <br>
-Dependencies may be licensed diffrently.
+Licensed under the [MIT License](http://creativecommons.org/licenses/MIT/). See [LICENSE](https://github.com/creatale/node-dv/blob/master/LICENSE).
+
+External libraries are licensed under their respective licenses.
