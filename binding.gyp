@@ -12,6 +12,7 @@
         'deps/lswms/lswms.gyp:liblswms',
       ],
       'include_dirs': [
+        "<!(node -e \"require('nan')\")",
         'deps/jpg',
         'deps/lodepng',
         'deps/leptonica/src',

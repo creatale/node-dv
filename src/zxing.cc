@@ -134,153 +134,155 @@ const zxing::BarcodeFormat::Value ZXing::BARCODEFORMATS[] = {
 
 const size_t ZXing::BARCODEFORMATS_LENGTH = 11;
 
+Persistent<Function> ZXing::constructor;
+
 void ZXing::Init(Handle<Object> target)
 {
-    Local<FunctionTemplate> constructor_template = FunctionTemplate::New(New);
-    constructor_template->SetClassName(String::NewSymbol("ZXing"));
+    Local<FunctionTemplate> constructor_template = NanNew<FunctionTemplate>(New);
+    constructor_template->SetClassName(NanNew("ZXing"));
     constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
     Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
-    proto->SetAccessor(String::NewSymbol("image"), GetImage, SetImage);
-    proto->SetAccessor(String::NewSymbol("formats"), GetFormats, SetFormats);
-    proto->SetAccessor(String::NewSymbol("tryHarder"), GetTryHarder, SetTryHarder);
-    proto->Set(String::NewSymbol("findCode"),
-               FunctionTemplate::New(FindCode)->GetFunction());
-    target->Set(String::NewSymbol("ZXing"),
-                Persistent<Function>::New(constructor_template->GetFunction()));
+    proto->SetAccessor(NanNew("image"), GetImage, SetImage);
+    proto->SetAccessor(NanNew("formats"), GetFormats, SetFormats);
+    proto->SetAccessor(NanNew("tryHarder"), GetTryHarder, SetTryHarder);
+    proto->Set(NanNew("findCode"),
+               NanNew<FunctionTemplate>(FindCode)->GetFunction());
+    NanAssignPersistent(constructor, constructor_template->GetFunction());
+    target->Set(NanNew("ZXing"), constructor_template->GetFunction());
 }
 
-Handle<Value> ZXing::New(const Arguments &args)
+NAN_METHOD(ZXing::New)
 {
-    HandleScope scope;
+    NanScope();
     Local<Object> image;
     if (args.Length() == 1 && Image::HasInstance(args[0])) {
         image = args[0]->ToObject();
     } else if (args.Length() != 0) {
-        return THROW(TypeError, "cannot convert argument list to "
+        return NanThrowTypeError("cannot convert argument list to "
                      "() or "
                      "(image: Image)");
     }
     ZXing* obj = new ZXing();
     if (!image.IsEmpty()) {
-        obj->image_ = Persistent<Object>::New(image->ToObject());
+        NanAssignPersistent(obj->image_, image->ToObject());
     }
     obj->Wrap(args.This());
-    return args.This();
+    NanReturnThis();
 }
 
-Handle<Value> ZXing::GetImage(Local<String> prop, const AccessorInfo &info)
+NAN_GETTER(ZXing::GetImage)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    return scope.Close(obj->image_);
+    NanScope();
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    NanReturnValue(obj->image_);
 }
 
-void ZXing::SetImage(Local<String> prop, Local<Value> value, const AccessorInfo &info)
+NAN_SETTER(ZXing::SetImage)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+    NanScope();
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
     if (Image::HasInstance(value) || value->IsNull()) {
         if (!obj->image_.IsEmpty()) {
-            obj->image_.Dispose();
-            obj->image_.Clear();
+            NanDisposePersistent(obj->image_);
         }
         if (!value->IsNull()) {
-            obj->image_ = Persistent<Object>::New(value->ToObject());
+            NanAssignPersistent(obj->image_, value->ToObject());
         }
     } else {
-        THROW(TypeError, "value must be of type Image");
+        return NanThrowTypeError("value must be of type Image");
     }
 }
 
-Handle<Value> ZXing::GetFormats(Local<String> prop, const AccessorInfo &info)
+NAN_GETTER(ZXing::GetFormats)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    Local<Object> format = Object::New();
+    NanScope();
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    Local<Object> format = NanNew<Object>();
     for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-        format->Set(String::NewSymbol(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]),
-                Boolean::New(obj->hints_.containsFormat(BARCODEFORMATS[i])));
+        format->Set(NanNew(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]),
+                NanNew<Boolean>(obj->hints_.containsFormat(BARCODEFORMATS[i])));
     }
-    return scope.Close(format);
+    NanReturnValue(format);
 }
 
-void ZXing::SetFormats(Local<String> prop, Local<Value> value, const AccessorInfo &info)
+NAN_SETTER(ZXing::SetFormats)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+    NanScope();
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
     if (value->IsObject()) {
         Local<Object> format = value->ToObject();
         bool tryHarder = obj->hints_.getTryHarder();
         obj->hints_.clear();
         obj->hints_.setTryHarder(tryHarder);
         for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-            if (format->Get(String::NewSymbol(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]))->BooleanValue()) {
+            if (format->Get(NanNew(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]))->BooleanValue()) {
                 obj->hints_.addFormat(BARCODEFORMATS[i]);
             }
         }
     } else {
-        THROW(TypeError, "value must be of type object");
+        return NanThrowTypeError("value must be of type object");
     }
 }
 
-Handle<Value> ZXing::GetTryHarder(Local<String> prop, const AccessorInfo &info)
+NAN_GETTER(ZXing::GetTryHarder)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
-    return scope.Close(Boolean::New(obj->hints_.getTryHarder()));
+    NanScope();
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    NanReturnValue(NanNew<Boolean>(obj->hints_.getTryHarder()));
 }
 
-void ZXing::SetTryHarder(Local<String> prop, Local<Value> value, const AccessorInfo &info)
+NAN_SETTER(ZXing::SetTryHarder)
 {
-    HandleScope scope;
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(info.This());
+    NanScope();
+    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
     if (value->IsBoolean()) {
         obj->hints_.setTryHarder(value->BooleanValue());
     } else {
-        THROW(TypeError, "value must be of type bool");
+        return NanThrowTypeError("value must be of type bool");
     }
 }
 
-Handle<Value> ZXing::FindCode(const Arguments &args)
+NAN_METHOD(ZXing::FindCode)
 {
-    HandleScope scope;
+    NanScope();
     ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
     if (obj->image_.IsEmpty()) {
-        return THROW(Error, "No image set");
+        return NanThrowError("No image set");
     }
     try {
-        zxing::Ref<PixSource> source(new PixSource(Image::Pixels(obj->image_)));
+        Local<Object> image_ = NanNew<Object>(obj->image_);
+        zxing::Ref<PixSource> source(new PixSource(Image::Pixels(image_)));
         zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
         zxing::Ref<zxing::Result> result(obj->reader_->decode(binary, obj->hints_));
-        Local<Object> object = Object::New();
+        Local<Object> object = NanNew<Object>();
         std::string resultStr = result->getText()->getText();
-        object->Set(String::NewSymbol("type"), String::New(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]));
-        object->Set(String::NewSymbol("data"), String::New(resultStr.c_str()));
-        object->Set(String::NewSymbol("buffer"), node::Buffer::New((char*)resultStr.data(), resultStr.length())->handle_);
-        Local<Array> points = Array::New();
+        object->Set(NanNew("type"), NanNew<String>(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]));
+        object->Set(NanNew("data"), NanNew<String>(resultStr.c_str()));
+        object->Set(NanNew("buffer"), NanNewBufferHandle((char*)resultStr.data(), resultStr.length()));
+        Local<Array> points = NanNew<Array>();
         for (int i = 0; i < result->getResultPoints()->size(); ++i) {
-            Local<Object> point = Object::New();
-            point->Set(String::NewSymbol("x"), Number::New(result->getResultPoints()[i]->getX()));
-            point->Set(String::NewSymbol("y"), Number::New(result->getResultPoints()[i]->getY()));
+            Local<Object> point = NanNew<Object>();
+            point->Set(NanNew("x"), NanNew<Number>(result->getResultPoints()[i]->getX()));
+            point->Set(NanNew("y"), NanNew<Number>(result->getResultPoints()[i]->getY()));
             points->Set(i, point);
         }
-        object->Set(String::NewSymbol("points"), points);
-        return scope.Close(object);
+        object->Set(NanNew("points"), points);
+        NanReturnValue(object);
     } catch (const zxing::ReaderException& e) {
         if (strcmp(e.what(), "No code detected") == 0) {
-            return scope.Close(Null());
+            NanReturnValue(NanNull());
         } else {
-            return THROW(Error, e.what());
+            return NanThrowError(e.what());
         }
     } catch (const zxing::IllegalArgumentException& e) {
-        return THROW(Error, e.what());
+        return NanThrowError(e.what());
     } catch (const zxing::Exception& e) {
-        return THROW(Error, e.what());
+        return NanThrowError(e.what());
     } catch (const std::exception& e) {
-        return THROW(Error, e.what());
+        return NanThrowError(e.what());
     } catch (...) {
-        return THROW(Error, "Uncaught exception");
+        return NanThrowError("Uncaught exception");
     }
 }
 

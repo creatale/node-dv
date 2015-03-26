@@ -11,13 +11,11 @@
 
 #include <v8.h>
 #include <node.h>
+#include <nan.h>
 #include <allheaders.h>
 
-#define THROW(type, msg) \
-    v8::ThrowException(v8::Exception::type(v8::String::New(msg)))
-
 v8::Handle<v8::Object> createBox(Box* box);
-Box* toBox(const v8::Arguments &args, int start, int* end = 0);
+Box* toBox(_NAN_METHOD_ARGS, int start, int* end = 0);
 int toOp(v8::Local<v8::Value> value);
 
 #endif

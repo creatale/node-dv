@@ -11,6 +11,7 @@
 
 #include <v8.h>
 #include <node.h>
+#include <nan.h>
 #include <baseapi.h>
 
 namespace binding {
@@ -21,38 +22,38 @@ public:
     static void Init(v8::Handle<v8::Object> target);
 
 private:
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
+    static NAN_METHOD(New);
 
     // Accessors.
-    static v8::Handle<v8::Value> GetImage(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static void SetImage(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetRectangle(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static void SetRectangle(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetPageSegMode(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static void SetPageSegMode(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetSymbolWhitelist(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static void SetSymbolWhitelist(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
-    static void SetVariable(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetIntVariable(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetBoolVariable(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetDoubleVariable(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetStringVariable(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+    static NAN_GETTER(GetImage);
+    static NAN_SETTER(SetImage);
+    static NAN_GETTER(GetRectangle);
+    static NAN_SETTER(SetRectangle);
+    static NAN_GETTER(GetPageSegMode);
+    static NAN_SETTER(SetPageSegMode);
+    static NAN_GETTER(GetSymbolWhitelist);
+    static NAN_SETTER(SetSymbolWhitelist);
+    static NAN_SETTER(SetVariable);
+    static NAN_GETTER(GetIntVariable);
+    static NAN_GETTER(GetBoolVariable);
+    static NAN_GETTER(GetDoubleVariable);
+    static NAN_GETTER(GetStringVariable);
 
     // Methods.
-    static v8::Handle<v8::Value> Clear(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ClearAdaptiveClassifier(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ThresholdImage(const v8::Arguments& args);
-    static v8::Handle<v8::Value> FindRegions(const v8::Arguments& args);
-    static v8::Handle<v8::Value> FindParagraphs(const v8::Arguments &args);
-    static v8::Handle<v8::Value> FindTextLines(const v8::Arguments& args);
-    static v8::Handle<v8::Value> FindWords(const v8::Arguments& args);
-    static v8::Handle<v8::Value> FindSymbols(const v8::Arguments& args);
-    static v8::Handle<v8::Value> FindText(const v8::Arguments& args);
+    static NAN_METHOD(Clear);
+    static NAN_METHOD(ClearAdaptiveClassifier);
+    static NAN_METHOD(ThresholdImage);
+    static NAN_METHOD(FindRegions);
+    static NAN_METHOD(FindParagraphs);
+    static NAN_METHOD(FindTextLines);
+    static NAN_METHOD(FindWords);
+    static NAN_METHOD(FindSymbols);
+    static NAN_METHOD(FindText);
 
     Tesseract(const char *datapath, const char *language);
     ~Tesseract();
 
-    v8::Handle<v8::Value> TransformResult(tesseract::PageIteratorLevel level, const v8::Arguments &args);
+    v8::Handle<v8::Value> TransformResult(tesseract::PageIteratorLevel level, _NAN_METHOD_ARGS);
 
     tesseract::TessBaseAPI api_;
     v8::Persistent<v8::Object> image_;

@@ -11,6 +11,7 @@
 
 #include <v8.h>
 #include <node.h>
+#include <nan.h>
 #include <allheaders.h>
 
 namespace binding {
@@ -28,55 +29,55 @@ public:
     static v8::Handle<v8::Value> New(Pix *pix);
 
 private:
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
+    static NAN_METHOD(New);
 
     // Accessors.
-    static v8::Handle<v8::Value> GetWidth(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetHeight(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetDepth(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
+    static NAN_GETTER(GetWidth);
+    static NAN_GETTER(GetHeight);
+    static NAN_GETTER(GetDepth);
 
     // Methods.
-    static v8::Handle<v8::Value> Invert(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Or(const v8::Arguments& args);
-    static v8::Handle<v8::Value> And(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Xor(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Add(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Subtract(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Convolve(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Unsharp(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Rotate(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Scale(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Crop(const v8::Arguments& args);
-    static v8::Handle<v8::Value> InRange(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Histogram(const v8::Arguments &args);
-    static v8::Handle<v8::Value> Projection(const v8::Arguments &args);
-    static v8::Handle<v8::Value> SetMasked(const v8::Arguments &args);
-    static v8::Handle<v8::Value> ApplyCurve(const v8::Arguments &args);
-    static v8::Handle<v8::Value> RankFilter(const v8::Arguments& args);
-    static v8::Handle<v8::Value> OctreeColorQuant(const v8::Arguments& args);
-    static v8::Handle<v8::Value> MedianCutQuant(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Threshold(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToGray(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToColor(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToHSV(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToRGB(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Erode(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Dilate(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Open(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Close(const v8::Arguments& args);
-    static v8::Handle<v8::Value> Thin(const v8::Arguments& args);
-    static v8::Handle<v8::Value> MaxDynamicRange(const v8::Arguments &args);
-    static v8::Handle<v8::Value> OtsuAdaptiveThreshold(const v8::Arguments& args);
-    static v8::Handle<v8::Value> LineSegments(const v8::Arguments& args);
-    static v8::Handle<v8::Value> FindSkew(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ConnectedComponents(const v8::Arguments& args);
-    static v8::Handle<v8::Value> DistanceFunction(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ClearBox(const v8::Arguments& args);
-    static v8::Handle<v8::Value> FillBox(const v8::Arguments &args);
-    static v8::Handle<v8::Value> DrawBox(const v8::Arguments& args);
-    static v8::Handle<v8::Value> DrawLine(const v8::Arguments& args);
-    static v8::Handle<v8::Value> DrawImage(const v8::Arguments& args);
-    static v8::Handle<v8::Value> ToBuffer(const v8::Arguments& args);
+    static NAN_METHOD(Invert);
+    static NAN_METHOD(Or);
+    static NAN_METHOD(And);
+    static NAN_METHOD(Xor);
+    static NAN_METHOD(Add);
+    static NAN_METHOD(Subtract);
+    static NAN_METHOD(Convolve);
+    static NAN_METHOD(Unsharp);
+    static NAN_METHOD(Rotate);
+    static NAN_METHOD(Scale);
+    static NAN_METHOD(Crop);
+    static NAN_METHOD(InRange);
+    static NAN_METHOD(Histogram);
+    static NAN_METHOD(Projection);
+    static NAN_METHOD(SetMasked);
+    static NAN_METHOD(ApplyCurve);
+    static NAN_METHOD(RankFilter);
+    static NAN_METHOD(OctreeColorQuant);
+    static NAN_METHOD(MedianCutQuant);
+    static NAN_METHOD(Threshold);
+    static NAN_METHOD(ToGray);
+    static NAN_METHOD(ToColor);
+    static NAN_METHOD(ToHSV);
+    static NAN_METHOD(ToRGB);
+    static NAN_METHOD(Erode);
+    static NAN_METHOD(Dilate);
+    static NAN_METHOD(Open);
+    static NAN_METHOD(Close);
+    static NAN_METHOD(Thin);
+    static NAN_METHOD(MaxDynamicRange);
+    static NAN_METHOD(OtsuAdaptiveThreshold);
+    static NAN_METHOD(LineSegments);
+    static NAN_METHOD(FindSkew);
+    static NAN_METHOD(ConnectedComponents);
+    static NAN_METHOD(DistanceFunction);
+    static NAN_METHOD(ClearBox);
+    static NAN_METHOD(FillBox);
+    static NAN_METHOD(DrawBox);
+    static NAN_METHOD(DrawLine);
+    static NAN_METHOD(DrawImage);
+    static NAN_METHOD(ToBuffer);
 
     Image(Pix *pix);
     ~Image();
