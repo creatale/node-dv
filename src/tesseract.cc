@@ -135,7 +135,7 @@ NAN_SETTER(Tesseract::SetImage)
             obj->api_.Clear();
         }
     } else {
-        return NanThrowTypeError("value must be of type Image");
+        NanThrowTypeError("value must be of type Image");
     }
 }
 
@@ -267,7 +267,7 @@ NAN_SETTER(Tesseract::SetSymbolWhitelist)
         String::Utf8Value whitelist(value);
         obj->api_.SetVariable("tessedit_char_whitelist", *whitelist);
     } else {
-        return NanThrowTypeError("value must be of type string");
+        NanThrowTypeError("value must be of type string");
     }
 }
 

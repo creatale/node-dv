@@ -187,7 +187,7 @@ NAN_SETTER(ZXing::SetImage)
             NanAssignPersistent(obj->image_, value->ToObject());
         }
     } else {
-        return NanThrowTypeError("value must be of type Image");
+        NanThrowTypeError("value must be of type Image");
     }
 }
 
@@ -218,7 +218,7 @@ NAN_SETTER(ZXing::SetFormats)
             }
         }
     } else {
-        return NanThrowTypeError("value must be of type object");
+        NanThrowTypeError("value must be of type object");
     }
 }
 
@@ -236,7 +236,7 @@ NAN_SETTER(ZXing::SetTryHarder)
     if (value->IsBoolean()) {
         obj->hints_.setTryHarder(value->BooleanValue());
     } else {
-        return NanThrowTypeError("value must be of type bool");
+        NanThrowTypeError("value must be of type bool");
     }
 }
 
