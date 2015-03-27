@@ -134,7 +134,6 @@ const zxing::BarcodeFormat::Value ZXing::BARCODEFORMATS[] = {
 
 const size_t ZXing::BARCODEFORMATS_LENGTH = 11;
 
-Persistent<Function> ZXing::constructor;
 
 void ZXing::Init(Handle<Object> target)
 {
@@ -147,7 +146,6 @@ void ZXing::Init(Handle<Object> target)
     proto->SetAccessor(NanNew("tryHarder"), GetTryHarder, SetTryHarder);
     proto->Set(NanNew("findCode"),
                NanNew<FunctionTemplate>(FindCode)->GetFunction());
-    NanAssignPersistent(constructor, constructor_template->GetFunction());
     target->Set(NanNew("ZXing"), constructor_template->GetFunction());
 }
 

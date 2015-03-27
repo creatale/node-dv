@@ -39,7 +39,6 @@ private:
     ZXing();
     ~ZXing();
 
-    static v8::Persistent<v8::Function> constructor;
     static const zxing::BarcodeFormat::Value BARCODEFORMATS[];
     static const size_t BARCODEFORMATS_LENGTH;
 

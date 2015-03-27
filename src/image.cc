@@ -180,7 +180,7 @@ bool Image::HasInstance(Handle<Value> val)
     if (!val->IsObject()) {
         return false;
     }
-    return constructor_template->HasInstance(val->ToObject());
+    return NanHasInstance(constructor_template, val->ToObject());
 }
 
 Pix *Image::Pixels(Handle<Object> obj)
@@ -189,11 +189,11 @@ Pix *Image::Pixels(Handle<Object> obj)
 }
 
 void Image::Init(Handle<Object> target)
-{
-    NanAssignPersistent(constructor_template, NanNew<FunctionTemplate>(New));
-    constructor_template->SetClassName(NanNew("Image"));
-    constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
-    Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
+{   
+    Local<FunctionTemplate> local_constructor_template = NanNew<FunctionTemplate>(New);
+    local_constructor_template->SetClassName(NanNew("Image"));
+    local_constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
+    Local<ObjectTemplate> proto = local_constructor_template->PrototypeTemplate();
     proto->SetAccessor(NanNew("width"), GetWidth);
     proto->SetAccessor(NanNew("height"), GetHeight);
     proto->SetAccessor(NanNew("depth"), GetDepth);
@@ -281,20 +281,22 @@ void Image::Init(Handle<Object> target)
                NanNew<FunctionTemplate>(DrawLine)->GetFunction());
     proto->Set(NanNew("toBuffer"),
                NanNew<FunctionTemplate>(ToBuffer)->GetFunction());
-    target->Set(NanNew("Image"),
-                NanNew<Persistent<Function>>(constructor_template->GetFunction()));
+    
+    NanAssignPersistent(constructor_template, local_constructor_template);
+
+    target->Set(NanNew("Image"), local_constructor_template->GetFunction());
 }
 
-Handle<Value> NanNew<Image>(Pix *pix)
+Handle<Value> Image::New(Pix *pix)
 {
-    NanScope();
-    Local<Object> instance = constructor_template->GetFunction()->NewInstance();
+    Local<Object> instance = NanNew(constructor_template)->GetFunction()->NewInstance();
     Image *obj = ObjectWrap::Unwrap<Image>(instance);
     obj->pix_ = pix;
     if (obj->pix_) {
-        V8::AdjustAmountOfExternalAllocatedMemory(obj->size());
+        NanAdjustExternalMemory(obj->size());
     }
-    NanReturnValue(instance);
+    //not sure if right, but this isnt really a v8 method, args is missing
+    return instance;
 }
 
 NAN_METHOD(Image::New)
@@ -306,7 +308,7 @@ NAN_METHOD(Image::New)
     } else if (args.Length() == 1 &&  Image::HasInstance(args[0])) {
         pix = pixCopy(NULL, Image::Pixels(args[0]->ToObject()));
     } else if (args.Length() == 2 && Buffer::HasInstance(args[1])) {
-        String::AsciiValue format(args[0]->ToString());
+        String::Utf8Value format(args[0]->ToString());
         Local<Object> buffer = args[1]->ToObject();
         unsigned char *in = reinterpret_cast<unsigned char*>(Buffer::Data(buffer));
         size_t inLength = Buffer::Length(buffer);
@@ -356,7 +358,7 @@ NAN_METHOD(Image::New)
                 Image::Pixels(args[1]->ToObject()),
                 Image::Pixels(args[2]->ToObject()));
     } else if (args.Length() == 4 && Buffer::HasInstance(args[1])) {
-        String::AsciiValue format(args[0]->ToString());
+        String::Utf8Value format(args[0]->ToString());
         Local<Object> buffer = args[1]->ToObject();
         size_t length = Buffer::Length(buffer);
         int32_t width = args[2]->Int32Value();
@@ -385,28 +387,28 @@ NAN_METHOD(Image::New)
     }
     Image* obj = new Image(pix);
     obj->Wrap(args.This());
-    return args.This();
+    NanReturnThis();
 }
 
 NAN_GETTER(Image::GetWidth)
 {
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    NanNew<NanReturnValue(Number>(obj->pix_->w));
+    NanReturnValue(NanNew<Number>(obj->pix_->w));
 }
 
 NAN_GETTER(Image::GetHeight)
 {
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    NanNew<NanReturnValue(Number>(obj->pix_->h));
+    NanReturnValue(NanNew<Number>(obj->pix_->h));
 }
 
 NAN_GETTER(Image::GetDepth)
 {
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    NanNew<NanReturnValue(Number>(obj->pix_->d));
+    NanReturnValue(NanNew<Number>(obj->pix_->d));
 }
 
 NAN_METHOD(Image::Invert)
@@ -417,7 +419,7 @@ NAN_METHOD(Image::Invert)
     if (pixd == NULL) {
         return NanThrowTypeError("error while applying INVERT");
     }
-    NanNew<NanReturnValue(Image>(pixd));
+    NanReturnValue(Image::New(pixd));
 }
 
 NAN_METHOD(Image::Or)
@@ -430,7 +432,7 @@ NAN_METHOD(Image::Or)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying OR");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (image: Image)");
     }
@@ -446,7 +448,7 @@ NAN_METHOD(Image::And)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying AND");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (image: Image)");
     }
@@ -462,7 +464,7 @@ NAN_METHOD(Image::Xor)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying XOR");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (image: Image)");
     }
@@ -491,7 +493,7 @@ NAN_METHOD(Image::Add)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying ADD");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (image: Image)");
     }
@@ -518,7 +520,7 @@ NAN_METHOD(Image::Subtract)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying SUBTRACT");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (image: Image)");
     }
@@ -542,7 +544,7 @@ NAN_METHOD(Image::Convolve)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying convolve");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (width: Number, height: Number)");
     }
@@ -559,7 +561,7 @@ NAN_METHOD(Image::Unsharp)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying unsharp");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (halfWidth: Number, fract: Number)");
     }
@@ -578,7 +580,7 @@ NAN_METHOD(Image::Rotate)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying rotate");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (angle: Number)");
     }
@@ -595,7 +597,7 @@ NAN_METHOD(Image::Scale)
         if (pixd == NULL) {
             return NanThrowTypeError("error while scaling");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (scaleX: Number, [scaleY: Number])");
     }
@@ -612,7 +614,7 @@ NAN_METHOD(Image::Crop)
         if (pixd == NULL) {
             return NanThrowTypeError("error while cropping");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (box: Box)");
     }
@@ -635,7 +637,7 @@ NAN_METHOD(Image::InRange)
         if (pixd == NULL) {
             return NanThrowTypeError("error while computing in range mask");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected ("
                      "lower1: Number, lower2: Number, lower3: Number, "
@@ -673,7 +675,7 @@ NAN_METHOD(Image::Projection)
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsString()) {
-        String::AsciiValue mode(args[0]->ToString());
+        String::Utf8Value mode(args[0]->ToString());
         ProjectionMode modeEnum;
         if (strcmp("horizontal", *mode) == 0) {
             modeEnum = Horizontal;
@@ -710,7 +712,7 @@ NAN_METHOD(Image::SetMasked)
         if (pixSetMasked(obj->pix_, mask, value) == 1) {
             return NanThrowTypeError("error while applying mask");
         }
-        return args.This();
+        NanReturnThis();
     } else {
         return NanThrowTypeError("expected (image: Image, value: Int32)");
     }
@@ -721,7 +723,7 @@ NAN_METHOD(Image::ApplyCurve)
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsArray() &&
-            NanNew<args[0]->ToObject()->Get(String>("length"))->Uint32Value() == 256) {
+            args[0]->ToObject()->Get(NanNew<String>("length"))->Uint32Value() == 256) {
         NUMA *numa = numaCreate(256);
         for (int i = 0; i < 256; i++) {
             numaAddNumber(numa, (l_float32)args[0]->ToObject()->Get(i)->ToInt32()->Value());
@@ -734,7 +736,7 @@ NAN_METHOD(Image::ApplyCurve)
         if (result != 0) {
             return NanThrowTypeError("error while applying value mapping");
         }
-        return args.This();
+        NanReturnThis();
     } else {
         return NanThrowTypeError("expected (array: Int32[256])");
     }
@@ -752,7 +754,7 @@ NAN_METHOD(Image::RankFilter)
         if (pixd == NULL) {
             return NanThrowTypeError("error while applying rank filter");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (width: Number, height: Number, rank: Number)");
     }
@@ -768,7 +770,7 @@ NAN_METHOD(Image::OctreeColorQuant)
         if (pixd == NULL) {
             return NanThrowTypeError("error while quantizating");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (colors: Int32)");
     }
@@ -784,7 +786,7 @@ NAN_METHOD(Image::MedianCutQuant)
         if (pixd == NULL) {
             return NanThrowTypeError("error while quantizating");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (colors: Int32)");
     }
@@ -800,7 +802,7 @@ NAN_METHOD(Image::Threshold)
         if (pixd == NULL) {
             return NanThrowTypeError("error while thresholding");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (value: Int32)");
     }
@@ -811,17 +813,17 @@ NAN_METHOD(Image::ToGray)
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (obj->pix_->d == 8) {
-        NanNew<NanReturnValue(Image>(pixClone(obj->pix_)));
+        NanReturnValue(Image::New(pixClone(obj->pix_)));
     }
     if (args.Length() == 0) {
         PIX *grayPix = pixConvertTo8(obj->pix_, 0);
         if (grayPix != NULL) {
-            NanNew<NanReturnValue(Image>(grayPix));
+            NanReturnValue(Image::New(grayPix));
         } else {
             return NanThrowError("error while computing grayscale image");
         }
     } else if (args.Length() == 1 && args[0]->IsString()) {
-        String::AsciiValue type(args[0]->ToString());
+        String::Utf8Value type(args[0]->ToString());
         int32_t typeInt;
         if (strcmp("min", *type) == 0) {
             typeInt = L_CHOOSE_MIN;
@@ -833,7 +835,7 @@ NAN_METHOD(Image::ToGray)
         PIX *grayPix = pixConvertRGBToGrayMinMax(
                     obj->pix_, typeInt);
         if (grayPix != NULL) {
-            NanNew<NanReturnValue(Image>(grayPix));
+            NanReturnValue(Image::New(grayPix));
         } else {
             return NanThrowError("error while computing grayscale image");
         }
@@ -845,7 +847,7 @@ NAN_METHOD(Image::ToGray)
         PIX *grayPix = pixConvertRGBToGray(
                     obj->pix_, rwt, gwt, bwt);
         if (grayPix != NULL) {
-            NanNew<NanReturnValue(Image>(grayPix));
+            NanReturnValue(Image::New(grayPix));
         } else {
             return NanThrowError("error while computing grayscale image");
         }
@@ -859,7 +861,7 @@ NAN_METHOD(Image::ToColor)
 {
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    NanNew<NanReturnValue(Image>(pixConvertTo32(obj->pix_)));
+    NanReturnValue(Image::New(pixConvertTo32(obj->pix_)));
 }
 
 NAN_METHOD(Image::ToHSV)
@@ -868,7 +870,7 @@ NAN_METHOD(Image::ToHSV)
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     PIX *pixd = pixConvertRGBToHSV(NULL, obj->pix_);
     if (pixd != NULL) {
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowError("error while converting to HSV");
     }
@@ -880,7 +882,7 @@ NAN_METHOD(Image::ToRGB)
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     PIX *pixd = pixConvertHSVToRGB(NULL, obj->pix_);
     if (pixd != NULL) {
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowError("error while converting to RGB");
     }
@@ -902,7 +904,7 @@ NAN_METHOD(Image::Erode)
         if (pixd == NULL) {
             return NanThrowTypeError("error while eroding");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (width: Number, height: Number)");
     }
@@ -924,7 +926,7 @@ NAN_METHOD(Image::Dilate)
         if (pixd == NULL) {
             return NanThrowTypeError("error while dilating");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (width: Number, height: Number)");
     }
@@ -946,7 +948,7 @@ NAN_METHOD(Image::Open)
         if (pixd == NULL) {
             return NanThrowTypeError("error while opening");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (width: Number, height: Number)");
     }
@@ -968,7 +970,7 @@ NAN_METHOD(Image::Close)
         if (pixd == NULL) {
             return NanThrowTypeError("error while closing");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (width: Number, height: Number)");
     }
@@ -980,7 +982,7 @@ NAN_METHOD(Image::Thin)
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsString() && args[1]->IsInt32() && args[2]->IsInt32()) {
         int typeInt = 0;
-        String::AsciiValue type(args[0]->ToString());
+        String::Utf8Value type(args[0]->ToString());
         if (strcmp("fg", *type) == 0) {
             typeInt = L_THIN_FG;
         } else if (strcmp("bg", *type) == 0) {
@@ -1000,7 +1002,7 @@ NAN_METHOD(Image::Thin)
         if (pixd == NULL) {
             return NanThrowTypeError("error while thinning");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (type: String, connectivity: Int32, maxIters: Int32)");
     }
@@ -1012,7 +1014,7 @@ NAN_METHOD(Image::MaxDynamicRange)
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args[0]->IsString()) {
         int typeInt = 0;
-        String::AsciiValue type(args[0]->ToString());
+        String::Utf8Value type(args[0]->ToString());
         if (strcmp("linear", *type) == 0) {
             typeInt = L_SET_PIXELS;
         } else if (strcmp("log", *type) == 0) {
@@ -1022,7 +1024,7 @@ NAN_METHOD(Image::MaxDynamicRange)
         if (pixd == NULL) {
             return NanThrowTypeError("error while computing max. dynamic range");
         }
-        NanNew<NanReturnValue(Image>(pixd));
+        NanReturnValue(Image::New(pixd));
     } else {
         return NanThrowTypeError("expected (type: String)");
     }
@@ -1047,8 +1049,8 @@ NAN_METHOD(Image::OtsuAdaptiveThreshold)
                     scorefact, &ppixth, &ppixd);
         if (error == 0) {
             Local<Object> object = NanNew<Object>();
-            object->Set(NanNew("thresholdValues"), NanNew<Image>(ppixth));
-            object->Set(NanNew("image"), NanNew<Image>(ppixd));
+            object->Set(NanNew("thresholdValues"), Image::New(ppixth));
+            object->Set(NanNew("image"), Image::New(ppixd));
             NanReturnValue(object);
         } else {
             return NanThrowError("error while computing threshold");
@@ -1164,7 +1166,7 @@ NAN_METHOD(Image::DistanceFunction)
         if (pixDistance == NULL) {
             return NanThrowTypeError("error while computing distance function");
         }
-        NanNew<NanReturnValue(Image>(pixDistance));
+        NanReturnValue(Image::New(pixDistance));
     } else {
 
         return NanThrowTypeError("expected (connectivity: Int32)");
@@ -1187,7 +1189,7 @@ NAN_METHOD(Image::ClearBox)
         if (error) {
             return NanThrowTypeError("error while clearing box");
         }
-        return args.This();
+        NanReturnThis();
     } else {
         return NanThrowTypeError("expected (box: Box) signature");
     }
@@ -1237,7 +1239,7 @@ NAN_METHOD(Image::FillBox)
         if (error) {
             return NanThrowTypeError("error while drawing box");
         }
-        return args.This();
+        NanReturnThis();
     }
     else {
         return NanThrowTypeError("expected (box: Box, value: Int32) or "
@@ -1286,7 +1288,7 @@ NAN_METHOD(Image::DrawBox)
         if (error) {
             return NanThrowTypeError("error while drawing box");
         }
-        return args.This();
+        NanReturnThis();
     } else {
         return NanThrowTypeError("expected (box: Box, borderWidth: Int32, "
                      "op: String) or (box: Box, borderWidth: Int32, r: Int32, "
@@ -1335,7 +1337,7 @@ NAN_METHOD(Image::DrawLine)
         if (error) {
             return NanThrowTypeError("error while drawing line");
         }
-        return args.This();
+        NanReturnThis();
     } else {
         return NanThrowTypeError("expected (p1: Point, p2: Point, "
                      "width: Int32, op: String) or (p1: Point, p2: Point, "
@@ -1358,7 +1360,7 @@ NAN_METHOD(Image::DrawImage)
         if (error) {
             return NanThrowTypeError("error while drawing image");
         }
-        return args.This();
+        NanReturnThis();
     } else {
         return NanThrowTypeError("expected (image: Image, box: Box)");
     }
@@ -1374,7 +1376,7 @@ NAN_METHOD(Image::ToBuffer)
     jpge::params params;
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
     if (args.Length() >= 1 && args[0]->IsString()) {
-        String::AsciiValue format(args[0]->ToString());
+        String::Utf8Value format(args[0]->ToString());
         if (strcmp("raw", *format) == 0) {
             formatInt = FORMAT_RAW;
         } else if (strcmp("png", *format) == 0) {
@@ -1515,13 +1517,13 @@ NAN_METHOD(Image::ToBuffer)
         return NanThrowError(msg.str().c_str());
     }
     if (formatInt == FORMAT_PNG) {
-        NanNew<NanReturnValue(Buffer>(reinterpret_cast<char *>(&pngData[0]), pngData.size())->handle_);
+        NanReturnValue(NanNewBufferHandle(reinterpret_cast<char *>(&pngData[0]), pngData.size()));
     } else if (formatInt == FORMAT_JPG) {
-        Handle<Value> buffer = NanNew<Buffer>(jpgData, jpgDataSize)->handle_;
+        Handle<Value> buffer = NanNewBufferHandle(jpgData, jpgDataSize);
         free(jpgData);
         NanReturnValue(buffer);
     } else {
-        NanNew<NanReturnValue(Buffer>(reinterpret_cast<char *>(&imgData[0]), imgData.size())->handle_);
+        NanReturnValue(NanNewBufferHandle(reinterpret_cast<char *>(&imgData[0]), imgData.size()));
     }
 }
 
@@ -1529,14 +1531,14 @@ Image::Image(Pix *pix)
     : pix_(pix)
 {
     if (pix_) {
-        V8::AdjustAmountOfExternalAllocatedMemory(size());
+        NanAdjustExternalMemory(size());
     }
 }
 
 Image::~Image()
 {
     if (pix_) {
-        V8::AdjustAmountOfExternalAllocatedMemory(-size());
+        NanAdjustExternalMemory(-size());
         pixDestroy(&pix_);
     }
 }

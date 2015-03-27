@@ -75,8 +75,7 @@ void Tesseract::Init(Handle<Object> target)
                NanNew<FunctionTemplate>(FindSymbols)->GetFunction());
     proto->Set(NanNew("findText"),
                NanNew<FunctionTemplate>(FindText)->GetFunction());
-    target->Set(NanNew("Tesseract"),
-                NanNew<Persistent<Function>>(constructor_template->GetFunction()));
+    target->Set(NanNew("Tesseract"), constructor_template->GetFunction());
 }
 
 NAN_METHOD(Tesseract::New)
@@ -102,14 +101,15 @@ NAN_METHOD(Tesseract::New)
                      "(datapath: String, language: String) or "
                      "(datapath: String, language: String, image: Image)");
     }
-    Tesseract* obj = new Tesseract(*String::AsciiValue(datapath),
-                                   *String::AsciiValue(lang));
+    Tesseract* obj = new Tesseract(*String::Utf8Value(datapath),
+                                   *String::Utf8Value(lang));
     if (!image.IsEmpty()) {
-        NanAssignPersistent(obj->image_, image->ToObject());
-        obj->api_.SetImage(Image::Pixels(obj->image_));
+        Local<Object> image_ = image->ToObject();
+        NanAssignPersistent(obj->image_, image_);
+        obj->api_.SetImage(Image::Pixels(image_));
     }
     obj->Wrap(args.This());
-    return args.This();
+    NanReturnThis();
 }
 
 NAN_GETTER(Tesseract::GetImage)
@@ -128,8 +128,9 @@ NAN_SETTER(Tesseract::SetImage)
             NanDisposePersistent(obj->image_);
         }
         if (!value->IsNull()) {
-            NanAssignPersistent(obj->image_, value->ToObject());
-            obj->api_.SetImage(Image::Pixels(obj->image_));
+            Local<Object> image_ = value->ToObject();
+            NanAssignPersistent(obj->image_, image_);
+            obj->api_.SetImage(Image::Pixels(image_));
         } else {
             obj->api_.Clear();
         }
@@ -161,7 +162,7 @@ NAN_SETTER(Tesseract::SetRectangle)
         int height = ceil(rect->Get(NanNew("height"))->ToNumber()->Value());
         if (!obj->image_.IsEmpty()) {
             // WORKAROUND: clamp rectangle to prevent occasional crashes.
-            PIX* pix = Image::Pixels(obj->image_);
+            PIX* pix = Image::Pixels(NanNew<Object>(obj->image_));
             x = std::max(x, 0);
             y = std::max(y, 0);
             width = std::min(width, (int)pix->w - x);
@@ -180,31 +181,31 @@ NAN_GETTER(Tesseract::GetPageSegMode)
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     switch (obj->api_.GetPageSegMode()) {
     case tesseract::PSM_OSD_ONLY:
-        return NanNew<String>("osd_only");
+        NanReturnValue(NanNew<String>("osd_only"));
     case tesseract::PSM_AUTO_OSD:
-        return NanNew<String>("auto_osd");
+        NanReturnValue(NanNew<String>("auto_osd"));
     case tesseract::PSM_AUTO_ONLY:
-        return NanNew<String>("auto_only");
+        NanReturnValue(NanNew<String>("auto_only"));
     case tesseract::PSM_AUTO:
-        return NanNew<String>("auto");
+        NanReturnValue(NanNew<String>("auto"));
     case tesseract::PSM_SINGLE_COLUMN:
-        return NanNew<String>("single_column");
+        NanReturnValue(NanNew<String>("single_column"));
     case tesseract::PSM_SINGLE_BLOCK_VERT_TEXT:
-        return NanNew<String>("single_block_vert_text");
+        NanReturnValue(NanNew<String>("single_block_vert_text"));
     case tesseract::PSM_SINGLE_BLOCK:
-        return NanNew<String>("single_block");
+        NanReturnValue(NanNew<String>("single_block"));
     case tesseract::PSM_SINGLE_LINE:
-        return NanNew<String>("single_line");
+        NanReturnValue(NanNew<String>("single_line"));
     case tesseract::PSM_SINGLE_WORD:
-        return NanNew<String>("single_word");
+        NanReturnValue(NanNew<String>("single_word"));
     case tesseract::PSM_CIRCLE_WORD:
-        return NanNew<String>("circle_word");
+        NanReturnValue(NanNew<String>("circle_word"));
     case tesseract::PSM_SINGLE_CHAR:
-        return NanNew<String>("single_char");
+        NanReturnValue(NanNew<String>("single_char"));
     case tesseract::PSM_SPARSE_TEXT:
-        return NanNew<String>("sparse_text");
+        NanReturnValue(NanNew<String>("sparse_text"));
     case tesseract::PSM_SPARSE_TEXT_OSD:
-        return NanNew<String>("sparse_text_osd");
+        NanReturnValue(NanNew<String>("sparse_text_osd"));
     default:
         return NanThrowError("cannot convert internal PSM to String");
     }
@@ -214,7 +215,7 @@ NAN_SETTER(Tesseract::SetPageSegMode)
 {
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    String::AsciiValue pageSegMode(value);
+    String::Utf8Value pageSegMode(value);
     if (strcmp("osd_only", *pageSegMode) == 0) {
         obj->api_.SetPageSegMode(tesseract::PSM_OSD_ONLY);
     } else if (strcmp("auto_osd", *pageSegMode) == 0) {
@@ -255,7 +256,7 @@ NAN_GETTER(Tesseract::GetSymbolWhitelist)
 {
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    NanNew<NanReturnValue(String>(obj->api_.GetStringVariable("tessedit_char_whitelist")));
+    NanReturnValue(NanNew<String>(obj->api_.GetStringVariable("tessedit_char_whitelist")));
 }
 
 NAN_SETTER(Tesseract::SetSymbolWhitelist)
@@ -274,7 +275,7 @@ NAN_SETTER(Tesseract::SetVariable)
 {
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    String::AsciiValue name(property);
+    String::Utf8Value name(property);
     String::Utf8Value val(value);
     obj->api_.SetVariable(*name, *val);
 }
@@ -283,19 +284,24 @@ NAN_GETTER(Tesseract::GetIntVariable)
 {
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    String::AsciiValue name(property);
+    String::Utf8Value name(property);
     int value;
-    NanReturnValue(obj->api_.GetIntVariable(*name, &value) ? NanNew<Number>(value) : NanNull());
+    if(obj->api_.GetIntVariable(*name, &value)) {
+        NanReturnValue(NanNew<Number>(value));
+    }
+    else {
+        NanReturnNull();
+    }
 }
 
 NAN_GETTER(Tesseract::GetBoolVariable)
 {
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    String::AsciiValue name(property);
+    String::Utf8Value name(property);
     bool value;
     if (obj->api_.GetBoolVariable(*name, &value)) {
-        NanNew<NanReturnValue(Boolean>(value));
+        NanReturnValue(NanNew<Boolean>(value));
     } else {
         NanReturnValue(NanNull());
     }
@@ -305,18 +311,28 @@ NAN_GETTER(Tesseract::GetDoubleVariable)
 {
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    String::AsciiValue name(property);
+    String::Utf8Value name(property);
     double value;
-    NanReturnValue(obj->api_.GetDoubleVariable(*name, &value) ? NanNew<Number>(value) : NanNull());
+    if(obj->api_.GetDoubleVariable(*name, &value)) {
+        NanReturnValue(NanNew<Number>(value));
+    }
+    else {
+        NanReturnNull();
+    }
 }
 
 NAN_GETTER(Tesseract::GetStringVariable)
 {
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    String::AsciiValue name(property);
+    String::Utf8Value name(property);
     const char *p = obj->api_.GetStringVariable(*name);
-    NanReturnValue((p != NULL) ? NanNew<String>(p) : NanNull());
+    if((p != NULL)) {
+        NanReturnValue(NanNew<String>(p));
+    }
+    else {
+        NanReturnNull();
+    }
 }
 
 NAN_METHOD(Tesseract::Clear)
@@ -324,7 +340,7 @@ NAN_METHOD(Tesseract::Clear)
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     obj->api_.Clear();
-    return args.This();
+    NanReturnThis();
 }
 
 NAN_METHOD(Tesseract::ClearAdaptiveClassifier)
@@ -332,7 +348,7 @@ NAN_METHOD(Tesseract::ClearAdaptiveClassifier)
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     obj->api_.ClearAdaptiveClassifier();
-    return args.This();
+    NanReturnThis();
 }
 
 NAN_METHOD(Tesseract::ThresholdImage)
@@ -341,7 +357,7 @@ NAN_METHOD(Tesseract::ThresholdImage)
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     Pix *pix = obj->api_.GetThresholdedImage();
     if (pix) {
-        NanNew<NanReturnValue(Image>(pix));
+        NanReturnValue(Image::New(pix));
     } else {
         NanReturnValue(NanNull());
     }
@@ -349,37 +365,32 @@ NAN_METHOD(Tesseract::ThresholdImage)
 
 NAN_METHOD(Tesseract::FindRegions)
 {
-    NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    NanReturnValue(obj->TransformResult(tesseract::RIL_BLOCK, args));
+    return obj->TransformResult(tesseract::RIL_BLOCK, args);
 }
 
 NAN_METHOD(Tesseract::FindParagraphs)
 {
-    NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    NanReturnValue(obj->TransformResult(tesseract::RIL_PARA, args));
+    return obj->TransformResult(tesseract::RIL_PARA, args);
 }
 
 NAN_METHOD(Tesseract::FindTextLines)
 {
-    NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    NanReturnValue(obj->TransformResult(tesseract::RIL_TEXTLINE, args));
+    return obj->TransformResult(tesseract::RIL_TEXTLINE, args);
 }
 
 NAN_METHOD(Tesseract::FindWords)
 {
-    NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    NanReturnValue(obj->TransformResult(tesseract::RIL_WORD, args));
+    return obj->TransformResult(tesseract::RIL_WORD, args);
 }
 
 NAN_METHOD(Tesseract::FindSymbols)
 {
-    NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
-    NanReturnValue(obj->TransformResult(tesseract::RIL_SYMBOL, args));
+    return obj->TransformResult(tesseract::RIL_SYMBOL, args);
 }
 
 NAN_METHOD(Tesseract::FindText)
@@ -387,7 +398,7 @@ NAN_METHOD(Tesseract::FindText)
     NanScope();
     Tesseract* obj = ObjectWrap::Unwrap<Tesseract>(args.This());
     if (args.Length() >= 1 && args[0]->IsString()) {
-        String::AsciiValue mode(args[0]);
+        String::Utf8Value mode(args[0]);
         bool withConfidence = false;
         if (args.Length() == 2 && args[1]->IsBoolean()) {
             withConfidence = args[1]->BooleanValue();
@@ -442,7 +453,7 @@ Tesseract::~Tesseract()
     api_.End();
 }
 
-Handle<Value> Tesseract::TransformResult(tesseract::PageIteratorLevel level, _NAN_METHOD_ARGS)
+_NAN_METHOD_RETURN_TYPE Tesseract::TransformResult(tesseract::PageIteratorLevel level, _NAN_METHOD_ARGS)
 {
     NanScope();
     bool recognize = true;
