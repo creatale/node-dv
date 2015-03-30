@@ -11,6 +11,7 @@
 
 #include <v8.h>
 #include <node.h>
+#include <nan.h>
 #include <zxing/DecodeHints.h>
 #include <zxing/MultiFormatReader.h>
 
@@ -22,18 +23,18 @@ public:
     static void Init(v8::Handle<v8::Object> target);
 
 private:
-    static v8::Handle<v8::Value> New(const v8::Arguments& args);
+    static NAN_METHOD(New);
 
     // Accessors.
-    static v8::Handle<v8::Value> GetImage(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static void SetImage(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetFormats(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static void SetFormats(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
-    static v8::Handle<v8::Value> GetTryHarder(v8::Local<v8::String> prop, const v8::AccessorInfo &info);
-    static void SetTryHarder(v8::Local<v8::String> prop, v8::Local<v8::Value> value, const v8::AccessorInfo &info);
+    static NAN_GETTER(GetImage);
+    static NAN_SETTER(SetImage);
+    static NAN_GETTER(GetFormats);
+    static NAN_SETTER(SetFormats);
+    static NAN_GETTER(GetTryHarder);
+    static NAN_SETTER(SetTryHarder);
 
     // Methods.
-    static v8::Handle<v8::Value> FindCode(const v8::Arguments& args);
+    static NAN_METHOD(FindCode);
 
     ZXing();
     ~ZXing();

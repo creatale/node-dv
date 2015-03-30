@@ -1,3 +1,6 @@
+## v1.9.0 (March 30, 2015)
+- Used NAN (Native Abstractions for Node.js) for compatibility to node-0.10 and node-0.12
+
 ## v1.8.1 (November 27, 2014)
 - Fixed dependencies for Node.js 0.8
 - Fixed build for MSVC 2012

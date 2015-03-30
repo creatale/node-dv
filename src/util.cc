@@ -14,15 +14,15 @@ using namespace v8;
 
 Handle<Object> createBox(Box* box)
 {
-    Handle<Object> result = Object::New();
-    result->Set(String::NewSymbol("x"), Int32::New(box->x));
-    result->Set(String::NewSymbol("y"), Int32::New(box->y));
-    result->Set(String::NewSymbol("width"), Int32::New(box->w));
-    result->Set(String::NewSymbol("height"), Int32::New(box->h));
+    Handle<Object> result = NanNew<Object>();
+    result->Set(NanNew("x"), NanNew<Int32>(box->x));
+    result->Set(NanNew("y"), NanNew<Int32>(box->y));
+    result->Set(NanNew("width"), NanNew<Int32>(box->w));
+    result->Set(NanNew("height"), NanNew<Int32>(box->h));
     return result;
 }
 
-Box* toBox(const Arguments &args, int start, int* end)
+Box* toBox(_NAN_METHOD_ARGS, int start, int* end)
 {
     if (args[start]->IsNumber() && args[start + 1]->IsNumber()
             && args[start + 2]->IsNumber() && args[start + 3]->IsNumber()) {
@@ -36,10 +36,10 @@ Box* toBox(const Arguments &args, int start, int* end)
         return boxCreate(x, y, width, height);
     } else if (args[start]->IsObject()) {
         Handle<Object> object = args[start]->ToObject();
-        int x = floor(object->Get(String::NewSymbol("x"))->ToNumber()->Value());
-        int y = floor(object->Get(String::NewSymbol("y"))->ToNumber()->Value());
-        int width = ceil(object->Get(String::NewSymbol("width"))->ToNumber()->Value());
-        int height = ceil(object->Get(String::NewSymbol("height"))->ToNumber()->Value());
+        int x = floor(object->Get(NanNew("x"))->ToNumber()->Value());
+        int y = floor(object->Get(NanNew("y"))->ToNumber()->Value());
+        int width = ceil(object->Get(NanNew("width"))->ToNumber()->Value());
+        int height = ceil(object->Get(NanNew("height"))->ToNumber()->Value());
         if (end) {
             *end = start;
         }
@@ -55,7 +55,7 @@ Box* toBox(const Arguments &args, int start, int* end)
 int toOp(v8::Local<v8::Value> value)
 {
     int result  = L_FLIP_PIXELS;
-    String::AsciiValue op(value->ToString());
+    String::Utf8Value op(value->ToString());
     if (strcmp("set", *op) == 0) {
         result = L_SET_PIXELS;
     } else if (strcmp("clear", *op) == 0) {
