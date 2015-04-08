@@ -289,6 +289,7 @@ void Image::Init(Handle<Object> target)
 
 Handle<Value> Image::New(Pix *pix)
 {
+    NanEscapableScope();
     Local<Object> instance = NanNew(constructor_template)->GetFunction()->NewInstance();
     Image *obj = ObjectWrap::Unwrap<Image>(instance);
     obj->pix_ = pix;
@@ -296,7 +297,7 @@ Handle<Value> Image::New(Pix *pix)
         NanAdjustExternalMemory(obj->size());
     }
     //not sure if right, but this isnt really a v8 method, args is missing
-    return instance;
+    return NanEscapeScope(instance);
 }
 
 NAN_METHOD(Image::New)
