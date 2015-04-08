@@ -296,7 +296,6 @@ Handle<Value> Image::New(Pix *pix)
     if (obj->pix_) {
         NanAdjustExternalMemory(obj->size());
     }
-    //not sure if right, but this isnt really a v8 method, args is missing
     return NanEscapeScope(instance);
 }
 
