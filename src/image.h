@@ -9,24 +9,26 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
-#include <v8.h>
-#include <node.h>
+//#include <v8.h>
+//#include <node.h>
 #include <nan.h>
 #include <allheaders.h>
 
 namespace binding {
 
-class Image : public node::ObjectWrap
+class Image : public Nan::ObjectWrap
 {
 public:
-    static v8::Persistent<v8::FunctionTemplate> constructor_template;
+    static Nan::Persistent<v8::FunctionTemplate> constructor_template;
 
     static bool HasInstance(v8::Handle<v8::Value> val);
     static Pix *Pixels(v8::Handle<v8::Object> obj);
 
-    static void Init(v8::Handle<v8::Object> target);
+	static NAN_MODULE_INIT(Init);
+    //static void Init(v8::Handle<v8::Object> target);
 
-    static v8::Handle<v8::Value> New(Pix *pix);
+    //static v8::Handle<v8::Value> New(Pix *pix);
+    static v8::Local<v8::Object> New(Pix *pix);
 
 private:
     static NAN_METHOD(New);
@@ -38,7 +40,7 @@ private:
 
     // Methods.
     static NAN_METHOD(Invert);
-    static NAN_METHOD(Or);
+    /*static NAN_METHOD(Or);
     static NAN_METHOD(And);
     static NAN_METHOD(Xor);
     static NAN_METHOD(Add);
@@ -76,7 +78,7 @@ private:
     static NAN_METHOD(FillBox);
     static NAN_METHOD(DrawBox);
     static NAN_METHOD(DrawLine);
-    static NAN_METHOD(DrawImage);
+    static NAN_METHOD(DrawImage);*/
     static NAN_METHOD(ToBuffer);
 
     Image(Pix *pix);

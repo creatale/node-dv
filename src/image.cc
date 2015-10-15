@@ -17,6 +17,7 @@
 #include <jpge.h>
 #include <opencv2/core/core.hpp>
 #include <LSWMS.h>
+#include <iostream>
 
 #ifdef _MSC_VER
 #if _MSC_VER <= 1700
@@ -28,11 +29,11 @@ int round(double x)
 #endif
 
 using namespace v8;
-using namespace node;
+//using namespace node;
 
 namespace binding {
 
-Persistent<FunctionTemplate> Image::constructor_template;
+Nan::Persistent<FunctionTemplate> Image::constructor_template;
 
 PIX *pixFromSource(uint8_t *pixSource, int32_t width, int32_t height, int32_t depth, int32_t targetDepth)
 {
@@ -180,7 +181,8 @@ bool Image::HasInstance(Handle<Value> val)
     if (!val->IsObject()) {
         return false;
     }
-    return NanHasInstance(constructor_template, val->ToObject());
+    return true;
+    //return NanHasInstance(constructor_template, val->ToObject());
 }
 
 Pix *Image::Pixels(Handle<Object> obj)
@@ -188,13 +190,21 @@ Pix *Image::Pixels(Handle<Object> obj)
     return ObjectWrap::Unwrap<Image>(obj)->pix_;
 }
 
-void Image::Init(Handle<Object> target)
-{   
-    Local<FunctionTemplate> local_constructor_template = NanNew<FunctionTemplate>(New);
-    local_constructor_template->SetClassName(NanNew("Image"));
-    local_constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
-    Local<ObjectTemplate> proto = local_constructor_template->PrototypeTemplate();
-    proto->SetAccessor(NanNew("width"), GetWidth);
+NAN_MODULE_INIT(Image::Init)
+{  
+	std::cout << "Module init.\n";
+    auto ctor = Nan::New<v8::FunctionTemplate>(New);
+    auto ctorInst = ctor->InstanceTemplate();
+    ctor->SetClassName(Nan::New("Image").ToLocalChecked());
+    ctorInst->SetInternalFieldCount(1);
+    
+	Nan::SetAccessor(ctorInst, Nan::New("width").ToLocalChecked(), GetWidth);
+	Nan::SetAccessor(ctorInst, Nan::New("height").ToLocalChecked(), GetHeight);
+	Nan::SetAccessor(ctorInst, Nan::New("depth").ToLocalChecked(), GetDepth);
+	
+	Nan::SetPrototypeMethod(ctor, "invert", Invert);
+   
+    /*proto->SetAccessor(NanNew("width"), GetWidth);
     proto->SetAccessor(NanNew("height"), GetHeight);
     proto->SetAccessor(NanNew("depth"), GetDepth);
     proto->Set(NanNew("invert"),
@@ -280,38 +290,55 @@ void Image::Init(Handle<Object> target)
     proto->Set(NanNew("drawLine"),
                NanNew<FunctionTemplate>(DrawLine)->GetFunction());
     proto->Set(NanNew("toBuffer"),
-               NanNew<FunctionTemplate>(ToBuffer)->GetFunction());
+               NanNew<FunctionTemplate>(ToBuffer)->GetFunction());*/
+	Nan::SetPrototypeMethod(ctor, "toBuffer", ToBuffer);
     
-    NanAssignPersistent(constructor_template, local_constructor_template);
+    constructor_template.Reset(ctor);
 
-    target->Set(NanNew("Image"), local_constructor_template->GetFunction());
+    Nan::Set(target, Nan::New("Image").ToLocalChecked(), Nan::GetFunction(ctor).ToLocalChecked());
+    std::cout << "Module init end.\n";
 }
 
-Handle<Value> Image::New(Pix *pix)
+Local<Object> Image::New(Pix *pix)
 {
-    NanEscapableScope();
-    Local<Object> instance = NanNew(constructor_template)->GetFunction()->NewInstance();
+	std::cout << "Construct from Pix\n";
+    Nan::EscapableHandleScope scope;
+    Local<Object> instance = Nan::New(constructor_template)->GetFunction()->NewInstance();
     Image *obj = ObjectWrap::Unwrap<Image>(instance);
     obj->pix_ = pix;
     if (obj->pix_) {
-        NanAdjustExternalMemory(obj->size());
+        Nan::AdjustExternalMemory(obj->size());
     }
-    return NanEscapeScope(instance);
+    return scope.Escape(instance);
 }
 
 NAN_METHOD(Image::New)
 {
-    NanScope();
+	std::cout << "Construct from JS ";
+	if (!info.IsConstructCall()) {
+		std::cout << "...without new\n";
+	    // [NOTE] generic recursive call with `new`
+		std::vector<v8::Local<v8::Value>> args(info.Length());
+		for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];	    
+	    auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
+	    if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
+	    return;
+	}
+	
+		
+	std::cout << "...regular constructor " << info.Length() << "\n";
+
+    //NanScope();
     Pix *pix;
-    if (args.Length() == 0) {
+    if (info.Length() == 0) {
         pix = 0;
-    } else if (args.Length() == 1 &&  Image::HasInstance(args[0])) {
-        pix = pixCopy(NULL, Image::Pixels(args[0]->ToObject()));
-    } else if (args.Length() == 2 && Buffer::HasInstance(args[1])) {
-        String::Utf8Value format(args[0]->ToString());
-        Local<Object> buffer = args[1]->ToObject();
-        unsigned char *in = reinterpret_cast<unsigned char*>(Buffer::Data(buffer));
-        size_t inLength = Buffer::Length(buffer);
+    } else if (info.Length() == 1 && Image::HasInstance(info[0])) {
+        pix = pixCopy(NULL, Image::Pixels(info[0]->ToObject()));
+    } else if (info.Length() == 2 && node::Buffer::HasInstance(info[1])) {
+        String::Utf8Value format(info[0]->ToString());
+        Local<Object> buffer = info[1]->ToObject();
+        unsigned char *in = reinterpret_cast<unsigned char*>(node::Buffer::Data(buffer));
+        size_t inLength = node::Buffer::Length(buffer);
         if (strcmp("png", *format) == 0) {
             std::vector<unsigned char> out;
             unsigned int width;
@@ -321,7 +348,7 @@ NAN_METHOD(Image::New)
             if (error) {
                 std::stringstream msg;
                 msg << "error while decoding '" << lodepng_error_text(error) << "'";
-                return NanThrowError(msg.str().c_str());
+                return Nan::ThrowError(msg.str().c_str());
             }
             if (state.info_png.color.colortype == LCT_GREY || state.info_png.color.colortype == LCT_GREY_ALPHA) {
                 pix = pixFromSource(&out[0], width, height, 32, 8);
@@ -335,34 +362,34 @@ NAN_METHOD(Image::New)
             unsigned char *out = jpgd::decompress_jpeg_image_from_memory(
                         in, static_cast<int>(inLength), &width, &height, &comps, 4);
             if (!out) {
-                return NanThrowError("error while decoding jpg");
+                return Nan::ThrowError("error while decoding jpg");
             }
             pix = pixFromSource(out, width, height, 32, comps == 1 ? 8 : 32);
             free(out);
         } else {
             std::stringstream msg;
             msg << "invalid bufffer format '" << *format << "'";
-            return NanThrowError(msg.str().c_str());
+            return Nan::ThrowError(msg.str().c_str());
         }
-    } else if (args.Length() == 3 && args[0]->IsNumber() && args[1]->IsNumber()
-               && args[2]->IsNumber()) {
-        int32_t width = args[0]->Int32Value();
-        int32_t height = args[1]->Int32Value();
-        int32_t depth = args[2]->Int32Value();
+    } else if (info.Length() == 3 && info[0]->IsNumber() && info[1]->IsNumber()
+               && info[2]->IsNumber()) {
+        int32_t width = info[0]->Int32Value();
+        int32_t height = info[1]->Int32Value();
+        int32_t depth = info[2]->Int32Value();
         pix = pixCreate(width, height, depth);
-    } else if (args.Length() == 3 &&
-               (Image::HasInstance(args[0]) || args[0]->IsNull() || args[0]->IsUndefined()) &&
-               (Image::HasInstance(args[1]) || args[1]->IsNull() || args[0]->IsUndefined()) &&
-               (Image::HasInstance(args[2]) || args[2]->IsNull() || args[0]->IsUndefined())) {
-        pix = pixCompose(Image::Pixels(args[0]->ToObject()),
-                Image::Pixels(args[1]->ToObject()),
-                Image::Pixels(args[2]->ToObject()));
-    } else if (args.Length() == 4 && Buffer::HasInstance(args[1])) {
-        String::Utf8Value format(args[0]->ToString());
-        Local<Object> buffer = args[1]->ToObject();
-        size_t length = Buffer::Length(buffer);
-        int32_t width = args[2]->Int32Value();
-        int32_t height = args[3]->Int32Value();
+    } else if (info.Length() == 3 &&
+               (Image::HasInstance(info[0]) || info[0]->IsNull() || info[0]->IsUndefined()) &&
+               (Image::HasInstance(info[1]) || info[1]->IsNull() || info[0]->IsUndefined()) &&
+               (Image::HasInstance(info[2]) || info[2]->IsNull() || info[0]->IsUndefined())) {
+        pix = pixCompose(Image::Pixels(info[0]->ToObject()),
+                Image::Pixels(info[1]->ToObject()),
+                Image::Pixels(info[2]->ToObject()));
+    } else if (info.Length() == 4 && node::Buffer::HasInstance(info[1])) {
+        String::Utf8Value format(info[0]->ToString());
+        Local<Object> buffer = info[1]->ToObject();
+        size_t length = node::Buffer::Length(buffer);
+        int32_t width = info[2]->Int32Value();
+        int32_t height = info[3]->Int32Value();
         int32_t depth;
         if (strcmp("rgba", *format) == 0) {
             depth = 32;
@@ -373,56 +400,78 @@ NAN_METHOD(Image::New)
         } else {
             std::stringstream msg;
             msg << "invalid buffer format '" << *format << "'";
-            return NanThrowError(msg.str().c_str());
+            return Nan::ThrowError(msg.str().c_str());
         }
         size_t expectedLength = width * height * depth;
         if (expectedLength != length << 3) {
-            return NanThrowError("invalid Buffer length");
+            return Nan::ThrowError("invalid Buffer length");
         }
-        pix = pixFromSource(reinterpret_cast<uint8_t*>(Buffer::Data(buffer)), width, height, depth, 32);
+        pix = pixFromSource(reinterpret_cast<uint8_t*>(node::Buffer::Data(buffer)), width, height, depth, 32);
     } else {
-        return NanThrowTypeError("expected (image: Image) or (image1: Image, "
+        return Nan::ThrowTypeError("expected (image: Image) or (image1: Image, "
                      "image2: Image, image3: Image) or (format: String, "
                      "image: Buffer, [width: Int32, height: Int32]) or no arguments at all");
     }
     Image* obj = new Image(pix);
-    obj->Wrap(args.This());
-    NanReturnThis();
+    
+    std::cout << "Wrap it!\n";
+    obj->Wrap(info.This());
+    //NanReturnThis();
+    std::cout << "Finished constructor.\n";
 }
 
 NAN_GETTER(Image::GetWidth)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    NanReturnValue(NanNew<Number>(obj->pix_->w));
+	std::cout << "GetWidth\n";
+    //NanScope();
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    std::cout << "obj " << obj << " pix_" << obj->pix_ << "\n";
+    if (obj->pix_) {
+    	info.GetReturnValue().Set(Nan::New(obj->pix_->w));
+    } else {
+    	info.GetReturnValue().SetNull();
+    }
+
+    //NanReturnValue(NanNew<Number>());
 }
 
 NAN_GETTER(Image::GetHeight)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    NanReturnValue(NanNew<Number>(obj->pix_->h));
+	std::cout << "GetHeight\n";
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (obj->pix_) {
+    	info.GetReturnValue().Set(Nan::New(obj->pix_->h));
+    } else {
+    	info.GetReturnValue().SetNull();
+    }
 }
 
 NAN_GETTER(Image::GetDepth)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    NanReturnValue(NanNew<Number>(obj->pix_->d));
+	std::cout << "GetDepth\n";
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    std::cout << "obj " << obj;
+    std::cout << " pix_" << obj->pix_ << "\n";
+    if (obj->pix_) {
+    	info.GetReturnValue().Set(Nan::New(obj->pix_->d));
+    } else {
+    	info.GetReturnValue().SetNull();
+    }
 }
 
 NAN_METHOD(Image::Invert)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
+    //NanScope();
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     Pix *pixd = pixInvert(NULL, obj->pix_);
     if (pixd == NULL) {
-        return NanThrowTypeError("error while applying INVERT");
+        return Nan::ThrowTypeError("error while applying INVERT");
     }
-    NanReturnValue(Image::New(pixd));
+    info.GetReturnValue().Set(Image::New(pixd));
+    //NanReturnValue(Image::New(pixd));
 }
 
-NAN_METHOD(Image::Or)
+/*NAN_METHOD(Image::Or)
 {
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());
@@ -1364,32 +1413,32 @@ NAN_METHOD(Image::DrawImage)
     } else {
         return NanThrowTypeError("expected (image: Image, box: Box)");
     }
-}
+}*/
 
 NAN_METHOD(Image::ToBuffer)
 {
-    NanScope();
+    //NanScope();
     const int FORMAT_RAW = 0;
     const int FORMAT_PNG = 1;
     const int FORMAT_JPG = 2;
     int formatInt = FORMAT_RAW;
     jpge::params params;
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (args.Length() >= 1 && args[0]->IsString()) {
-        String::Utf8Value format(args[0]->ToString());
+    Image *obj = ObjectWrap::Unwrap<Image>(info.This());
+    if (info.Length() >= 1 && info[0]->IsString()) {
+        String::Utf8Value format(info[0]->ToString());
         if (strcmp("raw", *format) == 0) {
             formatInt = FORMAT_RAW;
         } else if (strcmp("png", *format) == 0) {
             formatInt = FORMAT_PNG;
         } else if (strcmp("jpg", *format) == 0) {
             formatInt = FORMAT_JPG;
-            if (args[1]->IsNumber()) {
-                params.m_quality = args[1]->Int32Value();
+            if (info[1]->IsNumber()) {
+                params.m_quality = info[1]->Int32Value();
             }
         } else {
             std::stringstream msg;
             msg << "invalid format '" << *format << "'";
-            return NanThrowError(msg.str().c_str());
+            return Nan::ThrowError(msg.str().c_str());
         }
     }
     std::vector<unsigned char> imgData;
@@ -1509,36 +1558,36 @@ NAN_METHOD(Image::ToBuffer)
             }
         }
     } else {
-        return NanThrowError("invalid PIX depth");
+        return Nan::ThrowError("invalid PIX depth");
     }
     if (error) {
         std::stringstream msg;
         msg << "error while encoding '" << lodepng_error_text(error) << "'";
-        return NanThrowError(msg.str().c_str());
+        return Nan::ThrowError(msg.str().c_str());
     }
     if (formatInt == FORMAT_PNG) {
-        NanReturnValue(NanNewBufferHandle(reinterpret_cast<char *>(&pngData[0]), pngData.size()));
+    	info.GetReturnValue().Set(Nan::CopyBuffer(reinterpret_cast<char *>(&pngData[0]), pngData.size()).ToLocalChecked());
     } else if (formatInt == FORMAT_JPG) {
-        Handle<Value> buffer = NanNewBufferHandle(jpgData, jpgDataSize);
+    	info.GetReturnValue().Set(Nan::CopyBuffer(jpgData, jpgDataSize).ToLocalChecked());
         free(jpgData);
-        NanReturnValue(buffer);
     } else {
-        NanReturnValue(NanNewBufferHandle(reinterpret_cast<char *>(&imgData[0]), imgData.size()));
+    	info.GetReturnValue().Set(Nan::CopyBuffer(reinterpret_cast<char *>(&imgData[0]), imgData.size()).ToLocalChecked());
     }
 }
 
 Image::Image(Pix *pix)
     : pix_(pix)
 {
+	std::cout << "C++ constructor: " << pix_ << "\n";
     if (pix_) {
-        NanAdjustExternalMemory(size());
+        Nan::AdjustExternalMemory(size());
     }
 }
 
 Image::~Image()
 {
     if (pix_) {
-        NanAdjustExternalMemory(-size());
+        Nan::AdjustExternalMemory(-size());
         pixDestroy(&pix_);
     }
 }
