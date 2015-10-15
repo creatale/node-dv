@@ -36,15 +36,14 @@
        ],
       'sources': [
         'src/image.cc',
-        'src/tesseract.cc',
         'src/util.cc',
-        'src/zxing.cc',
         'src/module.cc',
       ],
       'conditions': [
         ['OS=="linux"',
           {
             'cflags!': [ '-w' ],
+            'cflags_cc': ['-std=c++11']
           }
         ],
         ['OS=="mac"',
