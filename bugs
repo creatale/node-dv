@@ -1,0 +1,7 @@
+1. new Image('gray') converts to 32 bit (and does it wrong)
+2. a = new Image('rgb', new Buffer('aaa'), 1, 1)
+  b = new Image('rgb', new Buffer('\x01\x02\x03'), 1, 1)
+  b.subtract(a).toBuffer() -> <Buffer 9f a0 a2>
+  expected <Buffer 0 0 0>, it is supposed to clip channel-wise!
+  
+  (works for grayscale!)

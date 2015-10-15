@@ -203,23 +203,13 @@ NAN_MODULE_INIT(Image::Init)
 	Nan::SetAccessor(ctorInst, Nan::New("depth").ToLocalChecked(), GetDepth);
 	
 	Nan::SetPrototypeMethod(ctor, "invert", Invert);
-   
-    /*proto->SetAccessor(NanNew("width"), GetWidth);
-    proto->SetAccessor(NanNew("height"), GetHeight);
-    proto->SetAccessor(NanNew("depth"), GetDepth);
-    proto->Set(NanNew("invert"),
-               NanNew<FunctionTemplate>(Invert)->GetFunction());
-    proto->Set(NanNew("or"),
-               NanNew<FunctionTemplate>(Or)->GetFunction());
-    proto->Set(NanNew("and"),
-               NanNew<FunctionTemplate>(And)->GetFunction());
-    proto->Set(NanNew("xor"),
-               NanNew<FunctionTemplate>(Xor)->GetFunction());
-    proto->Set(NanNew("add"),
-               NanNew<FunctionTemplate>(Add)->GetFunction());
-    proto->Set(NanNew("subtract"),
-               NanNew<FunctionTemplate>(Subtract)->GetFunction());
-    proto->Set(NanNew("convolve"),
+	Nan::SetPrototypeMethod(ctor, "or", Or);
+	Nan::SetPrototypeMethod(ctor, "and", And);
+	Nan::SetPrototypeMethod(ctor, "xor", Xor);
+	Nan::SetPrototypeMethod(ctor, "add", Add);
+	Nan::SetPrototypeMethod(ctor, "subtract", Subtract);
+	
+    /*proto->Set(NanNew("convolve"),
                NanNew<FunctionTemplate>(Convolve)->GetFunction());
     proto->Set(NanNew("unsharpMasking"), //TODO: remove (deprecated).
                NanNew<FunctionTemplate>(Unsharp)->GetFunction());
@@ -471,60 +461,56 @@ NAN_METHOD(Image::Invert)
     //NanReturnValue(Image::New(pixd));
 }
 
-/*NAN_METHOD(Image::Or)
+NAN_METHOD(Image::Or)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (Image::HasInstance(args[0])) {
-        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (Image::HasInstance(info[0])) {
+        Pix *otherPix = Image::Pixels(info[0]->ToObject());
         Pix *pixd = pixOr(NULL, obj->pix_, otherPix);
         if (pixd == NULL) {
-            return NanThrowTypeError("error while applying OR");
+            return Nan::ThrowTypeError("error while applying OR");
         }
-        NanReturnValue(Image::New(pixd));
+        info.GetReturnValue().Set(Image::New(pixd));
     } else {
-        return NanThrowTypeError("expected (image: Image)");
+        return Nan::ThrowTypeError("expected (image: Image)");
     }
 }
 
 NAN_METHOD(Image::And)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (Image::HasInstance(args[0])) {
-        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (Image::HasInstance(info[0])) {
+        Pix *otherPix = Image::Pixels(info[0]->ToObject());
         Pix *pixd = pixAnd(NULL, obj->pix_, otherPix);
         if (pixd == NULL) {
-            return NanThrowTypeError("error while applying AND");
+            return Nan::ThrowTypeError("error while applying AND");
         }
-        NanReturnValue(Image::New(pixd));
+        info.GetReturnValue().Set(Image::New(pixd));
     } else {
-        return NanThrowTypeError("expected (image: Image)");
+        return Nan::ThrowTypeError("expected (image: Image)");
     }
 }
 
 NAN_METHOD(Image::Xor)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (Image::HasInstance(args[0])) {
-        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (Image::HasInstance(info[0])) {
+        Pix *otherPix = Image::Pixels(info[0]->ToObject());
         Pix *pixd = pixXor(NULL, obj->pix_, otherPix);
         if (pixd == NULL) {
-            return NanThrowTypeError("error while applying XOR");
+            return Nan::ThrowTypeError("error while applying XOR");
         }
-        NanReturnValue(Image::New(pixd));
+        info.GetReturnValue().Set(Image::New(pixd));
     } else {
-        return NanThrowTypeError("expected (image: Image)");
+        return Nan::ThrowTypeError("expected (image: Image)");
     }
 }
 
 NAN_METHOD(Image::Add)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (Image::HasInstance(args[0])) {
-        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (Image::HasInstance(info[0])) {
+        Pix *otherPix = Image::Pixels(info[0]->ToObject());
         Pix *pixd;
         if (obj->pix_->d == 32) {
             pixd = pixAddRGB(obj->pix_, otherPix);
@@ -540,20 +526,19 @@ NAN_METHOD(Image::Add)
             pixd = pixOr(NULL, obj->pix_, otherPix);
         }
         if (pixd == NULL) {
-            return NanThrowTypeError("error while applying ADD");
+            return Nan::ThrowTypeError("error while applying ADD");
         }
-        NanReturnValue(Image::New(pixd));
+        info.GetReturnValue().Set(Image::New(pixd));
     } else {
-        return NanThrowTypeError("expected (image: Image)");
+        return Nan::ThrowTypeError("expected (image: Image)");
     }
 }
 
 NAN_METHOD(Image::Subtract)
 {
-    NanScope();
-    Image *obj = ObjectWrap::Unwrap<Image>(args.This());
-    if (Image::HasInstance(args[0])) {
-        Pix *otherPix = Image::Pixels(args[0]->ToObject());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (Image::HasInstance(info[0])) {
+        Pix *otherPix = Image::Pixels(info[0]->ToObject());
         Pix *pixd;
         if(obj->pix_->d >= 8) {
             if (obj->pix_ == otherPix) {
@@ -567,15 +552,15 @@ NAN_METHOD(Image::Subtract)
             pixd = pixSubtract(NULL, obj->pix_, otherPix);
         }
         if (pixd == NULL) {
-            return NanThrowTypeError("error while applying SUBTRACT");
+            return Nan::ThrowTypeError("error while applying SUBTRACT");
         }
-        NanReturnValue(Image::New(pixd));
+        info.GetReturnValue().Set(Image::New(pixd));
     } else {
-        return NanThrowTypeError("expected (image: Image)");
+        return Nan::ThrowTypeError("expected (image: Image)");
     }
 }
 
-NAN_METHOD(Image::Convolve)
+/*NAN_METHOD(Image::Convolve)
 {
     NanScope();
     Image *obj = ObjectWrap::Unwrap<Image>(args.This());

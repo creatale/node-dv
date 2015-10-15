@@ -40,12 +40,12 @@ private:
 
     // Methods.
     static NAN_METHOD(Invert);
-    /*static NAN_METHOD(Or);
+    static NAN_METHOD(Or);
     static NAN_METHOD(And);
     static NAN_METHOD(Xor);
     static NAN_METHOD(Add);
     static NAN_METHOD(Subtract);
-    static NAN_METHOD(Convolve);
+    /*static NAN_METHOD(Convolve);
     static NAN_METHOD(Unsharp);
     static NAN_METHOD(Rotate);
     static NAN_METHOD(Scale);
