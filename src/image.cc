@@ -181,8 +181,7 @@ bool Image::HasInstance(Handle<Value> val)
     if (!val->IsObject()) {
         return false;
     }
-    return true;
-    //return NanHasInstance(constructor_template, val->ToObject());
+    return Nan::New(constructor_template)->HasInstance(val->ToObject());
 }
 
 Pix *Image::Pixels(Handle<Object> obj)

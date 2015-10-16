@@ -5,3 +5,4 @@
   expected <Buffer 0 0 0>, it is supposed to clip channel-wise!
   
   (works for grayscale!)
+3. new Image().subtract(new Image()) segfaults
