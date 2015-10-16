@@ -17,7 +17,6 @@
 #include <jpge.h>
 #include <opencv2/core/core.hpp>
 #include <LSWMS.h>
-#include <iostream>
 
 #ifdef _MSC_VER
 #if _MSC_VER <= 1700
@@ -191,7 +190,6 @@ Pix *Image::Pixels(Handle<Object> obj)
 
 NAN_MODULE_INIT(Image::Init)
 {  
-	std::cout << "Module init.\n";
     auto ctor = Nan::New<v8::FunctionTemplate>(New);
     auto ctorInst = ctor->InstanceTemplate();
     ctor->SetClassName(Nan::New("Image").ToLocalChecked());
@@ -246,12 +244,10 @@ NAN_MODULE_INIT(Image::Init)
     constructor_template.Reset(ctor);
 
     Nan::Set(target, Nan::New("Image").ToLocalChecked(), Nan::GetFunction(ctor).ToLocalChecked());
-    std::cout << "Module init end.\n";
 }
 
 Local<Object> Image::New(Pix *pix)
 {
-	std::cout << "Construct from Pix\n";
     Nan::EscapableHandleScope scope;
     Local<Object> instance = Nan::New(constructor_template)->GetFunction()->NewInstance();
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(instance);
@@ -264,9 +260,7 @@ Local<Object> Image::New(Pix *pix)
 
 NAN_METHOD(Image::New)
 {
-	std::cout << "Construct from JS ";
 	if (!info.IsConstructCall()) {
-		std::cout << "...without new\n";
 	    // [NOTE] generic recursive call with `new`
 		std::vector<v8::Local<v8::Value>> args(info.Length());
 		for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];	    
@@ -274,11 +268,7 @@ NAN_METHOD(Image::New)
 	    if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
 	    return;
 	}
-	
-		
-	std::cout << "...regular constructor " << info.Length() << "\n";
 
-    //NanScope();
     Pix *pix;
     if (info.Length() == 0) {
         pix = 0;
@@ -364,18 +354,12 @@ NAN_METHOD(Image::New)
     }
     Image* obj = new Image(pix);
     
-    std::cout << "Wrap it!\n";
     obj->Wrap(info.This());
-    //NanReturnThis();
-    std::cout << "Finished constructor.\n";
 }
 
 NAN_GETTER(Image::GetWidth)
 {
-	std::cout << "GetWidth\n";
-    //NanScope();
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
-    std::cout << "obj " << obj << " pix_" << obj->pix_ << "\n";
     if (obj->pix_) {
     	info.GetReturnValue().Set(Nan::New(obj->pix_->w));
     } else {
@@ -385,7 +369,6 @@ NAN_GETTER(Image::GetWidth)
 
 NAN_GETTER(Image::GetHeight)
 {
-	std::cout << "GetHeight\n";
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (obj->pix_) {
     	info.GetReturnValue().Set(Nan::New(obj->pix_->h));
@@ -396,10 +379,7 @@ NAN_GETTER(Image::GetHeight)
 
 NAN_GETTER(Image::GetDepth)
 {
-	std::cout << "GetDepth\n";
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
-    std::cout << "obj " << obj;
-    std::cout << " pix_" << obj->pix_ << "\n";
     if (obj->pix_) {
     	info.GetReturnValue().Set(Nan::New(obj->pix_->d));
     } else {
@@ -409,14 +389,12 @@ NAN_GETTER(Image::GetDepth)
 
 NAN_METHOD(Image::Invert)
 {
-    //NanScope();
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     Pix *pixd = pixInvert(NULL, obj->pix_);
     if (pixd == NULL) {
         return Nan::ThrowTypeError("error while applying INVERT");
     }
     info.GetReturnValue().Set(Image::New(pixd));
-    //info.GetReturnValue().Set(Image::New(pixd));
 }
 
 NAN_METHOD(Image::Or)
@@ -1499,7 +1477,6 @@ NAN_METHOD(Image::ToBuffer)
 Image::Image(Pix *pix)
     : pix_(pix)
 {
-	std::cout << "C++ constructor: " << pix_ << "\n";
     if (pix_) {
         Nan::AdjustExternalMemory(size());
     }
