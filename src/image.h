@@ -45,7 +45,7 @@ private:
     static NAN_METHOD(Xor);
     static NAN_METHOD(Add);
     static NAN_METHOD(Subtract);
-    /*static NAN_METHOD(Convolve);
+    static NAN_METHOD(Convolve);
     static NAN_METHOD(Unsharp);
     static NAN_METHOD(Rotate);
     static NAN_METHOD(Scale);
@@ -63,7 +63,7 @@ private:
     static NAN_METHOD(ToColor);
     static NAN_METHOD(ToHSV);
     static NAN_METHOD(ToRGB);
-    static NAN_METHOD(Erode);
+    /*static NAN_METHOD(Erode);
     static NAN_METHOD(Dilate);
     static NAN_METHOD(Open);
     static NAN_METHOD(Close);
