@@ -36,6 +36,7 @@
        ],
       'sources': [
         'src/image.cc',
+        'src/tesseract.cc',
         'src/util.cc',
         'src/module.cc',
       ],
@@ -43,7 +44,7 @@
         ['OS=="linux"',
           {
             'cflags!': [ '-w' ],
-            'cflags_cc': ['-std=c++11']
+            'cflags_cc': ['-std=c++11', '-Wno-ignored-qualifiers', '-Wno-extra']
           }
         ],
         ['OS=="mac"',
