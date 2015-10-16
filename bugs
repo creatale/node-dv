@@ -6,3 +6,4 @@
   
   (works for grayscale!)
 3. new Image().subtract(new Image()) segfaults
+4. new Image('rgb', new Buffer('aaabbb'), 2, 1).toGray().lineSegments(1, 5, true) crashes

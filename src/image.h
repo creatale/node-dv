@@ -63,7 +63,7 @@ private:
     static NAN_METHOD(ToColor);
     static NAN_METHOD(ToHSV);
     static NAN_METHOD(ToRGB);
-    /*static NAN_METHOD(Erode);
+    static NAN_METHOD(Erode);
     static NAN_METHOD(Dilate);
     static NAN_METHOD(Open);
     static NAN_METHOD(Close);
@@ -78,7 +78,7 @@ private:
     static NAN_METHOD(FillBox);
     static NAN_METHOD(DrawBox);
     static NAN_METHOD(DrawLine);
-    static NAN_METHOD(DrawImage);*/
+    static NAN_METHOD(DrawImage);
     static NAN_METHOD(ToBuffer);
 
     Image(Pix *pix);

@@ -86,7 +86,7 @@ describe('Image', function(){
         writeImage('gray-convolve.png', this.gray.convolve(15, 15));
     })
     it('should #unsharp()', function(){
-        writeImage('gray-unsharp.png', this.gray.unsharpMasking(6, 2.5));
+        writeImage('gray-unsharp.png', this.gray.unsharp(6, 2.5));
     })
     it('should #rotate()', function(){
         writeImage('gray-rotate.png', this.gray.rotate(-0.703125));

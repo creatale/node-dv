@@ -225,7 +225,7 @@ NAN_MODULE_INIT(Image::Init)
     Nan::SetPrototypeMethod(ctor, "toColor", ToColor);
     Nan::SetPrototypeMethod(ctor, "toHSV", ToHSV);
     Nan::SetPrototypeMethod(ctor, "toRGB", ToRGB);
-    /*Nan::SetPrototypeMethod(ctor, "erode", Erode);
+    Nan::SetPrototypeMethod(ctor, "erode", Erode);
     Nan::SetPrototypeMethod(ctor, "dilate", Dilate);
     Nan::SetPrototypeMethod(ctor, "open", Open);
     Nan::SetPrototypeMethod(ctor, "close", Close);
@@ -241,8 +241,6 @@ NAN_MODULE_INIT(Image::Init)
     Nan::SetPrototypeMethod(ctor, "drawBox", DrawBox);
     Nan::SetPrototypeMethod(ctor, "drawImage", DrawImage);
     Nan::SetPrototypeMethod(ctor, "drawLine", DrawLine);
-    proto->Set(NanNew("toBuffer"),
-               NanNew<FunctionTemplate>(ToBuffer)->GetFunction());*/
 	Nan::SetPrototypeMethod(ctor, "toBuffer", ToBuffer);
     
     constructor_template.Reset(ctor);
@@ -793,6 +791,7 @@ NAN_METHOD(Image::ToGray)
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
     if (obj->pix_->d == 8) {
         info.GetReturnValue().Set(Image::New(pixClone(obj->pix_)));
+        return;
     }
     if (info.Length() == 0) {
         PIX *grayPix = pixConvertTo8(obj->pix_, 0);
@@ -815,6 +814,7 @@ NAN_METHOD(Image::ToGray)
                     obj->pix_, typeInt);
         if (grayPix != NULL) {
             info.GetReturnValue().Set(Image::New(grayPix));
+            return;
         } else {
             return Nan::ThrowError("error while computing grayscale image");
         }
@@ -863,11 +863,10 @@ NAN_METHOD(Image::ToRGB)
         return Nan::ThrowError("error while converting to RGB");
     }
 }
-/*
+
 NAN_METHOD(Image::Erode)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsNumber() && info[1]->IsNumber()) {
         int width = static_cast<int>(ceil(info[0]->NumberValue()));
         int height = static_cast<int>(ceil(info[1]->NumberValue()));
@@ -888,8 +887,7 @@ NAN_METHOD(Image::Erode)
 
 NAN_METHOD(Image::Dilate)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsNumber() && info[1]->IsNumber()) {
         int width = static_cast<int>(ceil(info[0]->NumberValue()));
         int height = static_cast<int>(ceil(info[1]->NumberValue()));
@@ -910,8 +908,7 @@ NAN_METHOD(Image::Dilate)
 
 NAN_METHOD(Image::Open)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsNumber() && info[1]->IsNumber()) {
         int width = static_cast<int>(ceil(info[0]->NumberValue()));
         int height = static_cast<int>(ceil(info[1]->NumberValue()));
@@ -932,8 +929,7 @@ NAN_METHOD(Image::Open)
 
 NAN_METHOD(Image::Close)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsNumber() && info[1]->IsNumber()) {
         int width = static_cast<int>(ceil(info[0]->NumberValue()));
         int height = static_cast<int>(ceil(info[1]->NumberValue()));
@@ -954,8 +950,7 @@ NAN_METHOD(Image::Close)
 
 NAN_METHOD(Image::Thin)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsString() && info[1]->IsInt32() && info[2]->IsInt32()) {
         int typeInt = 0;
         String::Utf8Value type(info[0]->ToString());
@@ -986,8 +981,7 @@ NAN_METHOD(Image::Thin)
 
 NAN_METHOD(Image::MaxDynamicRange)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsString()) {
         int typeInt = 0;
         String::Utf8Value type(info[0]->ToString());
@@ -1008,8 +1002,7 @@ NAN_METHOD(Image::MaxDynamicRange)
 
 NAN_METHOD(Image::OtsuAdaptiveThreshold)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsInt32() && info[1]->IsInt32()
             && info[2]->IsInt32() && info[3]->IsInt32()
             && info[4]->IsNumber()) {
@@ -1024,10 +1017,11 @@ NAN_METHOD(Image::OtsuAdaptiveThreshold)
                     obj->pix_, sx, sy, smoothx, smoothy,
                     scorefact, &ppixth, &ppixd);
         if (error == 0) {
-            Local<Object> object = NanNew<Object>();
-            object->Set(NanNew("thresholdValues"), Image::New(ppixth));
-            object->Set(NanNew("image"), Image::New(ppixd));
+            Local<Object> object = Nan::New<Object>();
+            object->Set(Nan::New("thresholdValues").ToLocalChecked(), Image::New(ppixth));
+            object->Set(Nan::New("image").ToLocalChecked(), Image::New(ppixd));
             info.GetReturnValue().Set(object);
+            return;
         } else {
             return Nan::ThrowError("error while computing threshold");
         }
@@ -1039,8 +1033,7 @@ NAN_METHOD(Image::OtsuAdaptiveThreshold)
 
 NAN_METHOD(Image::LineSegments)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsInt32() && info[1]->IsInt32() && info[2]->IsBoolean()) {
         if (obj->pix_->d != 8) {
             return Nan::ThrowTypeError("Not a 8bpp Image");
@@ -1054,18 +1047,24 @@ NAN_METHOD(Image::LineSegments)
         std::vector<LSWMS::LSEG> lSegs;
         std::vector<double> errors;
         lswms.run(img, lSegs, errors);
-        Local<Array> results = NanNew<Array>();
+        
+        Local<Array> results = Nan::New<Array>();
+        const auto strX = Nan::New("x").ToLocalChecked();
+        const auto strY = Nan::New("y").ToLocalChecked();
+        const auto strP1 = Nan::New("p1").ToLocalChecked();
+        const auto strP2 = Nan::New("p2").ToLocalChecked();
+        const auto strError = Nan::New("error").ToLocalChecked();
         for(size_t i = 0; i < lSegs.size(); i++) {
-            Handle<Object> p1 = NanNew<Object>();
-            p1->Set(NanNew("x"), NanNew<Int32>(lSegs[i][0].x));
-            p1->Set(NanNew("y"), NanNew<Int32>(lSegs[i][0].y));
-            Handle<Object> p2 = NanNew<Object>();
-            p2->Set(NanNew("x"), NanNew<Int32>(lSegs[i][1].x));
-            p2->Set(NanNew("y"), NanNew<Int32>(lSegs[i][1].y));
-            Handle<Object> result = NanNew<Object>();
-            result->Set(NanNew("p1"), p1);
-            result->Set(NanNew("p2"), p2);
-            result->Set(NanNew("error"), NanNew<Number>(errors[i]));
+            Handle<Object> p1 = Nan::New<Object>();
+            p1->Set(strX, Nan::New<Int32>(lSegs[i][0].x));
+            p1->Set(strY, Nan::New<Int32>(lSegs[i][0].y));
+            Handle<Object> p2 = Nan::New<Object>();
+            p2->Set(strX, Nan::New<Int32>(lSegs[i][1].x));
+            p2->Set(strY, Nan::New<Int32>(lSegs[i][1].y));
+            Handle<Object> result = Nan::New<Object>();
+            result->Set(strP1, p1);
+            result->Set(strP2, p2);
+            result->Set(strError, Nan::New<Number>(errors[i]));
             results->Set(i, result);
         }
         info.GetReturnValue().Set(results);
@@ -1076,8 +1075,7 @@ NAN_METHOD(Image::LineSegments)
 
 NAN_METHOD(Image::FindSkew)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     int32_t depth = pixGetDepth(obj->pix_);
     if (depth != 1) {
         return Nan::ThrowTypeError("expected binarized image");
@@ -1086,9 +1084,9 @@ NAN_METHOD(Image::FindSkew)
     float conf;
     int error = pixFindSkew(obj->pix_, &angle, &conf);
     if (error == 0) {
-        Local<Object> object = NanNew<Object>();
-        object->Set(NanNew("angle"), NanNew<Number>(angle));
-        object->Set(NanNew("confidence"), NanNew<Number>(conf));
+        Local<Object> object = Nan::New<Object>();
+        object->Set(Nan::New("angle").ToLocalChecked(), Nan::New(angle));
+        object->Set(Nan::New("confidence").ToLocalChecked(), Nan::New(conf));
         info.GetReturnValue().Set(object);
     } else {
         return Nan::ThrowError("angle measurment not valid");
@@ -1097,8 +1095,7 @@ NAN_METHOD(Image::FindSkew)
 
 NAN_METHOD(Image::ConnectedComponents)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsInt32()) {
         int connectivity = info[0]->Int32Value();
         PIX *pix = obj->pix_;
@@ -1113,7 +1110,7 @@ NAN_METHOD(Image::ConnectedComponents)
         if (!boxa) {
             return Nan::ThrowTypeError("error while computing connected components");
         }
-        Local<Object> boxes = NanNew<Array>();
+        Local<Object> boxes = Nan::New<Array>();
         for (int i = 0; i < boxa->n; ++i) {
             boxes->Set(i, createBox(boxa->box[i]));
         }
@@ -1126,8 +1123,7 @@ NAN_METHOD(Image::ConnectedComponents)
 
 NAN_METHOD(Image::DistanceFunction)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (info[0]->IsInt32()) {
         int connectivity = info[0]->Int32Value();
         PIX *pix = obj->pix_;
@@ -1151,8 +1147,7 @@ NAN_METHOD(Image::DistanceFunction)
 
 NAN_METHOD(Image::ClearBox)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     Box* box = toBox(info, 0);
     if (box) {
         int error;
@@ -1165,7 +1160,7 @@ NAN_METHOD(Image::ClearBox)
         if (error) {
             return Nan::ThrowTypeError("error while clearing box");
         }
-        NanReturnThis();
+        info.GetReturnValue().Set(info.This());
     } else {
         return Nan::ThrowTypeError("expected (box: Box) signature");
     }
@@ -1173,8 +1168,7 @@ NAN_METHOD(Image::ClearBox)
 
 NAN_METHOD(Image::FillBox)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     int boxEnd;
     BOX *box = toBox(info, 0, &boxEnd);
     if (box) {
@@ -1215,7 +1209,7 @@ NAN_METHOD(Image::FillBox)
         if (error) {
             return Nan::ThrowTypeError("error while drawing box");
         }
-        NanReturnThis();
+        info.GetReturnValue().Set(info.This());
     }
     else {
         return Nan::ThrowTypeError("expected (box: Box, value: Int32) or "
@@ -1225,8 +1219,7 @@ NAN_METHOD(Image::FillBox)
 
 NAN_METHOD(Image::DrawBox)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     int boxEnd;
     BOX *box = toBox(info, 0, &boxEnd);
     if (box && info[boxEnd + 1]->IsInt32()) {
@@ -1264,7 +1257,7 @@ NAN_METHOD(Image::DrawBox)
         if (error) {
             return Nan::ThrowTypeError("error while drawing box");
         }
-        NanReturnThis();
+        info.GetReturnValue().Set(info.This());
     } else {
         return Nan::ThrowTypeError("expected (box: Box, borderWidth: Int32, "
                      "op: String) or (box: Box, borderWidth: Int32, r: Int32, "
@@ -1274,15 +1267,17 @@ NAN_METHOD(Image::DrawBox)
 
 NAN_METHOD(Image::DrawLine)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    const auto strX = Nan::New("x").ToLocalChecked();
+    const auto strY = Nan::New("y").ToLocalChecked();
+    
     if (info[0]->IsObject() && info[1]->IsObject() && info[2]->IsInt32()) {
         Handle<Object> p1 = info[0]->ToObject();
         Handle<Object> p2 = info[1]->ToObject();
-        l_int32 x1 = round(p1->Get(NanNew("x"))->ToNumber()->Value());
-        l_int32 y1 = round(p1->Get(NanNew("y"))->ToNumber()->Value());
-        l_int32 x2 = round(p2->Get(NanNew("x"))->ToNumber()->Value());
-        l_int32 y2 = round(p2->Get(NanNew("y"))->ToNumber()->Value());
+        l_int32 x1 = round(p1->Get(strX)->ToNumber()->Value());
+        l_int32 y1 = round(p1->Get(strY)->ToNumber()->Value());
+        l_int32 x2 = round(p2->Get(strX)->ToNumber()->Value());
+        l_int32 y2 = round(p2->Get(strY)->ToNumber()->Value());
         l_int32 width = info[2]->Int32Value();
         l_int32 error;
         if (info[3]->IsString()) {
@@ -1313,7 +1308,7 @@ NAN_METHOD(Image::DrawLine)
         if (error) {
             return Nan::ThrowTypeError("error while drawing line");
         }
-        NanReturnThis();
+        info.GetReturnValue().Set(info.This());
     } else {
         return Nan::ThrowTypeError("expected (p1: Point, p2: Point, "
                      "width: Int32, op: String) or (p1: Point, p2: Point, "
@@ -1324,8 +1319,7 @@ NAN_METHOD(Image::DrawLine)
 
 NAN_METHOD(Image::DrawImage)
 {
-    NanScope();
-    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.This());
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     int boxEnd;
     BOX *box = toBox(info, 1, &boxEnd);
     if (Image::HasInstance(info[0]) && box) {
@@ -1336,11 +1330,11 @@ NAN_METHOD(Image::DrawImage)
         if (error) {
             return Nan::ThrowTypeError("error while drawing image");
         }
-        NanReturnThis();
+        info.GetReturnValue().Set(info.This());
     } else {
         return Nan::ThrowTypeError("expected (image: Image, box: Box)");
     }
-}*/
+}
 
 NAN_METHOD(Image::ToBuffer)
 {
