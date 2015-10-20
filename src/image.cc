@@ -183,7 +183,7 @@ bool Image::HasInstance(Handle<Value> val)
     return Nan::New(constructor_template)->HasInstance(val->ToObject());
 }
 
-Pix *Image::Pixels(Handle<Object> obj)
+Pix *Image::Pixels(Local<Object> obj)
 {
     return Nan::ObjectWrap::Unwrap<Image>(obj)->pix_;
 }

@@ -22,7 +22,7 @@ public:
     static Nan::Persistent<v8::FunctionTemplate> constructor_template;
 
     static bool HasInstance(v8::Handle<v8::Value> val);
-    static Pix *Pixels(v8::Handle<v8::Object> obj);
+    static Pix *Pixels(v8::Local<v8::Object> obj);
 
 	static NAN_MODULE_INIT(Init);
     //static void Init(v8::Handle<v8::Object> target);
