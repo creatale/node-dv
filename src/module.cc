@@ -9,15 +9,13 @@
 #include <nan.h>
 #include "image.h"
 #include "tesseract.h"
-/*#include "zxing.h"*/
-
-//using namespace v8;
+#include "zxing.h"
 
 NAN_MODULE_INIT(InitAll)
 {
     binding::Image::Init(target);
     binding::Tesseract::Init(target);
-    /*binding::ZXing::Init(target);*/
+    binding::ZXing::Init(target);
 }
 
-NODE_MODULE(NanObject, InitAll)
+NODE_MODULE(dvBinding, InitAll)

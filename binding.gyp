@@ -38,6 +38,7 @@
         'src/image.cc',
         'src/tesseract.cc',
         'src/util.cc',
+        'src/zxing.cc',
         'src/module.cc',
       ],
       'conditions': [
