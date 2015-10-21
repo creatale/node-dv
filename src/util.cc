@@ -12,17 +12,18 @@
 
 using namespace v8;
 
-Handle<Object> createBox(Box* box)
+Local<Object> createBox(Box* box)
 {
-    Handle<Object> result = NanNew<Object>();
-    result->Set(NanNew("x"), NanNew<Int32>(box->x));
-    result->Set(NanNew("y"), NanNew<Int32>(box->y));
-    result->Set(NanNew("width"), NanNew<Int32>(box->w));
-    result->Set(NanNew("height"), NanNew<Int32>(box->h));
-    return result;
+	Nan::EscapableHandleScope scope;
+    Local<Object> result = Nan::New<Object>();
+    result->Set(Nan::New("x").ToLocalChecked(), Nan::New(box->x));
+    result->Set(Nan::New("y").ToLocalChecked(), Nan::New(box->y));
+    result->Set(Nan::New("width").ToLocalChecked(), Nan::New(box->w));
+    result->Set(Nan::New("height").ToLocalChecked(), Nan::New(box->h));
+    return scope.Escape(result);
 }
 
-Box* toBox(_NAN_METHOD_ARGS, int start, int* end)
+Box* toBox(Nan::NAN_METHOD_ARGS_TYPE args, int start, int* end)
 {
     if (args[start]->IsNumber() && args[start + 1]->IsNumber()
             && args[start + 2]->IsNumber() && args[start + 3]->IsNumber()) {
@@ -36,10 +37,10 @@ Box* toBox(_NAN_METHOD_ARGS, int start, int* end)
         return boxCreate(x, y, width, height);
     } else if (args[start]->IsObject()) {
         Handle<Object> object = args[start]->ToObject();
-        int x = floor(object->Get(NanNew("x"))->ToNumber()->Value());
-        int y = floor(object->Get(NanNew("y"))->ToNumber()->Value());
-        int width = ceil(object->Get(NanNew("width"))->ToNumber()->Value());
-        int height = ceil(object->Get(NanNew("height"))->ToNumber()->Value());
+        int x = floor(object->Get(Nan::New("x").ToLocalChecked())->ToNumber()->Value());
+        int y = floor(object->Get(Nan::New("y").ToLocalChecked())->ToNumber()->Value());
+        int width = ceil(object->Get(Nan::New("width").ToLocalChecked())->ToNumber()->Value());
+        int height = ceil(object->Get(Nan::New("height").ToLocalChecked())->ToNumber()->Value());
         if (end) {
             *end = start;
         }

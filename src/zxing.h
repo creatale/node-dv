@@ -10,17 +10,16 @@
 #define ZXING_H
 
 #include <v8.h>
-#include <node.h>
 #include <nan.h>
 #include <zxing/DecodeHints.h>
 #include <zxing/MultiFormatReader.h>
 
 namespace binding {
 
-class ZXing : public node::ObjectWrap
+class ZXing : public Nan::ObjectWrap
 {
 public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
 private:
     static NAN_METHOD(New);
@@ -42,7 +41,7 @@ private:
     static const zxing::BarcodeFormat::Value BARCODEFORMATS[];
     static const size_t BARCODEFORMATS_LENGTH;
 
-    v8::Persistent<v8::Object> image_;
+    Nan::Persistent<v8::Object> image_;
     zxing::DecodeHints hints_;
     zxing::Ref<zxing::MultiFormatReader> reader_;
 };

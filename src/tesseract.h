@@ -10,16 +10,15 @@
 #define TESSERACT_H
 
 #include <v8.h>
-#include <node.h>
 #include <nan.h>
 #include <baseapi.h>
 
 namespace binding {
 
-class Tesseract : public node::ObjectWrap
+class Tesseract : public Nan::ObjectWrap
 {
 public:
-    static void Init(v8::Handle<v8::Object> target);
+    static NAN_MODULE_INIT(Init);
 
 private:
     static NAN_METHOD(New);
@@ -53,11 +52,11 @@ private:
     Tesseract(const char *datapath, const char *language);
     ~Tesseract();
 
-    _NAN_METHOD_RETURN_TYPE TransformResult(tesseract::PageIteratorLevel level, _NAN_METHOD_ARGS);
+    Nan::NAN_METHOD_RETURN_TYPE TransformResult(tesseract::PageIteratorLevel level, Nan::NAN_METHOD_ARGS_TYPE args);
 
     tesseract::TessBaseAPI api_;
-    v8::Persistent<v8::Object> image_;
-    v8::Persistent<v8::Object> rectangle_;
+    Nan::Persistent<v8::Object> image_;
+    Nan::Persistent<v8::Object> rectangle_;
 };
 
 }

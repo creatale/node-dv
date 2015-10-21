@@ -6,18 +6,16 @@
  * 
  * MIT License <https://github.com/creatale/node-dv/blob/master/LICENSE>
  */
-#include <node.h>
+#include <nan.h>
 #include "image.h"
 #include "tesseract.h"
 #include "zxing.h"
 
-using namespace v8;
-
-extern "C" void init(Handle<Object> target) 
+NAN_MODULE_INIT(InitAll)
 {
     binding::Image::Init(target);
     binding::Tesseract::Init(target);
     binding::ZXing::Init(target);
 }
 
-NODE_MODULE(dvBinding, init)
+NODE_MODULE(dvBinding, InitAll)

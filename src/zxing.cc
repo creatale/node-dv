@@ -21,7 +21,6 @@
 #include <node_buffer.h>
 
 using namespace v8;
-using namespace node;
 
 namespace binding {
 
@@ -135,152 +134,162 @@ const zxing::BarcodeFormat::Value ZXing::BARCODEFORMATS[] = {
 const size_t ZXing::BARCODEFORMATS_LENGTH = 11;
 
 
-void ZXing::Init(Handle<Object> target)
+
+NAN_MODULE_INIT(ZXing::Init)
 {
-    Local<FunctionTemplate> constructor_template = NanNew<FunctionTemplate>(New);
-    constructor_template->SetClassName(NanNew("ZXing"));
-    constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
-    Local<ObjectTemplate> proto = constructor_template->PrototypeTemplate();
-    proto->SetAccessor(NanNew("image"), GetImage, SetImage);
-    proto->SetAccessor(NanNew("formats"), GetFormats, SetFormats);
-    proto->SetAccessor(NanNew("tryHarder"), GetTryHarder, SetTryHarder);
-    proto->Set(NanNew("findCode"),
-               NanNew<FunctionTemplate>(FindCode)->GetFunction());
-    target->Set(NanNew("ZXing"), constructor_template->GetFunction());
+	auto ctor = Nan::New<v8::FunctionTemplate>(New);
+    auto ctorInst = ctor->InstanceTemplate();
+    auto name = Nan::New("ZXing").ToLocalChecked();
+    ctor->SetClassName(name);
+    ctorInst->SetInternalFieldCount(1);
+
+    Local<ObjectTemplate> proto = ctor->PrototypeTemplate();
+    Nan::SetAccessor(proto, Nan::New("image").ToLocalChecked(), GetImage, SetImage);
+    Nan::SetAccessor(proto, Nan::New("formats").ToLocalChecked(), GetFormats, SetFormats);
+    Nan::SetAccessor(proto, Nan::New("tryHarder").ToLocalChecked(), GetTryHarder, SetTryHarder);
+    
+    Nan::SetPrototypeMethod(ctor, "findCode", FindCode);
+    Nan::Set(target, name, ctor->GetFunction());
 }
 
 NAN_METHOD(ZXing::New)
 {
-    NanScope();
+	if (!info.IsConstructCall()) {
+		std::vector<v8::Local<v8::Value>> args(info.Length());
+		for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];	    
+	    auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
+	    if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
+	    return;
+	}
+
     Local<Object> image;
-    if (args.Length() == 1 && Image::HasInstance(args[0])) {
-        image = args[0]->ToObject();
-    } else if (args.Length() != 0) {
-        return NanThrowTypeError("cannot convert argument list to "
+    if (info.Length() == 1 && Image::HasInstance(info[0])) {
+        image = info[0]->ToObject();
+    } else if (info.Length() != 0) {
+        return Nan::ThrowTypeError("cannot convert argument list to "
                      "() or "
                      "(image: Image)");
     }
     ZXing* obj = new ZXing();
     if (!image.IsEmpty()) {
-        NanAssignPersistent(obj->image_, image->ToObject());
+        obj->image_.Reset(image->ToObject());
     }
-    obj->Wrap(args.This());
-    NanReturnThis();
+    obj->Wrap(info.This());
 }
 
 NAN_GETTER(ZXing::GetImage)
 {
-    NanScope();
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
-    NanReturnValue(obj->image_);
+    ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
+    info.GetReturnValue().Set(Nan::New(obj->image_));
 }
 
 NAN_SETTER(ZXing::SetImage)
 {
-    NanScope();
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
     if (Image::HasInstance(value) || value->IsNull()) {
         if (!obj->image_.IsEmpty()) {
-            NanDisposePersistent(obj->image_);
+            obj->image_.Reset();
         }
         if (!value->IsNull()) {
-            NanAssignPersistent(obj->image_, value->ToObject());
+            obj->image_.Reset(value->ToObject());
         }
     } else {
-        NanThrowTypeError("value must be of type Image");
+        Nan::ThrowTypeError("value must be of type Image");
     }
 }
 
 NAN_GETTER(ZXing::GetFormats)
 {
-    NanScope();
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
-    Local<Object> format = NanNew<Object>();
+    ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
+    Local<Object> format = Nan::New<Object>();
     for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-        format->Set(NanNew(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]),
-                NanNew<Boolean>(obj->hints_.containsFormat(BARCODEFORMATS[i])));
+    	auto name = Nan::New(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]).ToLocalChecked();
+        format->Set(name, Nan::New<Boolean>(obj->hints_.containsFormat(BARCODEFORMATS[i])));
     }
-    NanReturnValue(format);
+    info.GetReturnValue().Set(format);
 }
 
 NAN_SETTER(ZXing::SetFormats)
 {
-    NanScope();
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
     if (value->IsObject()) {
         Local<Object> format = value->ToObject();
         bool tryHarder = obj->hints_.getTryHarder();
         obj->hints_.clear();
         obj->hints_.setTryHarder(tryHarder);
         for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-            if (format->Get(NanNew(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]))->BooleanValue()) {
+        	auto name = Nan::New(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]).ToLocalChecked();
+            if (format->Get(name)->BooleanValue()) {
                 obj->hints_.addFormat(BARCODEFORMATS[i]);
             }
         }
     } else {
-        NanThrowTypeError("value must be of type object");
+        Nan::ThrowTypeError("value must be of type object");
     }
 }
 
 NAN_GETTER(ZXing::GetTryHarder)
 {
-    NanScope();
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
-    NanReturnValue(NanNew<Boolean>(obj->hints_.getTryHarder()));
+    ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
+    info.GetReturnValue().Set(Nan::New<Boolean>(obj->hints_.getTryHarder()));
 }
 
 NAN_SETTER(ZXing::SetTryHarder)
 {
-    NanScope();
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
     if (value->IsBoolean()) {
         obj->hints_.setTryHarder(value->BooleanValue());
     } else {
-        NanThrowTypeError("value must be of type bool");
+        Nan::ThrowTypeError("value must be of type bool");
     }
 }
 
 NAN_METHOD(ZXing::FindCode)
 {
-    NanScope();
-    ZXing* obj = ObjectWrap::Unwrap<ZXing>(args.This());
+    ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
     if (obj->image_.IsEmpty()) {
-        return NanThrowError("No image set");
+        return Nan::ThrowError("No image set");
     }
     try {
-        Local<Object> image_ = NanNew<Object>(obj->image_);
+        Local<Object> image_ = Nan::New<Object>(obj->image_);
         zxing::Ref<PixSource> source(new PixSource(Image::Pixels(image_)));
         zxing::Ref<zxing::Binarizer> binarizer(new zxing::HybridBinarizer(source));
         zxing::Ref<zxing::BinaryBitmap> binary(new zxing::BinaryBitmap(binarizer));
         zxing::Ref<zxing::Result> result(obj->reader_->decode(binary, obj->hints_));
-        Local<Object> object = NanNew<Object>();
+        Local<Object> object = Nan::New<Object>();
         std::string resultStr = result->getText()->getText();
-        object->Set(NanNew("type"), NanNew<String>(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]));
-        object->Set(NanNew("data"), NanNew<String>(resultStr.c_str()));
-        object->Set(NanNew("buffer"), NanNewBufferHandle((char*)resultStr.data(), resultStr.length()));
-        Local<Array> points = NanNew<Array>();
+        object->Set(Nan::New("type").ToLocalChecked(),
+        		Nan::New<String>(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]).ToLocalChecked());
+        object->Set(Nan::New("data").ToLocalChecked(),
+        		Nan::New<String>(resultStr.c_str()).ToLocalChecked());
+        object->Set(Nan::New("buffer").ToLocalChecked(),
+        		Nan::NewBuffer((char*)resultStr.data(), resultStr.length()).ToLocalChecked());
+        Local<Array> points = Nan::New<Array>();
+        auto strX = Nan::New("x").ToLocalChecked();
+        auto strY = Nan::New("y").ToLocalChecked();
         for (int i = 0; i < result->getResultPoints()->size(); ++i) {
-            Local<Object> point = NanNew<Object>();
-            point->Set(NanNew("x"), NanNew<Number>(result->getResultPoints()[i]->getX()));
-            point->Set(NanNew("y"), NanNew<Number>(result->getResultPoints()[i]->getY()));
+            Local<Object> point = Nan::New<Object>();
+            point->Set(strX, Nan::New<Number>(result->getResultPoints()[i]->getX()));
+            point->Set(strY, Nan::New<Number>(result->getResultPoints()[i]->getY()));
             points->Set(i, point);
         }
-        object->Set(NanNew("points"), points);
-        NanReturnValue(object);
+        object->Set(Nan::New("points").ToLocalChecked(), points);
+        info.GetReturnValue().Set(object);
     } catch (const zxing::ReaderException& e) {
         if (strcmp(e.what(), "No code detected") == 0) {
-            NanReturnValue(NanNull());
+            info.GetReturnValue().Set(Nan::Null());
+            return;
         } else {
-            return NanThrowError(e.what());
+            return Nan::ThrowError(e.what());
         }
     } catch (const zxing::IllegalArgumentException& e) {
-        return NanThrowError(e.what());
+        return Nan::ThrowError(e.what());
     } catch (const zxing::Exception& e) {
-        return NanThrowError(e.what());
+        return Nan::ThrowError(e.what());
     } catch (const std::exception& e) {
-        return NanThrowError(e.what());
+        return Nan::ThrowError(e.what());
     } catch (...) {
-        return NanThrowError("Uncaught exception");
+        return Nan::ThrowError("Uncaught exception");
     }
 }
 

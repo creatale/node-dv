@@ -10,12 +10,11 @@
 #define UTIL_H
 
 #include <v8.h>
-#include <node.h>
 #include <nan.h>
 #include <allheaders.h>
 
-v8::Handle<v8::Object> createBox(Box* box);
-Box* toBox(_NAN_METHOD_ARGS, int start, int* end = 0);
+v8::Local<v8::Object> createBox(Box* box);
+Box* toBox(Nan::NAN_METHOD_ARGS_TYPE args, int start, int* end = 0);
 int toOp(v8::Local<v8::Value> value);
 
 #endif
