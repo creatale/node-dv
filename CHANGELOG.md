@@ -1,3 +1,12 @@
+## v1.10.0 (October 21, 2015)
+- Upgraded to NAN 2. Now works with Node 4!
+- `Image` getters are now attached to object instead of prototype. This mostly means that `console.log` prints something useful.
+- `Image()` delegates to `new Image()` (#22)
+- `Image` constructor without arguments is now deprecated.
+- `Image#unsharpMasking()` (alias to `unsharp`) finally removed.
+- Fix: `new Image('gray')` didn't work and created a weird RGB image instead
+- Fix: Exception handling for `Image#lineSegments` missing, terminating the process
+
 ## v1.9.4 (October 12, 2015)
 - Update to NAN 1.9
 - Training data loading fixed for NPM 3
