@@ -42,6 +42,30 @@ describe('Image', function(){
         }
         this.textpage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
     })
+    it('should construct from raw data (grayscale)', function() {
+    	data = new Buffer('\x00\x01\x02\x04aaaabbbb')
+    	image = new dv.Image('gray', data, 4, 3);
+    	image.width.should.equal(4);
+    	image.height.should.equal(3);
+    	image.depth.should.equal(8);
+    	image.toBuffer('raw').should.deep.equal(data);
+    })
+    it('should construct from raw data (rgb)', function() {
+    	data = new Buffer('\x00\x01\x02\x04aaaabbbb')
+    	image = new dv.Image('rgb', data, 2, 2);
+    	image.width.should.equal(2);
+    	image.height.should.equal(2);
+    	image.depth.should.equal(32);
+    	image.toBuffer('raw').should.deep.equal(data);
+    })
+    it('should construct from raw data (rgba)', function() {
+    	data = new Buffer('\x00\x01\x02\x04aaaabbbb')
+    	image = new dv.Image('rgba', data, 3, 1);
+    	image.width.should.equal(3);
+    	image.height.should.equal(1);
+    	image.depth.should.equal(32);
+    	image.toBuffer('raw').should.deep.equal(new Buffer('\x00\x01\x02aaabbb'));
+    })
     it('should save using #toBuffer()', function(){
         writeImage('gray.jpg', this.gray);
         writeImage('rgb.jpg', this.rgb);
@@ -74,13 +98,23 @@ describe('Image', function(){
         writeImage('gray-boole-add.png', a.add(b));
         writeImage('gray-boole-subtract.png', a.subtract(b));
     })
-    it('should #add() and #subtract() arithmetically', function(){
+    it('should #add() and #subtract() arithmetically for grayscale', function(){
         var red = this.rgba.toGray(1, 0, 0);
         var cyan = this.rgba.toGray(0, 0.5, 0.5);
+        this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
         this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
         writeImage('gray-arith-add.png', red.add(cyan));
         writeImage('gray-arith-subtract.png', red.subtract(cyan));
         writeImage('color-arith-add.png', this.rgb.add(this.rgb));
+    })
+    it('should #add() and #subtract() arithmetically for rgb', function(){
+    	this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
+    
+    	a = new dv.Image('rgb', new Buffer([200,200,200]), 1, 1);
+    	b = new dv.Image('rgb', new Buffer([50, 60, 70]), 1, 1);
+    	a.add(b).toBuffer().should.deep.equal(new Buffer([250, 255, 255]));
+    	a.subtract(b).toBuffer().should.deep.equal(new Buffer([150, 140, 130]));
+  		b.subtract(a).toBuffer().should.deep.equal(new Buffer([0, 0, 0]));
     })
     it('should #convolve()', function(){
         writeImage('gray-convolve.png', this.gray.convolve(15, 15));
@@ -152,6 +186,10 @@ describe('Image', function(){
                             Math.round(255 * u), Math.round(255 * v));
         }
         writeImage('gray-line-segments.png', canvas);
+    })
+    it('should throw error on too large precision', function(){
+    	empty = new dv.Image('gray', new Buffer(1), 1, 1).toGray();
+    	empty.lineSegments.bind(empty, 1, 5, true).should.throw(Error);
     })
     it('should #connectedComponents()', function(){
         var binaryImage = this.textpage.otsuAdaptiveThreshold(32, 32, 0, 0, 0.1).image;
