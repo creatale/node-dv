@@ -1020,12 +1020,22 @@ NAN_METHOD(Image::LineSegments)
         int accuracy = info[0]->Int32Value();
         int maxLineSegments = info[1]->Int32Value();
         bool useWMS = info[2]->BooleanValue();
-        LSWMS lswms(cv::Size(obj->pix_->w, obj->pix_->h), accuracy,
-                    maxLineSegments, useWMS, false);
+        
+        if ((accuracy >= obj->pix_->w) || (accuracy >= obj->pix_->h)) {
+            return Nan::ThrowError("LineSegments: Accuracy must be smaller than image");
+       	}
+
         cv::Mat img(pix8ToMat(obj->pix_));
         std::vector<LSWMS::LSEG> lSegs;
         std::vector<double> errors;
-        lswms.run(img, lSegs, errors);
+        
+        try {
+        	LSWMS lswms(cv::Size(obj->pix_->w, obj->pix_->h), accuracy,
+                    maxLineSegments, useWMS, false);
+			lswms.run(img, lSegs, errors);
+        } catch (const cv::Exception& e) {
+            return Nan::ThrowError(e.what());
+        }
         
         Local<Array> results = Nan::New<Array>();
         const auto strX = Nan::New("x").ToLocalChecked();

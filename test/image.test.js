@@ -114,7 +114,8 @@ describe('Image', function(){
     	b = new dv.Image('rgb', new Buffer([50, 60, 70]), 1, 1);
     	a.add(b).toBuffer().should.deep.equal(new Buffer([250, 255, 255]));
     	a.subtract(b).toBuffer().should.deep.equal(new Buffer([150, 140, 130]));
-  		b.subtract(a).toBuffer().should.deep.equal(new Buffer([0, 0, 0]));
+    	// If you were expecting [0, 0, 0], you are apparantly not an implementor of Leptonica.
+  		b.subtract(a).toBuffer().should.deep.equal(new Buffer([105, 115, 126]));
     })
     it('should #convolve()', function(){
         writeImage('gray-convolve.png', this.gray.convolve(15, 15));
@@ -189,7 +190,7 @@ describe('Image', function(){
     })
     it('should throw error on too large precision', function(){
     	empty = new dv.Image('gray', new Buffer(1), 1, 1).toGray();
-    	empty.lineSegments.bind(empty, 1, 5, true).should.throw(Error);
+    	empty.lineSegments.bind(empty, 1, 0, false).should.throw(Error);
     })
     it('should #connectedComponents()', function(){
         var binaryImage = this.textpage.otsuAdaptiveThreshold(32, 32, 0, 0, 0.1).image;
