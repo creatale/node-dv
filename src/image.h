@@ -9,8 +9,6 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
-//#include <v8.h>
-//#include <node.h>
 #include <nan.h>
 #include <allheaders.h>
 
@@ -25,9 +23,7 @@ public:
     static Pix *Pixels(v8::Local<v8::Object> obj);
 
 	static NAN_MODULE_INIT(Init);
-    //static void Init(v8::Handle<v8::Object> target);
 
-    //static v8::Handle<v8::Value> New(Pix *pix);
     static v8::Local<v8::Object> New(Pix *pix);
 
 private:

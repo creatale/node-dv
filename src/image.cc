@@ -28,7 +28,6 @@ int round(double x)
 #endif
 
 using namespace v8;
-//using namespace node;
 
 namespace binding {
 

@@ -10,7 +10,6 @@
 #define TESSERACT_H
 
 #include <v8.h>
-//#include <node.h>
 #include <nan.h>
 #include <baseapi.h>
 

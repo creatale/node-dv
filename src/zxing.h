@@ -10,7 +10,6 @@
 #define ZXING_H
 
 #include <v8.h>
-//#include <node.h>
 #include <nan.h>
 #include <zxing/DecodeHints.h>
 #include <zxing/MultiFormatReader.h>

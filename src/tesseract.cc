@@ -18,11 +18,10 @@
 #include <params.h>
 
 using namespace v8;
-//using namespace node;
 
 namespace binding {
 
-# define ReturnValue(value) return info.GetReturnValue().Set(Nan::New(value).ToLocalChecked())
+#define ReturnValue(value) return info.GetReturnValue().Set(Nan::New(value).ToLocalChecked())
 
 NAN_MODULE_INIT(Tesseract::Init)
 {
