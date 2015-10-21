@@ -1,3 +1,13 @@
+## v1.9.4 (October 12, 2015)
+- Update to NAN 1.9
+- Training data loading fixed for NPM 3
+
+## v1.9.3 (June 18, 2015)
+- Optional tessdata folder (barringtonhaynes)
+
+## v1.9.1, 1.9.2 (May 7, 2015)
+- Compilation fixes
+
 ## v1.9.0 (March 30, 2015)
 - Used NAN (Native Abstractions for Node.js) for compatibility to node-0.10 and node-0.12
 
