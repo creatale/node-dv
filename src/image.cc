@@ -330,12 +330,14 @@ NAN_METHOD(Image::New)
         int32_t width = info[2]->Int32Value();
         int32_t height = info[3]->Int32Value();
         int32_t depth;
+        int32_t targetDepth = 32;
         if (strcmp("rgba", *format) == 0) {
             depth = 32;
         } else if (strcmp("rgb", *format) == 0) {
             depth = 24;
         } else if (strcmp("gray", *format) == 0) {
             depth = 8;
+            targetDepth = 8;
         } else {
             std::stringstream msg;
             msg << "invalid buffer format '" << *format << "'";
@@ -345,11 +347,11 @@ NAN_METHOD(Image::New)
         if (expectedLength != length << 3) {
             return Nan::ThrowError("invalid Buffer length");
         }
-        pix = pixFromSource(reinterpret_cast<uint8_t*>(node::Buffer::Data(buffer)), width, height, depth, 32);
+        pix = pixFromSource(reinterpret_cast<uint8_t*>(node::Buffer::Data(buffer)), width, height, depth, targetDepth);
     } else {
         return Nan::ThrowTypeError("expected (image: Image) or (image1: Image, "
                      "image2: Image, image3: Image) or (format: String, "
-                     "image: Buffer, [width: Int32, height: Int32]) or no arguments at all");
+                     "image: Buffer, [width: Int32, height: Int32])");
     }
     Image* obj = new Image(pix);
     
