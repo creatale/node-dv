@@ -9,6 +9,7 @@
 #ifndef TESSERACT_H
 #define TESSERACT_H
 
+#include <node.h>
 #include <v8.h>
 #include <nan.h>
 #include <baseapi.h>

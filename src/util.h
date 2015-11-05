@@ -9,6 +9,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <node.h>
 #include <v8.h>
 #include <nan.h>
 #include <allheaders.h>

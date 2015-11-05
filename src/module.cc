@@ -6,6 +6,7 @@
  * 
  * MIT License <https://github.com/creatale/node-dv/blob/master/LICENSE>
  */
+#include <node.h> // Side-effects required for VS build!
 #include <nan.h>
 #include "image.h"
 #include "tesseract.h"

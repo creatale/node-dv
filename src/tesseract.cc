@@ -157,10 +157,10 @@ NAN_SETTER(Tesseract::SetRectangle)
         if (!obj->image_.IsEmpty()) {
             // WORKAROUND: clamp rectangle to prevent occasional crashes.
             PIX* pix = Image::Pixels(Nan::New<Object>(obj->image_));
-            x = std::max(x, 0);
-            y = std::max(y, 0);
-            width = std::min(width, (int)pix->w - x);
-            height = std::min(height, (int)pix->h - y);
+            x = (std::max)(x, 0);
+            y = (std::max)(y, 0);
+            width = (std::min)(width, (int)pix->w - x);
+            height = (std::min)(height, (int)pix->h - y);
         }
         obj->api_.SetRectangle(x, y, width, height);
     } else {
