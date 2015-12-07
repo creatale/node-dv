@@ -12,8 +12,7 @@
           'xcode_settings': {
             'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
             'OTHER_CFLAGS': [ '-O3', '-march=native', '-w' ],
-            'OTHER_CPLUSPLUSFLAGS' : ['-Wno-c++11-narrowing', '-std=c++11', '-stdlib=libc++'],
-            'OTHER_LDFLAGS': ['-stdlib=libc++'],
+            'OTHER_CPLUSPLUSFLAGS' : ['-Wno-c++11-narrowing', '-std=c++11', '-stdlib=libc++', '-mmacosx-version-min=10.7'],
           }
         }
       ],
