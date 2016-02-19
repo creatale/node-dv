@@ -18,6 +18,7 @@
       ],
       ['OS=="win"',
         {
+          'defines!': ['_HAS_EXCEPTIONS=0'],
           'configurations': {
             'Debug': {
               'msvs_settings': {
