@@ -1,5 +1,6 @@
 # Test against this version of Node.js
 environment:
+  MSVS_VERSION: 2013
   nodejs_version: "5"
 
 # Install scripts. (runs after repo cloning)
