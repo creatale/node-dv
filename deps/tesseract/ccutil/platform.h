@@ -28,7 +28,9 @@
 #define ultoa _ultoa
 #endif  /* __GNUC__ */
 #define SIGNED
+#if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf _snprintf
+#endif
 #if (_MSC_VER <= 1400)
 #define vsnprintf _vsnprintf
 #endif /* _WIN32 */
