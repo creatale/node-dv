@@ -1,20 +1,23 @@
 language: node_js
 sudo: false
+os:
+  - linux
+  - osx
 node_js:
   - "0.12"
-  - "4.2"
-  - "5.1"
+  - "4.4"
+  - "5.8"
 before_install:
   - export CXX="g++-4.8" CC="gcc-4.8"
 addons:
   apt:
     sources:
-    - ubuntu-toolchain-r-test
+      - ubuntu-toolchain-r-test
     packages:
-    - libyajl-dev
-    - libxml2-dev
-    - gcc-4.8
-    - g++-4.8
+      - libyajl-dev
+      - libxml2-dev
+      - gcc-4.8
+      - g++-4.8
 branches:
   only:
     - master
