@@ -120,6 +120,15 @@
             ],
           }
         ],
+	['OS=="mac"',
+          {
+	   "link_settings" : {
+            'libraries': [
+              '/usr/lib/libiconv.dylib',
+              ],
+            }
+	  }
+        ]
       ],
     },
   ]

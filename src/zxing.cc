@@ -263,7 +263,7 @@ NAN_METHOD(ZXing::FindCode)
         object->Set(Nan::New("data").ToLocalChecked(),
         		Nan::New<String>(resultStr.c_str()).ToLocalChecked());
         object->Set(Nan::New("buffer").ToLocalChecked(),
-        		Nan::NewBuffer((char*)resultStr.data(), resultStr.length()).ToLocalChecked());
+        		Nan::CopyBuffer((char*)resultStr.data(), resultStr.length()).ToLocalChecked());
         Local<Array> points = Nan::New<Array>();
         auto strX = Nan::New("x").ToLocalChecked();
         auto strY = Nan::New("y").ToLocalChecked();
