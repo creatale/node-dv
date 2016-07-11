@@ -11,6 +11,7 @@ describe('ZXing', function(){
         this.barcode1 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode1.png'));
         this.barcode2 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode2.png'));
         this.barcode3 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode3.png'));
+        this.barcode4 = new dv.Image("png", fs.readFileSync(__dirname + '/fixtures/barcode4.png'));
     })
     it('should have no #image set', function(){
         should.not.exist(this.zxing.image);
@@ -51,6 +52,11 @@ describe('ZXing', function(){
             code.type.should.equal('PDF_417');
             code.data.should.equal('This PDF417 barcode has error correction level 4');
             should.exist(code.points);
+        })
+        it('should find QR Code', function(){
+            this.zxing.image = this.barcode4;
+            var code = this.zxing.findCode();
+            code.type.should.equal('QR');
         })
     })
     describe('#findCode() with tryHarder', function(){
