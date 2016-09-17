@@ -67,6 +67,8 @@ private:
     static NAN_METHOD(Thin);
     static NAN_METHOD(MaxDynamicRange);
     static NAN_METHOD(OtsuAdaptiveThreshold);
+    static NAN_METHOD(WolfAdaptiveThreshold);
+    static NAN_METHOD(NickAdaptiveThreshold);
     static NAN_METHOD(LineSegments);
     static NAN_METHOD(FindSkew);
     static NAN_METHOD(ConnectedComponents);
