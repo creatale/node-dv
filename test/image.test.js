@@ -175,6 +175,14 @@ describe('Image', function(){
         skew.angle.should.equal(-0.703125);
         skew.confidence.should.equal(4.957831859588623);
     })
+    it('should #wolfAdaptiveThreshold()', function(){
+        var threshold = this.gray.wolfAdaptiveThreshold(16, 16, 0.5);
+        writeImage('gray-threshold-wolf-image.png', threshold);
+    })
+    it('should #nickAdaptiveThreshold()', function(){
+        var threshold = this.gray.wolfAdaptiveThreshold(16, 16, -0.2);
+        writeImage('gray-threshold-nick-image.png', threshold);
+    })
     it('should #lineSegments(), #drawLine()', function(){
         var segments = this.gray.lineSegments(3, 0, false);
         var canvas = this.gray.toColor();

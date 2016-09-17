@@ -10,6 +10,7 @@
         'deps/zxing/zxing.gyp:libzxing',
         'deps/opencv/opencv.gyp:libopencv',
         'deps/lswms/lswms.gyp:liblswms',
+        'deps/binarizeAdaptive/binarizeAdaptive.gyp:libBinarizeAdaptive',
       ],
       'include_dirs': [
         "<!(node -e \"require('nan')\")",
@@ -33,6 +34,7 @@
         'deps/opencv/modules/dynamicuda/include',
         'deps/opencv/modules/imgproc/include',
         'deps/lswms',
+        'deps/binarizeAdaptive'
        ],
       'sources': [
         'src/image.cc',

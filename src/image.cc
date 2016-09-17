@@ -7,16 +7,17 @@
  * MIT License <https://github.com/creatale/node-dv/blob/master/LICENSE>
  */
 #include "image.h"
-#include "util.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
-#include <node_buffer.h>
-#include <lodepng.h>
-#include <jpgd.h>
-#include <jpge.h>
-#include <opencv2/core/core.hpp>
-#include <LSWMS.h>
+#include "util.h"
+#include "node_buffer.h"
+#include "lodepng.h"
+#include "jpgd.h"
+#include "jpge.h"
+#include "opencv2/core/core.hpp"
+#include "LSWMS.h"
+#include "binarizeAdaptive.h"
 
 #ifdef _MSC_VER
 #if _MSC_VER <= 1700
@@ -161,7 +162,7 @@ void pixProjection(std::vector<uint32_t> &values, PIX *pix, ProjectionMode mode)
     }
 }
 
-cv::Mat pix8ToMat(PIX *pix8)
+cv::Mat pix8ToMat(Pix *pix8)
 {
     cv::Mat mat(cv::Size(pix8->w, pix8->h), CV_8UC1);
     uint32_t *line = pix8->data;
@@ -172,6 +173,17 @@ cv::Mat pix8ToMat(PIX *pix8)
         line += pix8->wpl;
     }
     return mat;
+}
+
+Pix *mat8ToPix(cv::Mat *mat8)
+{
+	Pix *pixd = pixCreate(mat8->size().width, mat8->size().height, 8);
+	for(int i=0; i<mat8->rows; i++) {
+		for(int j=0; j<mat8->cols; j++) {
+			pixSetPixel(pixd, j, i, (l_uint32) mat8->at<uchar>(i,j));
+		}
+	}
+	return pixd;
 }
 
 bool Image::HasInstance(Handle<Value> val)
@@ -229,6 +241,8 @@ NAN_MODULE_INIT(Image::Init)
     Nan::SetPrototypeMethod(ctor, "thin", Thin);
     Nan::SetPrototypeMethod(ctor, "maxDynamicRange", MaxDynamicRange);
     Nan::SetPrototypeMethod(ctor, "otsuAdaptiveThreshold", OtsuAdaptiveThreshold);
+    Nan::SetPrototypeMethod(ctor, "wolfAdaptiveThreshold", WolfAdaptiveThreshold);
+    Nan::SetPrototypeMethod(ctor, "nickAdaptiveThreshold", NickAdaptiveThreshold);
     Nan::SetPrototypeMethod(ctor, "lineSegments", LineSegments);
     Nan::SetPrototypeMethod(ctor, "findSkew", FindSkew);
     Nan::SetPrototypeMethod(ctor, "connectedComponents", ConnectedComponents);
@@ -1007,6 +1021,48 @@ NAN_METHOD(Image::OtsuAdaptiveThreshold)
     } else {
         return Nan::ThrowTypeError("expected (sx: Int32, sy: Int32, "
                      "smoothx: Int32, smoothy: Int32, scoreFact: Number)");
+    }
+}
+
+NAN_METHOD(Image::WolfAdaptiveThreshold)
+{
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+
+    if (info[0]->IsInt32() && info[1]->IsInt32() && info[2]->IsNumber()) {
+		if (obj->pix_->d != 8) {
+			return Nan::ThrowTypeError("Not a 8bpp Image");
+		}
+        int32_t winx = info[0]->Int32Value();
+        int32_t winy = info[1]->Int32Value();
+        float optK = static_cast<float>(info[2]->NumberValue());
+        cv::Mat converted = binarizeWolf(pix8ToMat(obj->pix_), winx, winy, optK);
+        Pix *pixd = mat8ToPix(&converted);
+
+		info.GetReturnValue().Set(Image::New(pixConvertTo1(pixd, 128)));
+		return;
+    } else {
+        return Nan::ThrowTypeError("expected (winx: Int32, winy: Int32, optK: Number)");
+    }
+}
+
+NAN_METHOD(Image::NickAdaptiveThreshold)
+{
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+
+    if (info[0]->IsInt32() && info[1]->IsInt32() && info[2]->IsNumber()) {
+		if (obj->pix_->d != 8) {
+			return Nan::ThrowTypeError("Not a 8bpp Image");
+		}
+        int32_t winx = info[0]->Int32Value();
+        int32_t winy = info[1]->Int32Value();
+        float optK = static_cast<float>(info[2]->NumberValue());
+        cv::Mat converted = binarizeNick(pix8ToMat(obj->pix_), winx, winy, optK);
+        Pix *pixd = mat8ToPix(&converted);
+
+		info.GetReturnValue().Set(Image::New(pixConvertTo1(pixd, 128)));
+		return;
+    } else {
+        return Nan::ThrowTypeError("expected (winx: Int32, winy: Int32, optK: Number)");
     }
 }
 
