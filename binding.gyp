@@ -34,7 +34,7 @@
         'deps/opencv/modules/dynamicuda/include',
         'deps/opencv/modules/imgproc/include',
         'deps/lswms',
-        'deps/binarizeAdaptive/binarizeAdaptive'
+        'deps/binarizeAdaptive'
        ],
       'sources': [
         'src/image.cc',
