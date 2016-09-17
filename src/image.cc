@@ -162,7 +162,7 @@ void pixProjection(std::vector<uint32_t> &values, PIX *pix, ProjectionMode mode)
     }
 }
 
-cv::Mat pix8ToMat(PIX *pix8)
+cv::Mat pix8ToMat(Pix *pix8)
 {
     cv::Mat mat(cv::Size(pix8->w, pix8->h), CV_8UC1);
     uint32_t *line = pix8->data;
@@ -173,6 +173,17 @@ cv::Mat pix8ToMat(PIX *pix8)
         line += pix8->wpl;
     }
     return mat;
+}
+
+Pix *mat8ToPix(cv::Mat *mat8)
+{
+	Pix *pixd = pixCreate(mat8->size().width, mat8->size().height, 8);
+	for(int i=0; i<mat8->rows; i++) {
+		for(int j=0; j<mat8->cols; j++) {
+			pixSetPixel(pixd, j, i, (l_uint32) mat8->at<uchar>(i,j));
+		}
+	}
+	return pixd;
 }
 
 bool Image::HasInstance(Handle<Value> val)
