@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  runlength.c
+/*!
+ * \file runlength.c
+ * <pre>
  *
  *     Label pixels by membership in runs
  *           PIX         *pixStrokeWidthTransform()
@@ -36,11 +37,23 @@
  *           l_int32      pixFindHorizontalRuns()
  *           l_int32      pixFindVerticalRuns()
  *
+ *     Find max runs along horizontal and vertical lines
+ *           l_int32      pixFindMaxRuns()
+ *           l_int32      pixFindMaxHorizontalRunOnLine()
+ *           l_int32      pixFindMaxVerticalRunOnLine()
+ *
  *     Compute runlength-to-membership transform on a line
  *           l_int32      runlengthMembershipOnLine()
  *
  *     Make byte position LUT
  *           l_int32      makeMSBitLocTab()
+ *
+ *  Here we're handling runs of either black or white pixels on 1 bpp
+ *  images.  The directions of the runs in the stroke width transform
+ *  are selectable from given sets of angles.  Most of the other runs
+ *  are oriented either horizontally along the raster lines or
+ *  vertically along pixel columns.
+ * </pre>
  */
 
 #include <string.h>
@@ -54,15 +67,16 @@ static PIX *pixFindMinRunsOrthogonal(PIX *pixs, l_float32 angle, l_int32 depth);
  *                   Label pixels by membership in runs                  *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixStrokeWidthTransform()
+ * \brief   pixStrokeWidthTransform()
  *
- *      Input:   pixs (1 bpp)
- *               color (0 for white runs, 1 for black runs)
- *               depth (of pixd: 8 or 16 bpp)
- *               nangles (2, 4, 6 or 8)
- *      Return:  pixd (8 or 16 bpp), or null on error
+ * \param[in]     pixs 1 bpp
+ * \param[in]     color 0 for white runs, 1 for black runs
+ * \param[in]     depth of pixd: 8 or 16 bpp
+ * \param[in]     nangles 2, 4, 6 or 8
+ * \return   pixd 8 or 16 bpp, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The dest Pix is 8 or 16 bpp, with the pixel values
  *          equal to the stroke width in which it is a member.
  *          The values are clipped to the max pixel value if necessary.
@@ -79,6 +93,7 @@ static PIX *pixFindMinRunsOrthogonal(PIX *pixs, l_float32 angle, l_int32 depth);
  *               6          30       {0, 30, 60, 90, 120, 150}
  *               8          22.5     {0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5}
  *      (5) Runtime scales linearly with (nangles - 2).
+ * </pre>
  */
 PIX *
 pixStrokeWidthTransform(PIX     *pixs,
@@ -154,17 +169,18 @@ PIX       *pixh, *pixv, *pixt, *pixg1, *pixg2, *pixg3, *pixg4;
 
 
 /*!
- *  pixFindMinRunsOrthogonal()
+ * \brief   pixFindMinRunsOrthogonal()
  *
- *      Input:   pixs (1 bpp)
- *               angle (in radians)
- *               depth (of pixd: 8 or 16 bpp)
- *      Return:  pixd (8 or 16 bpp), or null on error
+ * \param[in]     pixs 1 bpp
+ * \param[in]     angle in radians
+ * \param[in]     depth of pixd: 8 or 16 bpp
+ * \return   pixd 8 or 16 bpp, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This computes, for each fg pixel in pixs, the minimum of
  *          the runlengths going through that pixel in two orthogonal
- *          directions: at @angle and at (90 + @angle).
+ *          directions: at %angle and at (90 + %angle).
  *      (2) We use rotation by shear because the forward and backward
  *          rotations by the same angle are exact inverse operations.
  *          As a result, the nonzero pixels in pixd correspond exactly
@@ -174,6 +190,7 @@ PIX       *pixh, *pixv, *pixt, *pixg1, *pixg2, *pixg3, *pixg4;
  *          between original and rotated pixels, also due to spatial
  *          quantization, causing some boundary pixels to be
  *          shifted from bg to fg or v.v.
+ * </pre>
  */
 static PIX *
 pixFindMinRunsOrthogonal(PIX       *pixs,
@@ -220,15 +237,16 @@ BOX     *box;
 
 
 /*!
- *  pixRunlengthTransform()
+ * \brief   pixRunlengthTransform()
  *
- *      Input:   pixs (1 bpp)
- *               color (0 for white runs, 1 for black runs)
- *               direction (L_HORIZONTAL_RUNS, L_VERTICAL_RUNS)
- *               depth (8 or 16 bpp)
- *      Return:  pixd (8 or 16 bpp), or null on error
+ * \param[in]     pixs 1 bpp
+ * \param[in]     color 0 for white runs, 1 for black runs
+ * \param[in]     direction L_HORIZONTAL_RUNS, L_VERTICAL_RUNS
+ * \param[in]     depth 8 or 16 bpp
+ * \return   pixd 8 or 16 bpp, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The dest Pix is 8 or 16 bpp, with the pixel values
  *          equal to the runlength in which it is a member.
  *          The length is clipped to the max pixel value if necessary.
@@ -238,6 +256,7 @@ BOX     *box;
  *          chosen color.
  *      (4) To convert for maximum dynamic range, either linear or
  *          log, use pixMaxDynamicRange().
+ * </pre>
  */
 PIX *
 pixRunlengthTransform(PIX     *pixs,
@@ -267,18 +286,19 @@ PIX       *pixt, *pixd;
     else
         return (PIX *)ERROR_PTR("invalid direction", procName, NULL);
     bufsize = L_MAX(w, h);
+    if (bufsize > 1000000) {
+        L_ERROR("largest image dimension = %d; too big\n", procName, bufsize);
+        return NULL;
+    }
 
     if ((pixd = pixCreate(w, h, depth)) == NULL)
         return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
     datad = pixGetData(pixd);
     wpld = pixGetWpl(pixd);
 
-    if ((start = (l_int32 *)CALLOC(maxsize, sizeof(l_int32))) == NULL)
-        return (PIX *)ERROR_PTR("start not made", procName, NULL);
-    if ((end = (l_int32 *)CALLOC(maxsize, sizeof(l_int32))) == NULL)
-        return (PIX *)ERROR_PTR("end not made", procName, NULL);
-    if ((buffer = (l_int32 *)CALLOC(bufsize, sizeof(l_int32))) == NULL)
-        return (PIX *)ERROR_PTR("buffer not made", procName, NULL);
+    start = (l_int32 *)LEPT_CALLOC(maxsize, sizeof(l_int32));
+    end = (l_int32 *)LEPT_CALLOC(maxsize, sizeof(l_int32));
+    buffer = (l_int32 *)LEPT_CALLOC(bufsize, sizeof(l_int32));
 
         /* Use fg runs for evaluation */
     if (color == 0)
@@ -318,9 +338,9 @@ PIX       *pixt, *pixd;
     }
 
     pixDestroy(&pixt);
-    FREE(start);
-    FREE(end);
-    FREE(buffer);
+    LEPT_FREE(start);
+    LEPT_FREE(end);
+    LEPT_FREE(buffer);
     return pixd;
 }
 
@@ -329,22 +349,24 @@ PIX       *pixt, *pixd;
  *               Find runs along horizontal and vertical lines           *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixFindHorizontalRuns()
+ * \brief   pixFindHorizontalRuns()
  *
- *      Input:  pix (1 bpp)
- *              y (line to traverse)
- *              xstart (returns array of start positions for fg runs)
- *              xend (returns array of end positions for fg runs)
- *              &n  (<return> the number of runs found)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix 1 bpp
+ * \param[in]    y line to traverse
+ * \param[in]    xstart returns array of start positions for fg runs
+ * \param[in]    xend returns array of end positions for fg runs
+ * \param[out]   pn  the number of runs found
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This finds foreground horizontal runs on a single scanline.
  *      (2) To find background runs, use pixInvert() before applying
  *          this function.
  *      (3) The xstart and xend arrays are input.  They should be
  *          of size w/2 + 1 to insure that they can hold
  *          the maximum number of runs in the raster line.
+ * </pre>
  */
 l_int32
 pixFindHorizontalRuns(PIX      *pix,
@@ -404,22 +426,24 @@ l_uint32  *line;
 
 
 /*!
- *  pixFindVerticalRuns()
+ * \brief   pixFindVerticalRuns()
  *
- *      Input:  pix (1 bpp)
- *              x (line to traverse)
- *              ystart (returns array of start positions for fg runs)
- *              yend (returns array of end positions for fg runs)
- *              &n   (<return> the number of runs found)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix 1 bpp
+ * \param[in]    x line to traverse
+ * \param[in]    ystart returns array of start positions for fg runs
+ * \param[in]    yend returns array of end positions for fg runs
+ * \param[out]   pn   the number of runs found
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This finds foreground vertical runs on a single scanline.
  *      (2) To find background runs, use pixInvert() before applying
  *          this function.
  *      (3) The ystart and yend arrays are input.  They should be
  *          of size h/2 + 1 to insure that they can hold
  *          the maximum number of runs in the raster line.
+ * </pre>
  */
 l_int32
 pixFindVerticalRuns(PIX      *pix,
@@ -480,24 +504,230 @@ l_uint32  *data, *line;
 
 
 /*-----------------------------------------------------------------------*
+ *            Find max runs along horizontal and vertical lines          *
+ *-----------------------------------------------------------------------*/
+/*!
+ * \brief   pixFindMaxRuns()
+ *
+ * \param[in]    pix 1 bpp
+ * \param[in]    direction L_HORIZONTAL_RUNS or L_VERTICAL_RUNS
+ * \param[out]   pnastart [optional] start locations of longest runs
+ * \return  na of lengths of runs, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This finds the longest foreground runs by row or column
+ *      (2) To find background runs, use pixInvert() before applying
+ *          this function.
+ * </pre>
+ */
+NUMA *
+pixFindMaxRuns(PIX     *pix,
+               l_int32  direction,
+               NUMA   **pnastart)
+{
+l_int32  w, h, i, start, size;
+NUMA    *nasize;
+
+    PROCNAME("pixFindMaxRuns");
+
+    if (pnastart) *pnastart = NULL;
+    if (direction != L_HORIZONTAL_RUNS && direction != L_VERTICAL_RUNS)
+        return (NUMA *)ERROR_PTR("direction invalid", procName, NULL);
+    if (!pix || pixGetDepth(pix) != 1)
+        return (NUMA *)ERROR_PTR("pix undefined or not 1 bpp", procName, NULL);
+
+    pixGetDimensions(pix, &w, &h, NULL);
+    nasize = numaCreate(w);
+    if (pnastart) *pnastart = numaCreate(w);
+    if (direction == L_HORIZONTAL_RUNS) {
+        for (i = 0; i < h; i++) {
+            pixFindMaxHorizontalRunOnLine(pix, i, &start, &size);
+            numaAddNumber(nasize, size);
+            if (pnastart) numaAddNumber(*pnastart, start);
+        }
+    } else {  /* vertical scans */
+        for (i = 0; i < w; i++) {
+            pixFindMaxVerticalRunOnLine(pix, i, &start, &size);
+            numaAddNumber(nasize, size);
+            if (pnastart) numaAddNumber(*pnastart, start);
+        }
+    }
+
+    return nasize;
+}
+
+
+/*!
+ * \brief   pixFindMaxHorizontalRunOnLine()
+ *
+ * \param[in]    pix 1 bpp
+ * \param[in]    y line to traverse
+ * \param[out]   pxstart [optional] start position
+ * \param[out]   psize  the size of the run
+ * \return  0 if OK; 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This finds the longest foreground horizontal run on a scanline.
+ *      (2) To find background runs, use pixInvert() before applying
+ *          this function.
+ * </pre>
+ */
+l_int32
+pixFindMaxHorizontalRunOnLine(PIX      *pix,
+                              l_int32   y,
+                              l_int32  *pxstart,
+                              l_int32  *psize)
+{
+l_int32    inrun;  /* boolean */
+l_int32    w, h, j, wpl, val, maxstart, maxsize, length, start;
+l_uint32  *line;
+
+    PROCNAME("pixFindMaxHorizontalRunOnLine");
+
+    if (pxstart) *pxstart = 0;
+    if (!psize)
+        return ERROR_INT("&size not defined", procName, 1);
+    *psize = 0;
+    if (!pix || pixGetDepth(pix) != 1)
+        return ERROR_INT("pix not defined or not 1 bpp", procName, 1);
+    pixGetDimensions(pix, &w, &h, NULL);
+    if (y < 0 || y >= h)
+        return ERROR_INT("y not in [0 ... h - 1]", procName, 1);
+
+    wpl = pixGetWpl(pix);
+    line = pixGetData(pix) + y * wpl;
+    inrun = FALSE;
+    start = 0;
+    maxstart = 0;
+    maxsize = 0;
+    for (j = 0; j < w; j++) {
+        val = GET_DATA_BIT(line, j);
+        if (!inrun) {
+            if (val) {
+                start = j;
+                inrun = TRUE;
+            }
+        } else if (!val) {  /* run just ended */
+            length = j - start;
+            if (length > maxsize) {
+                maxsize = length;
+                maxstart = start;
+            }
+            inrun = FALSE;
+        }
+    }
+
+    if (inrun) {  /* a run has continued to the end of the row */
+        length = j - start;
+        if (length > maxsize) {
+            maxsize = length;
+            maxstart = start;
+        }
+    }
+    if (pxstart) *pxstart = maxstart;
+    *psize = maxsize;
+    return 0;
+}
+
+
+/*!
+ * \brief   pixFindMaxVerticalRunOnLine()
+ *
+ * \param[in]    pix 1 bpp
+ * \param[in]    x column to traverse
+ * \param[out]   pystart [optional] start position
+ * \param[out]   psize  the size of the run
+ * \return  0 if OK; 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This finds the longest foreground vertical run on a scanline.
+ *      (2) To find background runs, use pixInvert() before applying
+ *          this function.
+ * </pre>
+ */
+l_int32
+pixFindMaxVerticalRunOnLine(PIX      *pix,
+                            l_int32   x,
+                            l_int32  *pystart,
+                            l_int32  *psize)
+{
+l_int32    inrun;  /* boolean */
+l_int32    w, h, i, wpl, val, maxstart, maxsize, length, start;
+l_uint32  *data, *line;
+
+    PROCNAME("pixFindMaxVerticalRunOnLine");
+
+    if (pystart) *pystart = 0;
+    if (!psize)
+        return ERROR_INT("&size not defined", procName, 1);
+    *psize = 0;
+    if (!pix || pixGetDepth(pix) != 1)
+        return ERROR_INT("pix not defined or not 1 bpp", procName, 1);
+    pixGetDimensions(pix, &w, &h, NULL);
+    if (x < 0 || x >= w)
+        return ERROR_INT("x not in [0 ... w - 1]", procName, 1);
+
+    wpl = pixGetWpl(pix);
+    data = pixGetData(pix);
+    inrun = FALSE;
+    start = 0;
+    maxstart = 0;
+    maxsize = 0;
+    for (i = 0; i < h; i++) {
+        line = data + i * wpl;
+        val = GET_DATA_BIT(line, x);
+        if (!inrun) {
+            if (val) {
+                start = i;
+                inrun = TRUE;
+            }
+        } else if (!val) {  /* run just ended */
+            length = i - start;
+            if (length > maxsize) {
+                maxsize = length;
+                maxstart = start;
+            }
+            inrun = FALSE;
+        }
+    }
+
+    if (inrun) {  /* a run has continued to the end of the column */
+        length = i - start;
+        if (length > maxsize) {
+            maxsize = length;
+            maxstart = start;
+        }
+    }
+    if (pystart) *pystart = maxstart;
+    *psize = maxsize;
+    return 0;
+}
+
+
+/*-----------------------------------------------------------------------*
  *            Compute runlength-to-membership transform on a line        *
  *-----------------------------------------------------------------------*/
 /*!
- *  runlengthMembershipOnLine()
+ * \brief   runlengthMembershipOnLine()
  *
- *      Input:   buffer (into which full line of data is placed)
- *               size (full size of line; w or h)
- *               depth (8 or 16 bpp)
- *               start (array of start positions for fg runs)
- *               end (array of end positions for fg runs)
- *               n   (the number of runs)
- *      Return:  0 if OK; 1 on error
+ * \param[in]     buffer into which full line of data is placed
+ * \param[in]     size full size of line; w or h
+ * \param[in]     depth 8 or 16 bpp
+ * \param[in]     start array of start positions for fg runs
+ * \param[in]     end array of end positions for fg runs
+ * \param[in]     n   the number of runs
+ * \return   0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Converts a set of runlengths into a buffer of
  *          runlength membership values.
  *      (2) Initialization of the array gives pixels that are
  *          not within a run the value 0.
+ * </pre>
  */
 l_int32
 runlengthMembershipOnLine(l_int32  *buffer,
@@ -542,18 +772,20 @@ l_int32  i, j, first, last, diff, max;
  *                       Make byte position LUT                          *
  *-----------------------------------------------------------------------*/
 /*!
- *  makeMSBitLocTab()
+ * \brief   makeMSBitLocTab()
  *
- *      Input:  bitval (either 0 or 1)
- *      Return: table (giving, for an input byte, the MS bit location,
- *                     starting at 0 with the MSBit in the byte),
- *                     or null on error.
+ * \param[in]    bitval either 0 or 1
+ * \return  table giving, for an input byte, the MS bit location,
+ *                     starting at 0 with the MSBit in the byte,
+ *                     or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If bitval == 1, it finds the leftmost ON pixel in a byte;
  *          otherwise if bitval == 0, it finds the leftmost OFF pixel.
  *      (2) If there are no pixels of the indicated color in the byte,
  *          this returns 8.
+ * </pre>
  */
 l_int32 *
 makeMSBitLocTab(l_int32  bitval)
@@ -564,7 +796,7 @@ l_uint8   byte, mask;
 
     PROCNAME("makeMSBitLocTab");
 
-    if ((tab = (l_int32 *)CALLOC(256, sizeof(l_int32))) == NULL)
+    if ((tab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32))) == NULL)
         return (l_int32 *)ERROR_PTR("tab not made", procName, NULL);
 
     for (i = 0; i < 256; i++) {

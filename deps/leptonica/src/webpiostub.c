@@ -24,17 +24,19 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  webpiostub.c
+/*!
+ * \file webpiostub.c
+ * <pre>
  *
  *     Stubs for webpio.c functions
+ * </pre>
  */
-
-#include "allheaders.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif  /* HAVE_CONFIG_H */
+
+#include "allheaders.h"
 
 /* --------------------------------------------*/
 #if  !HAVE_LIBWEBP   /* defined in environ.h */
@@ -58,6 +60,14 @@ l_int32 readHeaderWebP(const char *filename, l_int32 *pw, l_int32 *ph,
                        l_int32 *pspp)
 {
     return ERROR_INT("function not present", "readHeaderWebP", 1);
+}
+
+/* ----------------------------------------------------------------------*/
+
+l_int32 readHeaderMemWebP(const l_uint8 *data, size_t size,
+                          l_int32 *pw, l_int32 *ph, l_int32 *pspp)
+{
+    return ERROR_INT("function not present", "readHeaderMemWebP", 1);
 }
 
 /* ----------------------------------------------------------------------*/

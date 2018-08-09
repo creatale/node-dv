@@ -24,17 +24,19 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  tiffiostub.c
+/*!
+ * \file tiffiostub.c
+ * <pre>
  *
  *     Stubs for tiffio.c functions
+ * </pre>
  */
-
-#include "allheaders.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif  /* HAVE_CONFIG_H */
+
+#include "allheaders.h"
 
 /* --------------------------------------------*/
 #if  !HAVE_LIBTIFF   /* defined in environ.h */
@@ -42,14 +44,14 @@
 
 PIX * pixReadTiff(const char *filename, l_int32 n)
 {
-    return (PIX * )ERROR_PTR("function not present", "pixReadTiff", NULL);
+    return (PIX *)ERROR_PTR("function not present", "pixReadTiff", NULL);
 }
 
 /* ----------------------------------------------------------------------*/
 
 PIX * pixReadStreamTiff(FILE *fp, l_int32 n)
 {
-    return (PIX * )ERROR_PTR("function not present", "pixReadStreamTiff", NULL);
+    return (PIX *)ERROR_PTR("function not present", "pixReadStreamTiff", NULL);
 }
 
 /* ----------------------------------------------------------------------*/
@@ -78,10 +80,33 @@ l_int32 pixWriteStreamTiff(FILE *fp, PIX *pix, l_int32 comptype)
 
 /* ----------------------------------------------------------------------*/
 
+l_int32 pixWriteStreamTiffWA(FILE *fp, PIX *pix, l_int32 comptype,
+                             const char *modestr)
+{
+    return ERROR_INT("function not present", "pixWriteStreamTiffWA", 1);
+}
+
+/* ----------------------------------------------------------------------*/
+
+PIX * pixReadFromMultipageTiff(const char *filename, size_t *poffset)
+{
+    return (PIX *)ERROR_PTR("function not present",
+                            "pixReadFromMultipageTiff", NULL);
+}
+
+/* ----------------------------------------------------------------------*/
+
 PIXA * pixaReadMultipageTiff(const char *filename)
 {
-    return (PIXA * )ERROR_PTR("function not present",
-                              "pixaReadMultipageTiff", NULL);
+    return (PIXA *)ERROR_PTR("function not present",
+                             "pixaReadMultipageTiff", NULL);
+}
+
+/* ----------------------------------------------------------------------*/
+
+l_int32 pixaWriteMultipageTiff(const char *filename, PIXA *pixa)
+{
+    return ERROR_INT("function not present", "pixaWriteMultipageTiff", 1);
 }
 
 /* ----------------------------------------------------------------------*/
@@ -169,6 +194,30 @@ l_int32 extractG4DataFromFile(const char *filein, l_uint8 **pdata,
 PIX * pixReadMemTiff(const l_uint8 *cdata, size_t size, l_int32 n)
 {
     return (PIX *)ERROR_PTR("function not present", "pixReadMemTiff", NULL);
+}
+
+/* ----------------------------------------------------------------------*/
+
+PIX * pixReadMemFromMultipageTiff(const l_uint8 *cdata, size_t size,
+                                  size_t *poffset)
+{
+    return (PIX *)ERROR_PTR("function not present",
+                            "pixReadMemFromMultipageTiff", NULL);
+}
+
+/* ----------------------------------------------------------------------*/
+
+PIXA * pixaReadMemMultipageTiff(const l_uint8 *data, size_t size)
+{
+    return (PIXA *)ERROR_PTR("function not present",
+                             "pixaReadMemMultipageTiff", NULL);
+}
+
+/* ----------------------------------------------------------------------*/
+
+l_int32 pixaWriteMemMultipageTiff(l_uint8 **pdata, size_t *psize, PIXA *pixa)
+{
+    return ERROR_INT("function not present", "pixaWriteMemMultipageTiff", 1);
 }
 
 /* ----------------------------------------------------------------------*/

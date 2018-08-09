@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  rotateshear.c
+/*!
+ * \file rotateshear.c
+ * <pre>
  *
  *      Shear rotation about arbitrary point using 2 and 3 shears
  *
@@ -52,9 +53,9 @@
  *  This speed and flexibility comes at the following cost,
  *  relative to area-mapped rotation:
  *
- *    -  Jaggies are created on edges of straight lines
+ *    ~  Jaggies are created on edges of straight lines
  *
- *    -  For large angles, where you must use 3 shears,
+ *    ~  For large angles, where you must use 3 shears,
  *       there is some extra clipping from the shears.
  *
  *  For small angles, typically less than 0.05 radians,
@@ -156,6 +157,7 @@
  *  boundaries.  Dithering (by accumulation of 'error') with sampling
  *  makes more sense, but I haven't tried to do this.  There is only
  *  so much you can do with 1 bpp images!
+ * </pre>
  */
 
 #include <math.h>
@@ -170,16 +172,17 @@ static const l_float32  LIMIT_SHEAR_ANGLE = 0.35;     /* radians; ~20 deg   */
  *                Rotations about an arbitrary point                *
  *------------------------------------------------------------------*/
 /*!
- *  pixRotateShear()
+ * \brief   pixRotateShear()
  *
- *      Input:  pixs
- *              xcen (x value for which there is no horizontal shear)
- *              ycen (y value for which there is no vertical shear)
- *              angle (radians)
- *              incolor (L_BRING_IN_WHITE, L_BRING_IN_BLACK);
- *      Return: pixd, or null on error.
+ * \param[in]    pixs
+ * \param[in]    xcen x value for which there is no horizontal shear
+ * \param[in]    ycen y value for which there is no vertical shear
+ * \param[in]    angle radians
+ * \param[in]    incolor L_BRING_IN_WHITE, L_BRING_IN_BLACK;
+ * \return  pixd, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This rotates an image about the given point, using
  *          either 2 or 3 shears.
  *      (2) A positive angle gives a clockwise rotation.
@@ -187,6 +190,7 @@ static const l_float32  LIMIT_SHEAR_ANGLE = 0.35;     /* radians; ~20 deg   */
  *      (4) For rotation angles larger than about 0.35 radians, we issue
  *          a warning because you should probably be using another method
  *          (either sampling or area mapping)
+ * </pre>
  */
 PIX *
 pixRotateShear(PIX       *pixs,
@@ -216,15 +220,16 @@ pixRotateShear(PIX       *pixs,
 
 
 /*!
- *  pixRotate2Shear()
+ * \brief   pixRotate2Shear()
  *
- *      Input:  pixs
- *              xcen, ycen (center of rotation)
- *              angle (radians)
- *              incolor (L_BRING_IN_WHITE, L_BRING_IN_BLACK);
- *      Return: pixd, or null on error.
+ * \param[in]    pixs
+ * \param[in]    xcen, ycen center of rotation
+ * \param[in]    angle radians
+ * \param[in]    incolor L_BRING_IN_WHITE, L_BRING_IN_BLACK;
+ * \return  pixd, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This rotates the image about the given point, using the 2-shear
  *          method.  It should only be used for angles smaller than
  *          MAX_2_SHEAR_ANGLE.  For larger angles, a warning is issued.
@@ -237,6 +242,7 @@ pixRotateShear(PIX       *pixs,
  *      (5) This brings in 'incolor' pixels from outside the image.
  *      (6) If the image has an alpha layer, it is rotated separately by
  *          two shears.
+ * </pre>
  */
 PIX *
 pixRotate2Shear(PIX       *pixs,
@@ -262,9 +268,10 @@ PIX  *pix1, *pix2, *pixd;
 
     if ((pix1 = pixHShear(NULL, pixs, ycen, angle, incolor)) == NULL)
         return (PIX *)ERROR_PTR("pix1 not made", procName, NULL);
-    if ((pixd = pixVShear(NULL, pix1, xcen, angle, incolor)) == NULL)
-        return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
+    pixd = pixVShear(NULL, pix1, xcen, angle, incolor);
     pixDestroy(&pix1);
+    if (!pixd)
+        return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
 
     if (pixGetDepth(pixs) == 32 && pixGetSpp(pixs) == 4) {
         pix1 = pixGetRGBComponent(pixs, L_ALPHA_CHANNEL);
@@ -278,15 +285,16 @@ PIX  *pix1, *pix2, *pixd;
 }
 
 /*!
- *  pixRotate3Shear()
+ * \brief   pixRotate3Shear()
  *
- *      Input:  pixs
- *              xcen, ycen (center of rotation)
- *              angle (radians)
- *              incolor (L_BRING_IN_WHITE, L_BRING_IN_BLACK);
- *      Return: pixd, or null on error.
+ * \param[in]    pixs
+ * \param[in]    xcen, ycen center of rotation
+ * \param[in]    angle radians
+ * \param[in]    incolor L_BRING_IN_WHITE, L_BRING_IN_BLACK;
+ * \return  pixd, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This rotates the image about the given point, using the 3-shear
  *          method.  It should only be used for angles smaller than
  *          LIMIT_SHEAR_ANGLE.  For larger angles, a warning is issued.
@@ -305,6 +313,7 @@ PIX  *pix1, *pix2, *pixd;
  *          pp. 77-81, May 1986.  A description of the method, along with
  *          an implementation, can be found in Graphics Gems, p. 179,
  *          edited by Andrew Glassner, published by Academic Press, 1990.
+ * </pre>
  */
 PIX *
 pixRotate3Shear(PIX       *pixs,
@@ -333,8 +342,10 @@ PIX       *pix1, *pix2, *pixd;
     hangle = atan(sin(angle));
     if ((pixd = pixVShear(NULL, pixs, xcen, angle / 2., incolor)) == NULL)
         return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
-    if ((pix1 = pixHShear(NULL, pixd, ycen, hangle, incolor)) == NULL)
+    if ((pix1 = pixHShear(NULL, pixd, ycen, hangle, incolor)) == NULL) {
+        pixDestroy(&pixd);
         return (PIX *)ERROR_PTR("pix1 not made", procName, NULL);
+    }
     pixVShear(pixd, pix1, xcen, angle / 2., incolor);
     pixDestroy(&pix1);
 
@@ -354,15 +365,16 @@ PIX       *pix1, *pix2, *pixd;
  *             Rotations in-place about an arbitrary point          *
  *------------------------------------------------------------------*/
 /*!
- *  pixRotateShearIP()
+ * \brief   pixRotateShearIP()
  *
- *      Input:  pixs (any depth; not colormapped)
- *              xcen, ycen (center of rotation)
- *              angle (radians)
- *              incolor (L_BRING_IN_WHITE, L_BRING_IN_BLACK)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pixs any depth; not colormapped
+ * \param[in]    xcen, ycen center of rotation
+ * \param[in]    angle radians
+ * \param[in]    incolor L_BRING_IN_WHITE, L_BRING_IN_BLACK
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This does an in-place rotation of the image about the
  *          specified point, using the 3-shear method.  It should only
  *          be used for angles smaller than LIMIT_SHEAR_ANGLE.
@@ -377,6 +389,7 @@ PIX       *pix1, *pix2, *pixd;
  *      (5) This brings in 'incolor' pixels from outside the image.
  *      (6) The pix cannot be colormapped, because the in-place operation
  *          only blits in 0 or 1 bits, not an arbitrary colormap index.
+ * </pre>
  */
 l_int32
 pixRotateShearIP(PIX       *pixs,
@@ -415,12 +428,12 @@ l_float32  hangle;
  *                    Rotations about the image center              *
  *------------------------------------------------------------------*/
 /*!
- *  pixRotateShearCenter()
+ * \brief   pixRotateShearCenter()
  *
- *      Input:  pixs
- *              angle (radians)
- *              incolor (L_BRING_IN_WHITE, L_BRING_IN_BLACK)
- *      Return: pixd, or null on error
+ * \param[in]    pixs
+ * \param[in]    angle radians
+ * \param[in]    incolor L_BRING_IN_WHITE, L_BRING_IN_BLACK
+ * \return  pixd, or NULL on error
  */
 PIX *
 pixRotateShearCenter(PIX       *pixs,
@@ -438,12 +451,12 @@ pixRotateShearCenter(PIX       *pixs,
 
 
 /*!
- *  pixRotateShearCenterIP()
+ * \brief   pixRotateShearCenterIP()
  *
- *      Input:  pixs
- *              angle (radians)
- *              incolor (L_BRING_IN_WHITE, L_BRING_IN_BLACK)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs
+ * \param[in]    angle radians
+ * \param[in]    incolor L_BRING_IN_WHITE, L_BRING_IN_BLACK
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRotateShearCenterIP(PIX       *pixs,

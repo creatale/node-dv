@@ -24,8 +24,12 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  flipdetect.c
+/*!
+ * \file flipdetect.c
+ * <pre>
+ *
+ *      High-level interface for detection and correction
+ *          l_int32      pixOrientCorrect()
  *
  *      Page orientation detection (pure rotation by 90 degree increments):
  *          l_int32      pixOrientDetect()
@@ -160,6 +164,10 @@
  *      In the normal situation the confidence confidence will be
  *      large and positive.  However, if mirror flipped, the
  *      confidence will be large and negative.
+ *
+ *  A high-level interface, pixOrientCorrect() combines the detection
+ *  of the orientation with the rotation decision and the rotation itself.
+ * </pre>
  */
 
 #include <math.h>
@@ -192,7 +200,7 @@ static const char *textsel4 = "xxxxxx"
 
     /* Parameters for determining orientation */
 static const l_int32  DEFAULT_MIN_UP_DOWN_COUNT = 70;
-static const l_float32  DEFAULT_MIN_UP_DOWN_CONF = 7.0;
+static const l_float32  DEFAULT_MIN_UP_DOWN_CONF = 8.0;
 static const l_float32  DEFAULT_MIN_UP_DOWN_RATIO = 2.5;
 
     /* Parameters for determining mirror flip */
@@ -205,20 +213,113 @@ static void pixDebugFlipDetect(const char *filename, PIX *pixs,
 
 
 /*----------------------------------------------------------------*
+ *        High-level interface for detection and correction       *
+ *----------------------------------------------------------------*/
+/*!
+ * \brief   pixOrientCorrect()
+ *
+ * \param[in]    pixs 1 bpp, deskewed, English text, 150 - 300 ppi
+ * \param[in]    minupconf minimum value for which a decision can be made
+ * \param[in]    minratio minimum conf ratio required for a decision
+ * \param[out]   pupconf [optional] ; use NULL to skip
+ * \param[out]   pleftconf [optional] ; use NULL to skip
+ * \param[out]   protation [optional] ; use NULL to skip
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  pixd  may be rotated by 90, 180 or 270; null on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) Simple top-level function to detect if Roman text is in
+ *          reading orientation, and to rotate the image accordingly if not.
+ *      (2) Returns a copy if no rotation is needed.
+ *      (3) See notes for pixOrientDetect() and pixOrientDecision().
+ *          Use 0.0 for default values for %minupconf and %minratio
+ *      (4) Optional output of intermediate confidence results and
+ *          the rotation performed on pixs.
+ * </pre>
+ */
+PIX *
+pixOrientCorrect(PIX        *pixs,
+                 l_float32   minupconf,
+                 l_float32   minratio,
+                 l_float32  *pupconf,
+                 l_float32  *pleftconf,
+                 l_int32    *protation,
+                 l_int32     debug)
+{
+l_int32    orient;
+l_float32  upconf, leftconf;
+PIX       *pix1;
+
+    PROCNAME("pixOrientCorrect");
+
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return (PIX *)ERROR_PTR("pixs undefined or not 1 bpp", procName, NULL);
+
+    lept_mkdir("lept/orient");
+
+        /* Get confidences for orientation */
+    pixUpDownDetectDwa(pixs, &upconf, 0, debug);
+    pix1 = pixRotate90(pixs, 1);
+    pixUpDownDetectDwa(pix1, &leftconf, 0, debug);
+    pixDestroy(&pix1);
+    if (pupconf) *pupconf = upconf;
+    if (pleftconf) *pleftconf = leftconf;
+
+        /* Decide what to do */
+    makeOrientDecision(upconf,leftconf, minupconf, minratio, &orient, debug);
+
+        /* Do it */
+    switch (orient)
+    {
+    case L_TEXT_ORIENT_UNKNOWN:
+        L_INFO("text orientation not determined; no rotation\n", procName);
+        if (protation) *protation = 0;
+        return pixCopy(NULL, pixs);
+        break;
+    case L_TEXT_ORIENT_UP:
+        L_INFO("text is oriented up; no rotation\n", procName);
+        if (protation) *protation = 0;
+        return pixCopy(NULL, pixs);
+        break;
+    case L_TEXT_ORIENT_LEFT:
+        L_INFO("landscape; text oriented left; 90 cw rotation\n", procName);
+        if (protation) *protation = 90;
+        return pixRotateOrth(pixs, 1);
+        break;
+    case L_TEXT_ORIENT_DOWN:
+        L_INFO("text oriented down; 180 cw rotation\n", procName);
+        if (protation) *protation = 180;
+        return pixRotateOrth(pixs, 2);
+        break;
+    case L_TEXT_ORIENT_RIGHT:
+        L_INFO("landscape; text oriented right; 270 cw rotation\n", procName);
+        if (protation) *protation = 270;
+        return pixRotateOrth(pixs, 3);
+        break;
+    default:
+        L_ERROR("invalid orient flag!\n", procName);
+        return pixCopy(NULL, pixs);
+    }
+}
+
+
+/*----------------------------------------------------------------*
  *         Orientation detection (four 90 degree angles)          *
  *                      Rasterop implementation                   *
  *----------------------------------------------------------------*/
 /*!
- *  pixOrientDetect()
+ * \brief   pixOrientDetect()
  *
- *      Input:  pixs (1 bpp, deskewed, English text, 150 - 300 ppi)
- *              &upconf (<optional return> ; may be null)
- *              &leftconf (<optional return> ; may be null)
- *              mincount (min number of up + down; use 0 for default)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text, 150 - 300 ppi
+ * \param[out]   pupconf [optional] ; may be NULL
+ * \param[out]   pleftconf [optional] ; may be NULL
+ * \param[in]    mincount min number of up + down; use 0 for default
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See "Measuring document image skew and orientation"
  *          Dan S. Bloomberg, Gary E. Kopec and Lakshmi Dasari
  *          IS&T/SPIE EI'95, Conference 2422: Document Recognition II
@@ -263,6 +364,7 @@ static void pixDebugFlipDetect(const char *filename, PIX *pixs,
  *          there are a sufficient number of counts for both orientations,
  *          in which case neither upconf nor leftconf will be 0.0.
  *      (7) Uses rasterop implementation of HMT.
+ * </pre>
  */
 l_int32
 pixOrientDetect(PIX        *pixs,
@@ -271,25 +373,25 @@ pixOrientDetect(PIX        *pixs,
                 l_int32     mincount,
                 l_int32     debug)
 {
-PIX  *pixt;
+PIX  *pix1;
 
     PROCNAME("pixOrientDetect");
 
-    if (!pixs)
-        return ERROR_INT("pixs not defined", procName, 1);
-    if (pixGetDepth(pixs) != 1)
-        return ERROR_INT("pixs not 1 bpp", procName, 1);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (!pupconf && !pleftconf)
         return ERROR_INT("nothing to do", procName, 1);
     if (mincount == 0)
         mincount = DEFAULT_MIN_UP_DOWN_COUNT;
 
+    lept_mkdir("lept/orient");
+
     if (pupconf)
         pixUpDownDetect(pixs, pupconf, mincount, debug);
     if (pleftconf) {
-        pixt = pixRotate90(pixs, 1);
-        pixUpDownDetect(pixt, pleftconf, mincount, debug);
-        pixDestroy(&pixt);
+        pix1 = pixRotate90(pixs, 1);
+        pixUpDownDetect(pix1, pleftconf, mincount, debug);
+        pixDestroy(&pix1);
     }
 
     return 0;
@@ -297,17 +399,18 @@ PIX  *pixt;
 
 
 /*!
- *  makeOrientDecision()
+ * \brief   makeOrientDecision()
  *
- *      Input:  upconf (nonzero)
- *              leftconf (nonzero)
- *              minupconf (minimum value for which a decision can be made)
- *              minratio (minimum conf ratio required for a decision)
- *              &orient (<return> text orientation enum {0,1,2,3,4})
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    upconf nonzero
+ * \param[in]    leftconf nonzero
+ * \param[in]    minupconf minimum value for which a decision can be made
+ * \param[in]    minratio minimum conf ratio required for a decision
+ * \param[out]   porient text orientation enum {0,1,2,3,4}
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This can be run after pixOrientDetect()
  *      (2) Both upconf and leftconf must be nonzero; otherwise the
  *          orientation cannot be determined.
@@ -322,6 +425,7 @@ PIX  *pixt;
  *            L_TEXT_ORIENT_LEFT:     landscape, text up facing left
  *            L_TEXT_ORIENT_DOWN:     text upside-down
  *            L_TEXT_ORIENT_RIGHT:    landscape, text up facing right
+ * </pre>
  */
 l_int32
 makeOrientDecision(l_float32  upconf,
@@ -338,8 +442,12 @@ l_float32  absupconf, absleftconf;
     if (!porient)
         return ERROR_INT("&orient not defined", procName, 1);
     *porient = L_TEXT_ORIENT_UNKNOWN;  /* default: no decision */
-    if (upconf == 0.0 || leftconf == 0.0)
-        return ERROR_INT("not enough conf to get orientation", procName, 1);
+    if (upconf == 0.0 || leftconf == 0.0) {
+        L_INFO("not enough confidence to get orientation\n", procName);
+        return 0;
+    }
+
+    lept_mkdir("lept/orient");
 
     if (minupconf == 0.0)
         minupconf = DEFAULT_MIN_UP_DOWN_CONF;
@@ -378,15 +486,16 @@ l_float32  absupconf, absleftconf;
 
 
 /*!
- *  pixUpDownDetect()
+ * \brief   pixUpDownDetect()
  *
- *      Input:  pixs (1 bpp, deskewed, English text, 150 - 300 ppi)
- *              &conf (<return> confidence that text is rightside-up)
- *              mincount (min number of up + down; use 0 for default)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text, 150 - 300 ppi
+ * \param[out]   pconf confidence that text is rightside-up
+ * \param[in]    mincount min number of up + down; use 0 for default
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Special (typical, slightly faster) case, where the pixels
  *          identified through the HMT (hit-miss transform) are not
  *          clipped by a truncated word mask pixm.  See pixOrientDetect()
@@ -395,6 +504,7 @@ l_float32  absupconf, absleftconf;
  *          between the number of detected up and down ascenders,
  *          assuming that the text is either rightside-up or upside-down
  *          and not rotated at a 90 degree angle.
+ * </pre>
  */
 l_int32
 pixUpDownDetect(PIX        *pixs,
@@ -407,23 +517,24 @@ pixUpDownDetect(PIX        *pixs,
 
 
 /*!
- *  pixUpDownDetectGeneral()
+ * \brief   pixUpDownDetectGeneral()
  *
- *      Input:  pixs (1 bpp, deskewed, English text, 150 - 300 ppi)
- *              &conf (<return> confidence that text is rightside-up)
- *              mincount (min number of up + down; use 0 for default)
- *              npixels (number of pixels removed from each side of word box)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text, 150 - 300 ppi
+ * \param[out]   pconf confidence that text is rightside-up
+ * \param[in]    mincount min number of up + down; use 0 for default
+ * \param[in]    npixels number of pixels removed from each side of word box
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See pixOrientDetect() for other details.
- *      (2) @conf is the normalized difference between the number of
+ *      (2) %conf is the normalized difference between the number of
  *          detected up and down ascenders, assuming that the text
  *          is either rightside-up or upside-down and not rotated
  *          at a 90 degree angle.
- *      (3) The typical mode of operation is @npixels == 0.
- *          If @npixels > 0, this removes HMT matches at the
+ *      (3) The typical mode of operation is %npixels == 0.
+ *          If %npixels > 0, this removes HMT matches at the
  *          beginning and ending of "words."  This is useful for
  *          pages that may have mostly digits, because if npixels == 0,
  *          leading "1" and "3" digits can register as having
@@ -441,6 +552,7 @@ pixUpDownDetect(PIX        *pixs,
  *          this function is designed to work for input pix between
  *          150 and 300 ppi, and an 8x reduction on a 150 ppi image
  *          is going too far -- components will get merged.
+ * </pre>
  */
 l_int32
 pixUpDownDetectGeneral(PIX        *pixs,
@@ -451,7 +563,7 @@ pixUpDownDetectGeneral(PIX        *pixs,
 {
 l_int32    countup, countdown, nmax;
 l_float32  nup, ndown;
-PIX       *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
+PIX       *pix0, *pix1, *pix2, *pix3, *pixm;
 SEL       *sel1, *sel2, *sel3, *sel4;
 
     PROCNAME("pixUpDownDetectGeneral");
@@ -459,12 +571,14 @@ SEL       *sel1, *sel2, *sel3, *sel4;
     if (!pconf)
         return ERROR_INT("&conf not defined", procName, 1);
     *pconf = 0.0;
-    if (!pixs)
-        return ERROR_INT("pixs not defined", procName, 1);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (mincount == 0)
         mincount = DEFAULT_MIN_UP_DOWN_COUNT;
     if (npixels < 0)
         npixels = 0;
+
+    lept_mkdir("lept/orient");
 
     sel1 = selCreateFromString(textsel1, 5, 6, NULL);
     sel2 = selCreateFromString(textsel2, 5, 6, NULL);
@@ -475,7 +589,7 @@ SEL       *sel1, *sel2, *sel3, *sel4;
          * This closes holes in x-height characters and joins them at
          * the x-height.  There is more noise in the descender detection
          * from this, but it works fairly well. */
-    pixt0 = pixMorphCompSequence(pixs, "c1.8 + c30.1", 0);
+    pix0 = pixMorphCompSequence(pixs, "c1.8 + c30.1", 0);
 
         /* Optionally, make a mask of the word bounding boxes, shortening
          * each of them by a fixed amount at each end. */
@@ -484,10 +598,10 @@ SEL       *sel1, *sel2, *sel3, *sel4;
         l_int32  i, nbox, x, y, w, h;
         BOX   *box;
         BOXA  *boxa;
-        pixt1 = pixMorphSequence(pixt0, "o10.1", 0);
-        boxa = pixConnComp(pixt1, NULL, 8);
-        pixm = pixCreateTemplate(pixt1);
-        pixDestroy(&pixt1);
+        pix1 = pixMorphSequence(pix0, "o10.1", 0);
+        boxa = pixConnComp(pix1, NULL, 8);
+        pixm = pixCreateTemplate(pix1);
+        pixDestroy(&pix1);
         nbox = boxaGetCount(boxa);
         for (i = 0; i < nbox; i++) {
             box = boxaGetBox(boxa, i, L_CLONE);
@@ -503,30 +617,30 @@ SEL       *sel1, *sel2, *sel3, *sel4;
         /* Find the ascenders and optionally filter with pixm.
          * For an explanation of the procedure used for counting the result
          * of the HMT, see comments at the beginning of this function. */
-    pixt1 = pixHMT(NULL, pixt0, sel1);
-    pixt2 = pixHMT(NULL, pixt0, sel2);
-    pixOr(pixt1, pixt1, pixt2);
+    pix1 = pixHMT(NULL, pix0, sel1);
+    pix2 = pixHMT(NULL, pix0, sel2);
+    pixOr(pix1, pix1, pix2);
     if (pixm)
-        pixAnd(pixt1, pixt1, pixm);
-    pixt3 = pixReduceRankBinaryCascade(pixt1, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &countup, NULL);
-    pixDebugFlipDetect("junkpixup", pixs, pixt1, debug);
-    pixDestroy(&pixt1);
-    pixDestroy(&pixt2);
-    pixDestroy(&pixt3);
+        pixAnd(pix1, pix1, pixm);
+    pix3 = pixReduceRankBinaryCascade(pix1, 1, 1, 0, 0);
+    pixCountPixels(pix3, &countup, NULL);
+    pixDebugFlipDetect("/tmp/lept/orient/up.png", pixs, pix1, debug);
+    pixDestroy(&pix1);
+    pixDestroy(&pix2);
+    pixDestroy(&pix3);
 
         /* Find the ascenders and optionally filter with pixm. */
-    pixt1 = pixHMT(NULL, pixt0, sel3);
-    pixt2 = pixHMT(NULL, pixt0, sel4);
-    pixOr(pixt1, pixt1, pixt2);
+    pix1 = pixHMT(NULL, pix0, sel3);
+    pix2 = pixHMT(NULL, pix0, sel4);
+    pixOr(pix1, pix1, pix2);
     if (pixm)
-        pixAnd(pixt1, pixt1, pixm);
-    pixt3 = pixReduceRankBinaryCascade(pixt1, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &countdown, NULL);
-    pixDebugFlipDetect("junkpixdown", pixs, pixt1, debug);
-    pixDestroy(&pixt1);
-    pixDestroy(&pixt2);
-    pixDestroy(&pixt3);
+        pixAnd(pix1, pix1, pixm);
+    pix3 = pixReduceRankBinaryCascade(pix1, 1, 1, 0, 0);
+    pixCountPixels(pix3, &countdown, NULL);
+    pixDebugFlipDetect("/tmp/lept/orient/down.png", pixs, pix1, debug);
+    pixDestroy(&pix1);
+    pixDestroy(&pix2);
+    pixDestroy(&pix3);
 
         /* Evaluate statistically, generating a confidence that is
          * related to the probability with a gaussian distribution. */
@@ -537,7 +651,7 @@ SEL       *sel1, *sel2, *sel3, *sel4;
         *pconf = 2. * ((nup - ndown) / sqrt(nup + ndown));
 
     if (debug) {
-        if (pixm) pixWrite("junkpixm1", pixm, IFF_PNG);
+        if (pixm) pixWriteDebug("/tmp/lept/orient/pixm1.png", pixm, IFF_PNG);
         fprintf(stderr, "nup = %7.3f, ndown = %7.3f, conf = %7.3f\n",
                 nup, ndown, *pconf);
         if (*pconf > DEFAULT_MIN_UP_DOWN_CONF)
@@ -546,7 +660,7 @@ SEL       *sel1, *sel2, *sel3, *sel4;
             fprintf(stderr, "Text is upside-down\n");
     }
 
-    pixDestroy(&pixt0);
+    pixDestroy(&pix0);
     pixDestroy(&pixm);
     selDestroy(&sel1);
     selDestroy(&sel2);
@@ -561,16 +675,17 @@ SEL       *sel1, *sel2, *sel3, *sel4;
  *                         DWA implementation                     *
  *----------------------------------------------------------------*/
 /*!
- *  pixOrientDetectDwa()
+ * \brief   pixOrientDetectDwa()
  *
- *      Input:  pixs (1 bpp, deskewed, English text)
- *              &upconf (<optional return> ; may be null)
- *              &leftconf (<optional return> ; may be null)
- *              mincount (min number of up + down; use 0 for default)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text
+ * \param[out]   pupconf [optional] ; may be NULL
+ * \param[out]   pleftconf [optional] ; may be NULL
+ * \param[in]    mincount min number of up + down; use 0 for default
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Same interface as for pixOrientDetect().  See notes
  *          there for usage.
  *      (2) Uses auto-gen'd code for the Sels defined at the
@@ -578,6 +693,7 @@ SEL       *sel1, *sel2, *sel3, *sel4;
  *          The auto-gen'd code is in fliphmtgen.c, and can
  *          be generated by a simple executable; see prog/flipselgen.c.
  *      (3) This runs about 2.5 times faster than the pixOrientDetect().
+ * </pre>
  */
 l_int32
 pixOrientDetectDwa(PIX        *pixs,
@@ -586,14 +702,12 @@ pixOrientDetectDwa(PIX        *pixs,
                    l_int32     mincount,
                    l_int32     debug)
 {
-PIX  *pixt;
+PIX  *pix1;
 
     PROCNAME("pixOrientDetectDwa");
 
-    if (!pixs)
-        return ERROR_INT("pixs not defined", procName, 1);
-    if (pixGetDepth(pixs) != 1)
-        return ERROR_INT("pixs not 1 bpp", procName, 1);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (!pupconf && !pleftconf)
         return ERROR_INT("nothing to do", procName, 1);
     if (mincount == 0)
@@ -602,9 +716,9 @@ PIX  *pixt;
     if (pupconf)
         pixUpDownDetectDwa(pixs, pupconf, mincount, debug);
     if (pleftconf) {
-        pixt = pixRotate90(pixs, 1);
-        pixUpDownDetectDwa(pixt, pleftconf, mincount, debug);
-        pixDestroy(&pixt);
+        pix1 = pixRotate90(pixs, 1);
+        pixUpDownDetectDwa(pix1, pleftconf, mincount, debug);
+        pixDestroy(&pix1);
     }
 
     return 0;
@@ -612,15 +726,16 @@ PIX  *pixt;
 
 
 /*!
- *  pixUpDownDetectDwa()
+ * \brief   pixUpDownDetectDwa()
  *
- *      Input:  pixs (1 bpp, deskewed, English text, 150 - 300 ppi)
- *              &conf (<return> confidence that text is rightside-up)
- *              mincount (min number of up + down; use 0 for default)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text, 150 - 300 ppi
+ * \param[out]   pconf confidence that text is rightside-up
+ * \param[in]    mincount min number of up + down; use 0 for default
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Faster (DWA) version of pixUpDownDetect().
  *      (2) This is a special case (but typical and slightly faster) of
  *          pixUpDownDetectGeneralDwa(), where the pixels identified
@@ -631,9 +746,10 @@ PIX  *pixt;
  *          between the number of detected up and down ascenders,
  *          assuming that the text is either rightside-up or upside-down
  *          and not rotated at a 90 degree angle.
+ * </pre>
  */
 l_int32
-pixUpDownDetectDwa(PIX        *pixs,
+pixUpDownDetectDwa(PIX       *pixs,
                   l_float32  *pconf,
                   l_int32     mincount,
                   l_int32     debug)
@@ -643,17 +759,19 @@ pixUpDownDetectDwa(PIX        *pixs,
 
 
 /*!
- *  pixUpDownDetectGeneralDwa()
+ * \brief   pixUpDownDetectGeneralDwa()
  *
- *      Input:  pixs (1 bpp, deskewed, English text)
- *              &conf (<return> confidence that text is rightside-up)
- *              mincount (min number of up + down; use 0 for default)
- *              npixels (number of pixels removed from each side of word box)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text
+ * \param[out]   pconf confidence that text is rightside-up
+ * \param[in]    mincount min number of up + down; use 0 for default
+ * \param[in]    npixels number of pixels removed from each side of word box
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See the notes in pixUpDownDetectGeneral() for usage.
+ * </pre>
  */
 l_int32
 pixUpDownDetectGeneralDwa(PIX        *pixs,
@@ -668,19 +786,21 @@ char       flipsel3[] = "flipsel3";
 char       flipsel4[] = "flipsel4";
 l_int32    countup, countdown, nmax;
 l_float32  nup, ndown;
-PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
+PIX       *pixt, *pix0, *pix1, *pix2, *pix3, *pixm;
 
     PROCNAME("pixUpDownDetectGeneralDwa");
 
     if (!pconf)
         return ERROR_INT("&conf not defined", procName, 1);
     *pconf = 0.0;
-    if (!pixs)
-        return ERROR_INT("pixs not defined", procName, 1);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (mincount == 0)
         mincount = DEFAULT_MIN_UP_DOWN_COUNT;
     if (npixels < 0)
         npixels = 0;
+
+    lept_mkdir("lept/orient");
 
         /* One of many reasonable pre-filtering sequences: (1, 8) and (30, 1).
          * This closes holes in x-height characters and joins them at
@@ -689,7 +809,7 @@ PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
     pixt = pixMorphSequenceDwa(pixs, "c1.8 + c30.1", 0);
 
         /* Be sure to add the border before the flip DWA operations! */
-    pixt0 = pixAddBorderGeneral(pixt, ADDED_BORDER, ADDED_BORDER,
+    pix0 = pixAddBorderGeneral(pixt, ADDED_BORDER, ADDED_BORDER,
                                 ADDED_BORDER, ADDED_BORDER, 0);
     pixDestroy(&pixt);
 
@@ -700,10 +820,10 @@ PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
         l_int32  i, nbox, x, y, w, h;
         BOX   *box;
         BOXA  *boxa;
-        pixt1 = pixMorphSequenceDwa(pixt0, "o10.1", 0);
-        boxa = pixConnComp(pixt1, NULL, 8);
-        pixm = pixCreateTemplate(pixt1);
-        pixDestroy(&pixt1);
+        pix1 = pixMorphSequenceDwa(pix0, "o10.1", 0);
+        boxa = pixConnComp(pix1, NULL, 8);
+        pixm = pixCreateTemplate(pix1);
+        pixDestroy(&pix1);
         nbox = boxaGetCount(boxa);
         for (i = 0; i < nbox; i++) {
             box = boxaGetBox(boxa, i, L_CLONE);
@@ -719,28 +839,28 @@ PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
         /* Find the ascenders and optionally filter with pixm.
          * For an explanation of the procedure used for counting the result
          * of the HMT, see comments in pixUpDownDetectGeneral().  */
-    pixt1 = pixFlipFHMTGen(NULL, pixt0, flipsel1);
-    pixt2 = pixFlipFHMTGen(NULL, pixt0, flipsel2);
-    pixOr(pixt1, pixt1, pixt2);
+    pix1 = pixFlipFHMTGen(NULL, pix0, flipsel1);
+    pix2 = pixFlipFHMTGen(NULL, pix0, flipsel2);
+    pixOr(pix1, pix1, pix2);
     if (pixm)
-        pixAnd(pixt1, pixt1, pixm);
-    pixt3 = pixReduceRankBinaryCascade(pixt1, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &countup, NULL);
-    pixDestroy(&pixt1);
-    pixDestroy(&pixt2);
-    pixDestroy(&pixt3);
+        pixAnd(pix1, pix1, pixm);
+    pix3 = pixReduceRankBinaryCascade(pix1, 1, 1, 0, 0);
+    pixCountPixels(pix3, &countup, NULL);
+    pixDestroy(&pix1);
+    pixDestroy(&pix2);
+    pixDestroy(&pix3);
 
         /* Find the ascenders and optionally filter with pixm. */
-    pixt1 = pixFlipFHMTGen(NULL, pixt0, flipsel3);
-    pixt2 = pixFlipFHMTGen(NULL, pixt0, flipsel4);
-    pixOr(pixt1, pixt1, pixt2);
+    pix1 = pixFlipFHMTGen(NULL, pix0, flipsel3);
+    pix2 = pixFlipFHMTGen(NULL, pix0, flipsel4);
+    pixOr(pix1, pix1, pix2);
     if (pixm)
-        pixAnd(pixt1, pixt1, pixm);
-    pixt3 = pixReduceRankBinaryCascade(pixt1, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &countdown, NULL);
-    pixDestroy(&pixt1);
-    pixDestroy(&pixt2);
-    pixDestroy(&pixt3);
+        pixAnd(pix1, pix1, pixm);
+    pix3 = pixReduceRankBinaryCascade(pix1, 1, 1, 0, 0);
+    pixCountPixels(pix3, &countdown, NULL);
+    pixDestroy(&pix1);
+    pixDestroy(&pix2);
+    pixDestroy(&pix3);
 
         /* Evaluate statistically, generating a confidence that is
          * related to the probability with a gaussian distribution. */
@@ -751,7 +871,7 @@ PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
         *pconf = 2. * ((nup - ndown) / sqrt(nup + ndown));
 
     if (debug) {
-        if (pixm) pixWrite("junkpixm2", pixm, IFF_PNG);
+        if (pixm) pixWriteDebug("/tmp/lept/orient/pixm2.png", pixm, IFF_PNG);
         fprintf(stderr, "nup = %7.3f, ndown = %7.3f, conf = %7.3f\n",
                 nup, ndown, *pconf);
         if (*pconf > DEFAULT_MIN_UP_DOWN_CONF)
@@ -760,7 +880,7 @@ PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
             fprintf(stderr, "Text is upside-down\n");
     }
 
-    pixDestroy(&pixt0);
+    pixDestroy(&pix0);
     pixDestroy(&pixm);
     return 0;
 }
@@ -772,15 +892,16 @@ PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
  *                       Rasterop implementation                  *
  *----------------------------------------------------------------*/
 /*!
- *  pixMirrorDetect()
+ * \brief   pixMirrorDetect()
  *
- *      Input:  pixs (1 bpp, deskewed, English text)
- *              &conf (<return> confidence that text is not LR mirror reversed)
- *              mincount (min number of left + right; use 0 for default)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text
+ * \param[out]   pconf confidence that text is not LR mirror reversed
+ * \param[in]    mincount min number of left + right; use 0 for default
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) For this test, it is necessary that the text is horizontally
  *          oriented, with ascenders going up.
  *      (2) conf is the normalized difference between the number of
@@ -807,6 +928,7 @@ PIX       *pixt, *pixt0, *pixt1, *pixt2, *pixt3, *pixm;
  *          parts of the characters are purposely weakened sufficiently
  *          to allow these characters to remain open.  The wonders
  *          of morphology!
+ * </pre>
  */
 l_int32
 pixMirrorDetect(PIX        *pixs,
@@ -816,7 +938,7 @@ pixMirrorDetect(PIX        *pixs,
 {
 l_int32    count1, count2, nmax;
 l_float32  nleft, nright;
-PIX       *pixt0, *pixt1, *pixt2, *pixt3;
+PIX       *pix0, *pix1, *pix2, *pix3;
 SEL       *sel1, *sel2;
 
     PROCNAME("pixMirrorDetect");
@@ -824,8 +946,8 @@ SEL       *sel1, *sel2;
     if (!pconf)
         return ERROR_INT("&conf not defined", procName, 1);
     *pconf = 0.0;
-    if (!pixs)
-        return ERROR_INT("pixs not defined", procName, 1);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (mincount == 0)
         mincount = DEFAULT_MIN_MIRROR_FLIP_COUNT;
 
@@ -833,35 +955,34 @@ SEL       *sel1, *sel2;
     sel2 = selCreateFromString(textsel2, 5, 6, NULL);
 
         /* Fill x-height characters but not space between them, sort of. */
-    pixt3 = pixMorphCompSequence(pixs, "d1.30", 0);
-    pixXor(pixt3, pixt3, pixs);
-    pixt0 = pixMorphCompSequence(pixs, "c15.1", 0);
-    pixXor(pixt0, pixt0, pixs);
-    pixAnd(pixt0, pixt0, pixt3);
-    pixOr(pixt0, pixt0, pixs);
-    pixDestroy(&pixt3);
-/*    pixDisplayWrite(pixt0, 1); */
+    pix3 = pixMorphCompSequence(pixs, "d1.30", 0);
+    pixXor(pix3, pix3, pixs);
+    pix0 = pixMorphCompSequence(pixs, "c15.1", 0);
+    pixXor(pix0, pix0, pixs);
+    pixAnd(pix0, pix0, pix3);
+    pixOr(pix0, pix0, pixs);
+    pixDestroy(&pix3);
 
         /* Filter the right-facing characters. */
-    pixt1 = pixHMT(NULL, pixt0, sel1);
-    pixt3 = pixReduceRankBinaryCascade(pixt1, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &count1, NULL);
-    pixDebugFlipDetect("junkpixright", pixs, pixt1, debug);
-    pixDestroy(&pixt1);
-    pixDestroy(&pixt3);
+    pix1 = pixHMT(NULL, pix0, sel1);
+    pix3 = pixReduceRankBinaryCascade(pix1, 1, 1, 0, 0);
+    pixCountPixels(pix3, &count1, NULL);
+    pixDebugFlipDetect("/tmp/lept/orient/right.png", pixs, pix1, debug);
+    pixDestroy(&pix1);
+    pixDestroy(&pix3);
 
         /* Filter the left-facing characters. */
-    pixt2 = pixHMT(NULL, pixt0, sel2);
-    pixt3 = pixReduceRankBinaryCascade(pixt2, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &count2, NULL);
-    pixDebugFlipDetect("junkpixleft", pixs, pixt2, debug);
-    pixDestroy(&pixt2);
-    pixDestroy(&pixt3);
+    pix2 = pixHMT(NULL, pix0, sel2);
+    pix3 = pixReduceRankBinaryCascade(pix2, 1, 1, 0, 0);
+    pixCountPixels(pix3, &count2, NULL);
+    pixDebugFlipDetect("/tmp/lept/orient/left.png", pixs, pix2, debug);
+    pixDestroy(&pix2);
+    pixDestroy(&pix3);
 
     nright = (l_float32)count1;
     nleft = (l_float32)count2;
     nmax = L_MAX(count1, count2);
-    pixDestroy(&pixt0);
+    pixDestroy(&pix0);
     selDestroy(&sel1);
     selDestroy(&sel2);
 
@@ -885,18 +1006,20 @@ SEL       *sel1, *sel2;
  *                          DWA implementation                    *
  *----------------------------------------------------------------*/
 /*!
- *  pixMirrorDetectDwa()
+ * \brief   pixMirrorDetectDwa()
  *
- *      Input:  pixs (1 bpp, deskewed, English text)
- *              &conf (<return> confidence that text is not LR mirror reversed)
- *              mincount (min number of left + right; use 0 for default)
- *              debug (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, deskewed, English text
+ * \param[out]   pconf confidence that text is not LR mirror reversed
+ * \param[in]    mincount min number of left + right; use 0 for default
+ * \param[in]    debug 1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) We assume the text is horizontally oriented, with
  *          ascenders going up.
  *      (2) See notes in pixMirrorDetect().
+ * </pre>
  */
 l_int32
 pixMirrorDetectDwa(PIX        *pixs,
@@ -908,45 +1031,45 @@ char       flipsel1[] = "flipsel1";
 char       flipsel2[] = "flipsel2";
 l_int32    count1, count2, nmax;
 l_float32  nleft, nright;
-PIX       *pixt0, *pixt1, *pixt2, *pixt3;
+PIX       *pix0, *pix1, *pix2, *pix3;
 
     PROCNAME("pixMirrorDetectDwa");
 
     if (!pconf)
         return ERROR_INT("&conf not defined", procName, 1);
     *pconf = 0.0;
-    if (!pixs)
-        return ERROR_INT("pixs not defined", procName, 1);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (mincount == 0)
         mincount = DEFAULT_MIN_MIRROR_FLIP_COUNT;
 
         /* Fill x-height characters but not space between them, sort of. */
-    pixt3 = pixMorphSequenceDwa(pixs, "d1.30", 0);
-    pixXor(pixt3, pixt3, pixs);
-    pixt0 = pixMorphSequenceDwa(pixs, "c15.1", 0);
-    pixXor(pixt0, pixt0, pixs);
-    pixAnd(pixt0, pixt0, pixt3);
-    pixOr(pixt3, pixt0, pixs);
-    pixDestroy(&pixt0);
-    pixt0 = pixAddBorderGeneral(pixt3, ADDED_BORDER, ADDED_BORDER,
+    pix3 = pixMorphSequenceDwa(pixs, "d1.30", 0);
+    pixXor(pix3, pix3, pixs);
+    pix0 = pixMorphSequenceDwa(pixs, "c15.1", 0);
+    pixXor(pix0, pix0, pixs);
+    pixAnd(pix0, pix0, pix3);
+    pixOr(pix3, pix0, pixs);
+    pixDestroy(&pix0);
+    pix0 = pixAddBorderGeneral(pix3, ADDED_BORDER, ADDED_BORDER,
                                 ADDED_BORDER, ADDED_BORDER, 0);
-    pixDestroy(&pixt3);
+    pixDestroy(&pix3);
 
         /* Filter the right-facing characters. */
-    pixt1 = pixFlipFHMTGen(NULL, pixt0, flipsel1);
-    pixt3 = pixReduceRankBinaryCascade(pixt1, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &count1, NULL);
-    pixDestroy(&pixt1);
-    pixDestroy(&pixt3);
+    pix1 = pixFlipFHMTGen(NULL, pix0, flipsel1);
+    pix3 = pixReduceRankBinaryCascade(pix1, 1, 1, 0, 0);
+    pixCountPixels(pix3, &count1, NULL);
+    pixDestroy(&pix1);
+    pixDestroy(&pix3);
 
         /* Filter the left-facing characters. */
-    pixt2 = pixFlipFHMTGen(NULL, pixt0, flipsel2);
-    pixt3 = pixReduceRankBinaryCascade(pixt2, 1, 1, 0, 0);
-    pixCountPixels(pixt3, &count2, NULL);
-    pixDestroy(&pixt2);
-    pixDestroy(&pixt3);
+    pix2 = pixFlipFHMTGen(NULL, pix0, flipsel2);
+    pix3 = pixReduceRankBinaryCascade(pix2, 1, 1, 0, 0);
+    pixCountPixels(pix3, &count2, NULL);
+    pixDestroy(&pix2);
+    pixDestroy(&pix3);
 
-    pixDestroy(&pixt0);
+    pixDestroy(&pix0);
     nright = (l_float32)count1;
     nleft = (l_float32)count2;
     nmax = L_MAX(count1, count2);
@@ -993,7 +1116,7 @@ PIX  *pixt, *pixthm;
     pixthm = pixMorphSequence(pixhm, "d5.5", 0);
     pixSetMaskedCmap(pixt, pixthm, 0, 0, 255, 0, 0);
 
-    pixWrite(filename, pixt, IFF_PNG);
+    pixWriteDebug(filename, pixt, IFF_PNG);
     pixDestroy(&pixthm);
     pixDestroy(&pixt);
     return;

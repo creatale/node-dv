@@ -24,10 +24,12 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  pnmiostub.c
+/*!
+ * \file pnmiostub.c
+ * <pre>
  *
  *     Stubs for pnmio.c functions
+ * </pre>
  */
 
 #include "allheaders.h"
@@ -74,6 +76,13 @@ l_int32 pixWriteStreamAsciiPnm(FILE *fp, PIX *pix)
 
 /* ----------------------------------------------------------------------*/
 
+l_int32 pixWriteStreamPam(FILE *fp, PIX *pix)
+{
+    return ERROR_INT("function not present", "pixWriteStreamPam", 1);
+}
+
+/* ----------------------------------------------------------------------*/
+
 PIX * pixReadMemPnm(const l_uint8 *cdata, size_t size)
 {
     return (PIX * )ERROR_PTR("function not present", "pixReadMemPnm", NULL);
@@ -81,11 +90,11 @@ PIX * pixReadMemPnm(const l_uint8 *cdata, size_t size)
 
 /* ----------------------------------------------------------------------*/
 
-l_int32 sreadHeaderPnm(const l_uint8 *cdata, size_t size, l_int32 *pw,
-                       l_int32 *ph, l_int32 *pd, l_int32 *ptype,
-                       l_int32 *pbps, l_int32 *pspp)
+l_int32 readHeaderMemPnm(const l_uint8 *cdata, size_t size, l_int32 *pw,
+                         l_int32 *ph, l_int32 *pd, l_int32 *ptype,
+                         l_int32 *pbps, l_int32 *pspp)
 {
-    return ERROR_INT("function not present", "sreadHeaderPnm", 1);
+    return ERROR_INT("function not present", "readHeaderMemPnm", 1);
 }
 
 /* ----------------------------------------------------------------------*/
@@ -94,6 +103,13 @@ l_int32 pixWriteMemPnm(l_uint8 **pdata, size_t *psize, PIX *pix)
 {
     return ERROR_INT("function not present", "pixWriteMemPnm", 1);
 }
+/* ----------------------------------------------------------------------*/
+
+l_int32 pixWriteMemPam(l_uint8 **pdata, size_t *psize, PIX *pix)
+{
+    return ERROR_INT("function not present", "pixWriteMemPam", 1);
+}
+
 
 /* --------------------------------------------*/
 #endif  /* !USE_PNMIO */

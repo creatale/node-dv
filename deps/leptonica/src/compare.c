@@ -24,13 +24,15 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  compare.c
+/*!
+ * \file compare.c
+ * <pre>
  *
  *      Test for pix equality
  *           l_int32     pixEqual()
  *           l_int32     pixEqualWithAlpha()
  *           l_int32     pixEqualWithCmap()
+ *           l_int32     cmapEqual()
  *           l_int32     pixUsesCmapColor()
  *
  *      Binary correlation
@@ -52,9 +54,51 @@
  *           l_int32     pixGetPerceptualDiff()
  *           l_int32     pixGetPSNR()
  *
+ *      Comparison of photo regions by histogram
+ *           l_int32     pixaComparePhotoRegionsByHisto()  -- top-level
+ *           l_int32     pixComparePhotoRegionsByHisto()  -- top-level for 2
+ *           l_int32     pixGenPhotoHistos()
+ *           PIX        *pixPadToCenterCentroid()
+ *           l_int32     pixCentroid8()
+ *           l_int32     pixDecideIfPhotoImage()
+ *           l_int32     compareTilesByHisto()
+ *
+ *           l_int32     pixCompareGrayByHisto()  -- top-level for 2
+ *       static l_int32  pixCompareTilesByHisto()
+ *           l_int32     pixCropAlignedToCentroid()
+ *
+ *           l_uint8    *l_compressGrayHistograms()
+ *           NUMAA      *l_uncompressGrayHistograms()
+ *
  *      Translated images at the same resolution
  *           l_int32     pixCompareWithTranslation()
  *           l_int32     pixBestCorrelation()
+ *
+ *  For comparing images using tiled histograms, essentially all the
+ *  computation goes into deciding if a region of an image is a photo,
+ *  whether that photo region is amenable to similarity measurements
+ *  using histograms, and finally the calculation of the gray histograms
+ *  for each of the tiled regions.  The actual comparison is essentially
+ *  instantaneous.  Therefore, with a large number of images to compare
+ *  with each other, it is important to first calculate the histograms
+ *  for each image.  Then the comparisons, which go as the square of the
+ *  number of images, actually takes no time.
+ *
+ *  A high level function that takes a pixa of images and does
+ *  all comparisons, pixaComparePhotosByHisto(), uses this split
+ *  approach.  It pads the images so that the centroid is in the center,
+ *  which will allow the tiles to be better aligned.
+ *
+ *  For testing purposes, two functions are given that do all the work
+ *  to compare just two photo regions:
+ *    *  pixComparePhotoRegionsByHisto() uses the split approach, qualifying
+ *       the images first with pixGenPhotoHistos(), and then comparing
+ *       with compareTilesByHisto().
+ *    *  pixCompareGrayByHisto() aligns the two images by centroid
+ *       and calls pixCompareTilesByHisto() to generate the histograms
+ *       and do the comparison.
+ *
+ * </pre>
  */
 
 #include <string.h>
@@ -64,19 +108,24 @@
     /* Small enough to consider equal to 0.0, for plot output */
 static const l_float32  TINY = 0.00001;
 
+static l_int32 pixCompareTilesByHisto(PIX *pix1, PIX *pix2, l_int32 maxgray,
+                                      l_int32 factor, l_int32 nx, l_int32 ny,
+                                      l_float32 *pscore, PIXA *pixadebug);
+
 
 /*------------------------------------------------------------------*
  *                        Test for pix equality                     *
  *------------------------------------------------------------------*/
 /*!
- *  pixEqual()
+ * \brief   pixEqual()
  *
- *      Input:  pix1
- *              pix2
- *              &same  (<return> 1 if same; 0 if different)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1
+ * \param[in]    pix2
+ * \param[out]   psame  1 if same; 0 if different
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Equality is defined as having the same pixel values for
  *          each respective image pixel.
  *      (2) This works on two pix of any depth.  If one or both pix
@@ -95,6 +144,7 @@ static const l_float32  TINY = 0.00001;
  *          different depths.
  *      (6) For images without colormaps that are not 32 bpp, all bits
  *          in the image part of the data array must be identical.
+ * </pre>
  */
 l_int32
 pixEqual(PIX      *pix1,
@@ -106,19 +156,21 @@ pixEqual(PIX      *pix1,
 
 
 /*!
- *  pixEqualWithAlpha()
+ * \brief   pixEqualWithAlpha()
  *
- *      Input:  pix1
- *              pix2
- *              use_alpha (1 to compare alpha in RGBA; 0 to ignore)
- *              &same  (<return> 1 if same; 0 if different)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1
+ * \param[in]    pix2
+ * \param[in]    use_alpha   1 to compare alpha in RGBA; 0 to ignore
+ * \param[out]   psame       1 if same; 0 if different
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See notes in pixEqual().
  *      (2) This is more general than pixEqual(), in that for 32 bpp
  *          RGBA images, where spp = 4, you can optionally include
  *          the alpha component in the comparison.
+ * </pre>
  */
 l_int32
 pixEqualWithAlpha(PIX      *pix1,
@@ -139,10 +191,8 @@ PIXCMAP   *cmap1, *cmap2;
     if (!psame)
         return ERROR_INT("psame not defined", procName, 1);
     *psame = 0;  /* init to not equal */
-    if (!pix1)
-        return ERROR_INT("pix1 not defined", procName, 1);
-    if (!pix2)
-        return ERROR_INT("pix2 not defined", procName, 1);
+    if (!pix1 || !pix2)
+        return ERROR_INT("pix1 and pix2 not both defined", procName, 1);
     pixGetDimensions(pix1, &w1, &h1, &d1);
     pixGetDimensions(pix2, &w2, &h2, &d2);
     if (w1 != w2 || h1 != h2) {
@@ -274,7 +324,7 @@ PIXCMAP   *cmap1, *cmap2;
         linebits = d1 * w1;
         fullwords = linebits / 32;
         endbits = linebits & 31;
-        endmask = 0xffffffff << (32 - endbits);
+        endmask = (endbits == 0) ? 0 : (0xffffffff << (32 - endbits));
         for (i = 0; i < h1; i++) {
             line1 = data1 + wpl1 * i;
             line2 = data2 + wpl2 * i;
@@ -305,14 +355,15 @@ PIXCMAP   *cmap1, *cmap2;
 
 
 /*!
- *  pixEqualWithCmap()
+ * \brief   pixEqualWithCmap()
  *
- *      Input:  pix1
- *              pix2
- *              &same
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix1
+ * \param[in]    pix2
+ * \param[out]   psame
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This returns same = TRUE if the images have identical content.
  *      (2) Both pix must have a colormap, and be of equal size and depth.
  *          If these conditions are not satisfied, it is not an error;
@@ -321,6 +372,7 @@ PIXCMAP   *cmap1, *cmap2;
  *          the comparison proceeds 32 bits at a time.
  *      (4) If the colormaps are different, the comparison is done by
  *          slow brute force.
+ * </pre>
  */
 l_int32
 pixEqualWithCmap(PIX      *pix1,
@@ -328,8 +380,7 @@ pixEqualWithCmap(PIX      *pix1,
                  l_int32  *psame)
 {
 l_int32    d, w, h, wpl1, wpl2, i, j, linebits, fullwords, endbits;
-l_int32    nc1, nc2, samecmaps;
-l_int32    rval1, rval2, gval1, gval2, bval1, bval2;
+l_int32    rval1, rval2, gval1, gval2, bval1, bval2, samecmaps;
 l_uint32   endmask, val1, val2;
 l_uint32  *data1, *data2, *line1, *line2;
 PIXCMAP   *cmap1, *cmap2;
@@ -346,41 +397,19 @@ PIXCMAP   *cmap1, *cmap2;
 
     if (pixSizesEqual(pix1, pix2) == 0)
         return 0;
-
     cmap1 = pixGetColormap(pix1);
     cmap2 = pixGetColormap(pix2);
     if (!cmap1 || !cmap2) {
         L_INFO("both images don't have colormap\n", procName);
         return 0;
     }
-    d = pixGetDepth(pix1);
+    pixGetDimensions(pix1, &w, &h, &d);
     if (d != 1 && d != 2 && d != 4 && d != 8) {
         L_INFO("pix depth not in {1, 2, 4, 8}\n", procName);
         return 0;
     }
 
-    nc1 = pixcmapGetCount(cmap1);
-    nc2 = pixcmapGetCount(cmap2);
-    samecmaps = TRUE;
-    if (nc1 != nc2) {
-        L_INFO("colormap sizes are different\n", procName);
-        samecmaps = FALSE;
-    }
-
-        /* Check if colormaps are identical */
-    if (samecmaps == TRUE) {
-        for (i = 0; i < nc1; i++) {
-            pixcmapGetColor(cmap1, i, &rval1, &gval1, &bval1);
-            pixcmapGetColor(cmap2, i, &rval2, &gval2, &bval2);
-            if (rval1 != rval2 || gval1 != gval2 || bval1 != bval2) {
-                samecmaps = FALSE;
-                break;
-            }
-        }
-    }
-
-    h = pixGetHeight(pix1);
-    w = pixGetWidth(pix1);
+    cmapEqual(cmap1, cmap2, 3, &samecmaps);
     if (samecmaps == TRUE) {  /* colormaps are identical; compare by words */
         linebits = d * w;
         wpl1 = pixGetWpl(pix1);
@@ -389,7 +418,7 @@ PIXCMAP   *cmap1, *cmap2;
         data2 = pixGetData(pix2);
         fullwords = linebits / 32;
         endbits = linebits & 31;
-        endmask = 0xffffffff << (32 - endbits);
+        endmask = (endbits == 0) ? 0 : (0xffffffff << (32 - endbits));
         for (i = 0; i < h; i++) {
             line1 = data1 + wpl1 * i;
             line2 = data2 + wpl2 * i;
@@ -426,13 +455,70 @@ PIXCMAP   *cmap1, *cmap2;
 
 
 /*!
- *  pixUsesCmapColor()
+ * \brief   cmapEqual()
  *
- *      Input:  pixs
- *              &color (<return>)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    cmap1
+ * \param[in]    cmap2
+ * \param[in]    ncomps  3 for RGB, 4 for RGBA
+ * \param[out]   psame
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
+ *      (1) This returns %same = TRUE if the colormaps have identical entries.
+ *      (2) If %ncomps == 4, the alpha components of the colormaps are also
+ *          compared.
+ * </pre>
+ */
+l_int32
+cmapEqual(PIXCMAP  *cmap1,
+          PIXCMAP  *cmap2,
+          l_int32   ncomps,
+          l_int32  *psame)
+{
+l_int32  n1, n2, i, rval1, rval2, gval1, gval2, bval1, bval2, aval1, aval2;
+
+    PROCNAME("cmapEqual");
+
+    if (!psame)
+        return ERROR_INT("&same not defined", procName, 1);
+    *psame = FALSE;
+    if (!cmap1)
+        return ERROR_INT("cmap1 not defined", procName, 1);
+    if (!cmap2)
+        return ERROR_INT("cmap2 not defined", procName, 1);
+    if (ncomps != 3 && ncomps != 4)
+        return ERROR_INT("ncomps not 3 or 4", procName, 1);
+
+    n1 = pixcmapGetCount(cmap1);
+    n2 = pixcmapGetCount(cmap2);
+    if (n1 != n2) {
+        L_INFO("colormap sizes are different\n", procName);
+        return 0;
+    }
+
+    for (i = 0; i < n1; i++) {
+        pixcmapGetRGBA(cmap1, i, &rval1, &gval1, &bval1, &aval1);
+        pixcmapGetRGBA(cmap2, i, &rval2, &gval2, &bval2, &aval2);
+        if (rval1 != rval2 || gval1 != gval2 || bval1 != bval2)
+            return 0;
+        if (ncomps == 4 && aval1 != aval2)
+            return 0;
+    }
+    *psame = TRUE;
+    return 0;
+}
+
+
+/*!
+ * \brief   pixUsesCmapColor()
+ *
+ * \param[in]    pixs     any depth, colormap
+ * \param[out]   pcolor   TRUE if color found
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
  *      (1) This returns color = TRUE if three things are obtained:
  *          (a) the pix has a colormap
  *          (b) the colormap has at least one color entry
@@ -440,6 +526,7 @@ PIXCMAP   *cmap1, *cmap2;
  *      (2) It is used in pixEqual() for comparing two images, in a
  *          situation where it is required to know if the colormap
  *          has color entries that are actually used in the image.
+ * </pre>
  */
 l_int32
 pixUsesCmapColor(PIX      *pixs,
@@ -485,14 +572,15 @@ PIXCMAP  *cmap;
  *                          Binary correlation                      *
  *------------------------------------------------------------------*/
 /*!
- *  pixCorrelationBinary()
+ * \brief   pixCorrelationBinary()
  *
- *      Input:  pix1 (1 bpp)
- *              pix2 (1 bpp)
- *              &val (<return> correlation)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1    1 bpp
+ * \param[in]    pix2    1 bpp
+ * \param[out]   pval    correlation
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The correlation is a number between 0.0 and 1.0,
  *          based on foreground similarity:
  *                           (|1 AND 2|)**2
@@ -504,6 +592,7 @@ PIXCMAP  *cmap;
  *          If one or both images have no fg pixels, the correlation is 0.0.
  *      (2) Typically the two images are of equal size, but this
  *          is not enforced.  Instead, the UL corners are aligned.
+ * </pre>
  */
 l_int32
 pixCorrelationBinary(PIX        *pix1,
@@ -527,10 +616,16 @@ PIX      *pixn;
     tab8 = makePixelSumTab8();
     pixCountPixels(pix1, &count1, tab8);
     pixCountPixels(pix2, &count2, tab8);
+    if (count1 == 0 || count2 == 0) {
+        LEPT_FREE(tab8);
+        return 0;
+    }
     pixn = pixAnd(NULL, pix1, pix2);
     pixCountPixels(pixn, &countn, tab8);
-    *pval = (l_float32)(countn * countn) / (l_float32)(count1 * count2);
-    FREE(tab8);
+    *pval = (l_float32)countn * (l_float32)countn /
+              ((l_float32)count1 * (l_float32)count2);
+    LEPT_FREE(tab8);
+    pixDestroy(&pixn);
     return 0;
 }
 
@@ -539,13 +634,14 @@ PIX      *pixn;
  *                   Difference of two images                       *
  *------------------------------------------------------------------*/
 /*!
- *  pixDisplayDiffBinary()
+ * \brief   pixDisplayDiffBinary()
  *
- *      Input:  pix1 (1 bpp)
- *              pix2 (1 bpp)
- *      Return: pixd (4 bpp cmapped), or null on error
+ * \param[in]    pix1    1 bpp
+ * \param[in]    pix2    1 bpp
+ * \return  pixd 4 bpp cmapped, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This gives a color representation of the difference between
  *          pix1 and pix2.  The color difference depends on the order.
  *          The pixels in pixd have 4 colors:
@@ -554,6 +650,7 @@ PIX      *pixn;
  *           * on in pix2, off in pix1: green
  *      (2) This aligns the UL corners of pix1 and pix2, and crops
  *          to the overlapping pixels.
+ * </pre>
  */
 PIX *
 pixDisplayDiffBinary(PIX  *pix1,
@@ -594,20 +691,22 @@ PIXCMAP  *cmap;
 
 
 /*!
- *  pixCompareBinary()
+ * \brief   pixCompareBinary()
  *
- *      Input:  pix1 (1 bpp)
- *              pix2 (1 bpp)
- *              comptype (L_COMPARE_XOR, L_COMPARE_SUBTRACT)
- *              &fract (<return> fraction of pixels that are different)
- *              &pixdiff (<optional return> pix of difference)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1       1 bpp
+ * \param[in]    pix2       1 bpp
+ * \param[in]    comptype   L_COMPARE_XOR, L_COMPARE_SUBTRACT
+ * \param[out]   pfract     fraction of pixels that are different
+ * \param[out]   ppixdiff   [optional] pix of difference
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The two images are aligned at the UL corner, and do not
  *          need to be the same size.
  *      (2) If using L_COMPARE_SUBTRACT, pix2 is subtracted from pix1.
  *      (3) The total number of pixels is determined by pix1.
+ * </pre>
  */
 l_int32
 pixCompareBinary(PIX        *pix1,
@@ -649,19 +748,20 @@ PIX      *pixt;
 
 
 /*!
- *  pixCompareGrayOrRGB()
+ * \brief   pixCompareGrayOrRGB()
  *
- *      Input:  pix1 (8 or 16 bpp gray, 32 bpp rgb, or colormapped)
- *              pix2 (8 or 16 bpp gray, 32 bpp rgb, or colormapped)
- *              comptype (L_COMPARE_SUBTRACT, L_COMPARE_ABS_DIFF)
- *              plottype (gplot plot output type, or 0 for no plot)
- *              &same (<optional return> 1 if pixel values are identical)
- *              &diff (<optional return> average difference)
- *              &rmsdiff (<optional return> rms of difference)
- *              &pixdiff (<optional return> pix of difference)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1      8 or 16 bpp gray, 32 bpp rgb, or colormapped
+ * \param[in]    pix2      8 or 16 bpp gray, 32 bpp rgb, or colormapped
+ * \param[in]    comptype  L_COMPARE_SUBTRACT, L_COMPARE_ABS_DIFF
+ * \param[in]    plottype  gplot plot output type, or 0 for no plot
+ * \param[out]   psame     [optional] 1 if pixel values are identical
+ * \param[out]   pdiff     [optional] average difference
+ * \param[out]   prmsdiff  [optional] rms of difference
+ * \param[out]   ppixdiff  [optional] pix of difference
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The two images are aligned at the UL corner, and do not
  *          need to be the same size.  If they are not the same size,
  *          the comparison will be made over overlapping pixels.
@@ -682,6 +782,7 @@ PIX      *pixt;
  *      (9) The RMS difference is optionally returned in the
  *          parameter 'rmsdiff'.  For RGB, we return the average of
  *          the RMS differences for each of the components.
+ * </pre>
  */
 l_int32
 pixCompareGrayOrRGB(PIX        *pix1,
@@ -709,7 +810,7 @@ PIX     *pixt1, *pixt2;
         return ERROR_INT("pix2 depth < 8 bpp and not cmapped", procName, 1);
     if (comptype != L_COMPARE_SUBTRACT && comptype != L_COMPARE_ABS_DIFF)
         return ERROR_INT("invalid comptype", procName, 1);
-    if (plottype > NUM_GPLOT_OUTPUTS)
+    if (plottype < 0 || plottype >= NUM_GPLOT_OUTPUTS)
         return ERROR_INT("invalid plottype", procName, 1);
 
     pixt1 = pixRemoveColormap(pix1, REMOVE_CMAP_BASED_ON_SRC);
@@ -734,21 +835,25 @@ PIX     *pixt1, *pixt2;
 
 
 /*!
- *  pixCompareGray()
+ * \brief   pixCompareGray()
  *
- *      Input:  pix1 (8 or 16 bpp, not cmapped)
- *              pix2 (8 or 16 bpp, not cmapped)
- *              comptype (L_COMPARE_SUBTRACT, L_COMPARE_ABS_DIFF)
- *              plottype (gplot plot output type, or 0 for no plot)
- *              &same (<optional return> 1 if pixel values are identical)
- *              &diff (<optional return> average difference)
- *              &rmsdiff (<optional return> rms of difference)
- *              &pixdiff (<optional return> pix of difference)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1       8 or 16 bpp, not cmapped
+ * \param[in]    pix2       8 or 16 bpp, not cmapped
+ * \param[in]    comptype   L_COMPARE_SUBTRACT, L_COMPARE_ABS_DIFF
+ * \param[in]    plottype   gplot plot output type, or 0 for no plot
+ * \param[out]   psame      [optional] 1 if pixel values are identical
+ * \param[out]   pdiff      [optional] average difference
+ * \param[out]   prmsdiff   [optional] rms of difference
+ * \param[out]   ppixdiff   [optional] pix of difference
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See pixCompareGrayOrRGB() for details.
  *      (2) Use pixCompareGrayOrRGB() if the input pix are colormapped.
+ *      (3) Note: setting %plottype > 0 can result in writing named
+ *                output files.
+ * </pre>
  */
 l_int32
 pixCompareGray(PIX        *pix1,
@@ -762,7 +867,7 @@ pixCompareGray(PIX        *pix1,
 {
 char            buf[64];
 static l_int32  index = 0;
-l_int32         d1, d2, first, last;
+l_int32         d1, d2, same, first, last;
 GPLOT          *gplot;
 NUMA           *na, *nac;
 PIX            *pixt;
@@ -785,31 +890,40 @@ PIX            *pixt;
         return ERROR_INT("pix1 and/or pix2 are colormapped", procName, 1);
     if (comptype != L_COMPARE_SUBTRACT && comptype != L_COMPARE_ABS_DIFF)
         return ERROR_INT("invalid comptype", procName, 1);
-    if (plottype > NUM_GPLOT_OUTPUTS)
+    if (plottype < 0 || plottype >= NUM_GPLOT_OUTPUTS)
         return ERROR_INT("invalid plottype", procName, 1);
+
+    lept_mkdir("lept/comp");
 
     if (comptype == L_COMPARE_SUBTRACT)
         pixt = pixSubtractGray(NULL, pix1, pix2);
     else  /* comptype == L_COMPARE_ABS_DIFF) */
         pixt = pixAbsDifference(pix1, pix2);
 
-    if (psame)
-        pixZero(pixt, psame);
+    pixZero(pixt, &same);
+    if (same)
+        L_INFO("Images are pixel-wise identical\n", procName);
+    if (psame) *psame = same;
 
     if (pdiff)
         pixGetAverageMasked(pixt, NULL, 0, 0, 1, L_MEAN_ABSVAL, pdiff);
 
-    if (plottype) {
+        /* Don't bother to plot if the images are the same */
+    if (plottype && !same) {
+        L_INFO("Images differ: output plots will be generated\n", procName);
         na = pixGetGrayHistogram(pixt, 1);
         numaGetNonzeroRange(na, TINY, &first, &last);
         nac = numaClipToInterval(na, 0, last);
-        snprintf(buf, sizeof(buf), "/tmp/grayroot%d", index++);
+        snprintf(buf, sizeof(buf), "/tmp/lept/comp/compare_gray%d", index);
         gplot = gplotCreate(buf, plottype,
                             "Pixel Difference Histogram", "diff val",
                             "number of pixels");
         gplotAddPlot(gplot, NULL, nac, GPLOT_LINES, "gray");
         gplotMakeOutput(gplot);
         gplotDestroy(&gplot);
+        snprintf(buf, sizeof(buf), "/tmp/lept/comp/compare_gray%d.png",
+                 index++);
+        l_fileDisplay(buf, 100, 100, 1.0);
         numaDestroy(&na);
         numaDestroy(&nac);
     }
@@ -831,20 +945,24 @@ PIX            *pixt;
 
 
 /*!
- *  pixCompareRGB()
+ * \brief   pixCompareRGB()
  *
- *      Input:  pix1 (32 bpp rgb)
- *              pix2 (32 bpp rgb)
- *              comptype (L_COMPARE_SUBTRACT, L_COMPARE_ABS_DIFF)
- *              plottype (gplot plot output type, or 0 for no plot)
- *              &same (<optional return> 1 if pixel values are identical)
- *              &diff (<optional return> average difference)
- *              &rmsdiff (<optional return> rms of difference)
- *              &pixdiff (<optional return> pix of difference)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1       32 bpp rgb
+ * \param[in]    pix2       32 bpp rgb
+ * \param[in]    comptype   L_COMPARE_SUBTRACT, L_COMPARE_ABS_DIFF
+ * \param[in]    plottype   gplot plot output type, or 0 for no plot
+ * \param[out]   psame      [optional] 1 if pixel values are identical
+ * \param[out]   pdiff      [optional] average difference
+ * \param[out]   prmsdiff   [optional] rms of difference
+ * \param[out]   ppixdiff   [optional] pix of difference
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See pixCompareGrayOrRGB() for details.
+ *      (2) Note: setting %plottype > 0 can result in writing named
+ *                output files.
+ * </pre>
  */
 l_int32
 pixCompareRGB(PIX        *pix1,
@@ -858,7 +976,7 @@ pixCompareRGB(PIX        *pix1,
 {
 char            buf[64];
 static l_int32  index = 0;
-l_int32         rsame, gsame, bsame, first, rlast, glast, blast, last;
+l_int32         rsame, gsame, bsame, same, first, rlast, glast, blast, last;
 l_float32       rdiff, gdiff, bdiff;
 GPLOT          *gplot;
 NUMA           *nar, *nag, *nab, *narc, *nagc, *nabc;
@@ -867,6 +985,9 @@ PIX            *pixr, *pixg, *pixb;
 
     PROCNAME("pixCompareRGB");
 
+    if (psame) *psame = 0;
+    if (pdiff) *pdiff = 0.0;
+    if (prmsdiff) *prmsdiff = 0.0;
     if (ppixdiff) *ppixdiff = NULL;
     if (!pix1 || pixGetDepth(pix1) != 32)
         return ERROR_INT("pix1 not defined or not 32 bpp", procName, 1);
@@ -874,8 +995,10 @@ PIX            *pixr, *pixg, *pixb;
         return ERROR_INT("pix2 not defined or not ew bpp", procName, 1);
     if (comptype != L_COMPARE_SUBTRACT && comptype != L_COMPARE_ABS_DIFF)
         return ERROR_INT("invalid comptype", procName, 1);
-    if (plottype > NUM_GPLOT_OUTPUTS)
+    if (plottype < 0 || plottype >= NUM_GPLOT_OUTPUTS)
         return ERROR_INT("invalid plottype", procName, 1);
+
+    lept_mkdir("lept/comp");
 
     pixr1 = pixGetRGBComponent(pix1, COLOR_RED);
     pixr2 = pixGetRGBComponent(pix2, COLOR_RED);
@@ -893,15 +1016,13 @@ PIX            *pixr, *pixg, *pixb;
         pixb = pixAbsDifference(pixb1, pixb2);
     }
 
-    if (psame) {
-        pixZero(pixr, &rsame);
-        pixZero(pixg, &gsame);
-        pixZero(pixb, &bsame);
-        if (!rsame || !gsame || !bsame)
-            *psame = 0;
-        else
-            *psame = 1;
-    }
+    pixZero(pixr, &rsame);
+    pixZero(pixg, &gsame);
+    pixZero(pixb, &bsame);
+    same = rsame && gsame && bsame;
+    if (same)
+        L_INFO("Images are pixel-wise identical\n", procName);
+    if (psame) *psame = same;
 
     if (pdiff) {
         pixGetAverageMasked(pixr, NULL, 0, 0, 1, L_MEAN_ABSVAL, &rdiff);
@@ -910,7 +1031,9 @@ PIX            *pixr, *pixg, *pixb;
         *pdiff = (rdiff + gdiff + bdiff) / 3.0;
     }
 
-    if (plottype) {
+        /* Don't bother to plot if the images are the same */
+    if (plottype && !same) {
+        L_INFO("Images differ: output plots will be generated\n", procName);
         nar = pixGetGrayHistogram(pixr, 1);
         nag = pixGetGrayHistogram(pixg, 1);
         nab = pixGetGrayHistogram(pixb, 1);
@@ -922,7 +1045,7 @@ PIX            *pixr, *pixg, *pixb;
         narc = numaClipToInterval(nar, 0, last);
         nagc = numaClipToInterval(nag, 0, last);
         nabc = numaClipToInterval(nab, 0, last);
-        snprintf(buf, sizeof(buf), "/tmp/rgbroot%d", index++);
+        snprintf(buf, sizeof(buf), "/tmp/lept/comp/compare_rgb%d", index);
         gplot = gplotCreate(buf, plottype,
                             "Pixel Difference Histogram", "diff val",
                             "number of pixels");
@@ -931,6 +1054,9 @@ PIX            *pixr, *pixg, *pixb;
         gplotAddPlot(gplot, NULL, nabc, GPLOT_LINES, "blue");
         gplotMakeOutput(gplot);
         gplotDestroy(&gplot);
+        snprintf(buf, sizeof(buf), "/tmp/lept/comp/compare_rgb%d.png",
+                 index++);
+        l_fileDisplay(buf, 100, 100, 1.0);
         numaDestroy(&nar);
         numaDestroy(&nag);
         numaDestroy(&nab);
@@ -971,16 +1097,17 @@ PIX            *pixr, *pixg, *pixb;
 
 
 /*!
- *  pixCompareTiled()
+ * \brief   pixCompareTiled()
  *
- *      Input:  pix1 (8 bpp or 32 bpp rgb)
- *              pix2 (8 bpp 32 bpp rgb)
- *              sx, sy (tile size; must be > 1)
- *              type (L_MEAN_ABSVAL or L_ROOT_MEAN_SQUARE)
- *              &pixdiff (<return> pix of difference)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pix1       8 bpp or 32 bpp rgb
+ * \param[in]    pix2       8 bpp 32 bpp rgb
+ * \param[in]    sx, sy     tile size; must be > 1 in each dimension
+ * \param[in]    type       L_MEAN_ABSVAL or L_ROOT_MEAN_SQUARE
+ * \param[out]   ppixdiff   pix of difference
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) With L_MEAN_ABSVAL, we compute for each tile the
  *          average abs value of the pixel component difference between
  *          the two (aligned) images.  With L_ROOT_MEAN_SQUARE, we
@@ -991,6 +1118,7 @@ PIX            *pixr, *pixg, *pixb;
  *          is found by averaging the measured difference over all three
  *          components of each pixel in the tile.
  *      (4) The result, pixdiff, contains one pixel for each source tile.
+ * </pre>
  */
 l_int32
 pixCompareTiled(PIX     *pix1,
@@ -1061,14 +1189,15 @@ PIXACC    *pixacc;
  *            Other measures of the difference of two images        *
  *------------------------------------------------------------------*/
 /*!
- *  pixCompareRankDifference()
+ * \brief   pixCompareRankDifference()
  *
- *      Input:  pix1 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              pix2 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              factor (subsampling factor; use 0 or 1 for no subsampling)
- *      Return: narank (numa of rank difference), or null on error
+ * \param[in]    pix1      8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    pix2      8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    factor    subsampling factor; use 0 or 1 for no subsampling
+ * \return  narank      numa of rank difference, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This answers the question: if the pixel values in each
  *          component are compared by absolute difference, for
  *          any value of difference, what is the fraction of
@@ -1083,6 +1212,7 @@ PIXACC    *pixacc;
  *          is either gray or RGB depending on the colormap.
  *      (4) If RGB, pixel differences for each component are aggregated
  *          into a single histogram.
+ * </pre>
  */
 NUMA *
 pixCompareRankDifference(PIX     *pix1,
@@ -1122,36 +1252,37 @@ NUMA       *nah, *nan, *nad;
 
 
 /*!
- *  pixTestForSimilarity()
+ * \brief   pixTestForSimilarity()
  *
- *      Input:  pix1 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              pix2 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              factor (subsampling factor; use 0 or 1 for no subsampling)
- *              mindiff (minimum pixel difference to be counted; > 0)
- *              maxfract (maximum fraction of pixels allowed to have
- *                        diff greater than or equal to mindiff)
- *              maxave (maximum average difference of pixels allowed for
- *                      pixels with diff greater than or equal to mindiff,
- *                      after subtracting mindiff)
- *              &similar (<return> 1 if similar, 0 otherwise)
- *              printstats (use 1 to print normalized histogram to stderr)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix1         8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    pix2         8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    factor       subsampling factor; use 0 or 1 for no subsampling
+ * \param[in]    mindiff      minimum pixel difference to be counted; > 0
+ * \param[in]    maxfract     maximum fraction of pixels allowed to have
+ *                            diff greater than or equal to mindiff
+ * \param[in]    maxave       maximum average difference of pixels allowed for
+ *                            pixels with diff greater than or equal to
+ *                            mindiff, after subtracting mindiff
+ * \param[out]   psimilar     1 if similar, 0 otherwise
+ * \param[in]    details      use 1 to give normalized histogram and other data
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This takes 2 pix that are the same size and determines using
  *          3 input parameters if they are "similar".  The first parameter
- *          @mindiff establishes a criterion of pixel-to-pixel similarity:
+ *          %mindiff establishes a criterion of pixel-to-pixel similarity:
  *          two pixels are not similar if their difference in value is
- *          at least mindiff.  Then @maxfract and @maxave are thresholds
+ *          at least mindiff.  Then %maxfract and %maxave are thresholds
  *          on the number and distribution of dissimilar pixels
  *          allowed for the two pix to be similar.   If the pix are
  *          to be similar, neither threshold can be exceeded.
- *      (2) In setting the @maxfract and @maxave thresholds, you have
+ *      (2) In setting the %maxfract and %maxave thresholds, you have
  *          these options:
- *            (a) Base the comparison only on @maxfract.  Then set
- *                @maxave = 0.0 or 256.0.  (If 0, we always ignore it.)
- *            (b) Base the comparison only on @maxave.  Then set
- *                @maxfract = 1.0.
+ *            (a) Base the comparison only on %maxfract.  Then set
+ *                %maxave = 0.0 or 256.0.  (If 0, we always ignore it.)
+ *            (b) Base the comparison only on %maxave.  Then set
+ *                %maxfract = 1.0.
  *            (c) Base the comparison on both thresholds.
  *      (3) Example of values that can be expected at mindiff = 15 when
  *          comparing lossless png encoding with jpeg encoding, q=75:
@@ -1166,6 +1297,7 @@ NUMA       *nah, *nan, *nad;
  *          is either gray or RGB depending on the colormap.
  *      (6) If RGB, the maximum difference between pixel components is
  *          saved in the histogram.
+ * </pre>
  */
 l_int32
 pixTestForSimilarity(PIX       *pix1,
@@ -1175,7 +1307,7 @@ pixTestForSimilarity(PIX       *pix1,
                      l_float32  maxfract,
                      l_float32  maxave,
                      l_int32   *psimilar,
-                     l_int32    printstats)
+                     l_int32    details)
 {
 l_float32   fractdiff, avediff;
 
@@ -1194,7 +1326,7 @@ l_float32   fractdiff, avediff;
         return ERROR_INT("mindiff must be > 0", procName, 1);
 
     if (pixGetDifferenceStats(pix1, pix2, factor, mindiff,
-                              &fractdiff, &avediff, printstats))
+                              &fractdiff, &avediff, details))
         return ERROR_INT("diff stats not found", procName, 1);
 
     if (maxave <= 0.0) maxave = 256.0;
@@ -1205,30 +1337,31 @@ l_float32   fractdiff, avediff;
 
 
 /*!
- *  pixGetDifferenceStats()
+ * \brief   pixGetDifferenceStats()
  *
- *      Input:  pix1 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              pix2 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              factor (subsampling factor; use 0 or 1 for no subsampling)
- *              mindiff (minimum pixel difference to be counted; > 0)
- *              &fractdiff (<return> fraction of pixels with diff greater
- *                          than or equal to mindiff)
- *              &avediff (<return> average difference of pixels with diff
- *                        greater than or equal to mindiff, less mindiff)
- *              printstats (use 1 to print normalized histogram to stderr)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix1        8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    pix2        8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    factor      subsampling factor; use 0 or 1 for no subsampling
+ * \param[in]    mindiff     minimum pixel difference to be counted; > 0
+ * \param[out]   pfractdiff  fraction of pixels with diff greater than or
+ *                           equal to mindiff
+ * \param[out]   pavediff    average difference of pixels with diff greater
+ *                           than or equal to mindiff, less mindiff
+ * \param[in]    details     use 1 to give normalized histogram and other data
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
- *      (1) This takes a threshold @mindiff and describes the difference
+ * <pre>
+ * Notes:
+ *      (1) This takes a threshold %mindiff and describes the difference
  *          between two images in terms of two numbers:
- *            (a) the fraction of pixels, @fractdiff, whose difference
- *                equals or exceeds the threshold @mindiff, and
- *            (b) the average value @avediff of the difference in pixel value
+ *            (a) the fraction of pixels, %fractdiff, whose difference
+ *                equals or exceeds the threshold %mindiff, and
+ *            (b) the average value %avediff of the difference in pixel value
  *                for the pixels in the set given by (a), after you subtract
- *                @mindiff.  The reason for subtracting @mindiff is that
+ *                %mindiff.  The reason for subtracting %mindiff is that
  *                you then get a useful measure for the rate of falloff
  *                of the distribution for larger differences.  For example,
- *                if @mindiff = 10 and you find that @avediff = 2.5, it
+ *                if %mindiff = 10 and you find that %avediff = 2.5, it
  *                says that of the pixels with diff > 10, the average of
  *                their diffs is just mindiff + 2.5 = 12.5.  This is a
  *                fast falloff in the histogram with increasing difference.
@@ -1239,6 +1372,11 @@ l_float32   fractdiff, avediff;
  *          is either gray or RGB depending on the colormap.
  *      (4) If RGB, the maximum difference between pixel components is
  *          saved in the histogram.
+ *      (5) Set %details == 1 to see the difference histogram and get
+ *          an output that shows for each value of %mindiff, what are the
+ *          minimum values required for fractdiff and avediff in order
+ *          that the two pix will be considered similar.
+ * </pre>
  */
 l_int32
 pixGetDifferenceStats(PIX        *pix1,
@@ -1247,7 +1385,7 @@ pixGetDifferenceStats(PIX        *pix1,
                       l_int32     mindiff,
                       l_float32  *pfractdiff,
                       l_float32  *pavediff,
-                      l_int32     printstats)
+                      l_int32     details)
 {
 l_int32     i, first, last, diff;
 l_float32   fract, ave;
@@ -1256,12 +1394,12 @@ NUMA       *nah, *nan, *nac;
 
     PROCNAME("pixGetDifferenceStats");
 
+    if (pfractdiff) *pfractdiff = 0.0;
+    if (pavediff) *pavediff = 0.0;
     if (!pfractdiff)
         return ERROR_INT("&fractdiff not defined", procName, 1);
-    *pfractdiff = 0.0;
     if (!pavediff)
         return ERROR_INT("&avediff not defined", procName, 1);
-    *pavediff = 0.0;
     if (!pix1)
         return ERROR_INT("pix1 not defined", procName, 1);
     if (!pix2)
@@ -1278,9 +1416,13 @@ NUMA       *nah, *nan, *nac;
     }
     array = numaGetFArray(nan, L_NOCOPY);
 
-    if (printstats) {
+    if (details) {
+        lept_mkdir("lept/comp");
         numaGetNonzeroRange(nan, 0.0, &first, &last);
         nac = numaClipToInterval(nan, first, last);
+        gplotSimple1(nac, GPLOT_PNG, "/tmp/lept/comp/histo",
+                     "Difference histogram");
+        l_fileDisplay("/tmp/lept/comp/histo.png", 500, 0, 1.0);
         fprintf(stderr, "\nNonzero values in normalized histogram:");
         numaWriteStream(stderr, nac);
         numaDestroy(&nac);
@@ -1320,14 +1462,15 @@ NUMA       *nah, *nan, *nac;
 
 
 /*!
- *  pixGetDifferenceHistogram()
+ * \brief   pixGetDifferenceHistogram()
  *
- *      Input:  pix1 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              pix2 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              factor (subsampling factor; use 0 or 1 for no subsampling)
- *      Return: na (Numa of histogram of differences), or null on error
+ * \param[in]    pix1      8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    pix2      8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    factor    subsampling factor; use 0 or 1 for no subsampling
+ * \return  na     Numa of histogram of differences, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The two images are aligned at the UL corner, and do not
  *          need to be the same size.  If they are not the same size,
  *          the comparison will be made over overlapping pixels.
@@ -1335,6 +1478,7 @@ NUMA       *nah, *nan, *nac;
  *          is either gray or RGB depending on the colormap.
  *      (3) If RGB, the maximum difference between pixel components is
  *          saved in the histogram.
+ * </pre>
  */
 NUMA *
 pixGetDifferenceHistogram(PIX     *pix1,
@@ -1421,29 +1565,29 @@ PIX        *pixt1, *pixt2;
 
 
 /*!
- *  pixGetPerceptualDiff()
+ * \brief   pixGetPerceptualDiff()
  *
- *      Input:  pix1 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              pix2 (8 bpp gray or 32 bpp rgb, or colormapped)
- *              sampling (subsampling factor; use 0 or 1 for no subsampling)
- *              dilation (size of grayscale or color Sel; odd)
- *              mindiff (minimum pixel difference to be counted; > 0)
- *              &fract (<return> fraction of pixels with diff greater than
- *                      mindiff)
- *              &pixdiff1 (<optional return> showing difference (gray or color))
- *              &pixdiff2 (<optional return> showing pixels of sufficient diff)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs1       8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    pixs2       8 bpp gray or 32 bpp rgb, or colormapped
+ * \param[in]    sampling    subsampling factor; use 0 or 1 for no subsampling
+ * \param[in]    dilation    size of grayscale or color Sel; odd
+ * \param[in]    mindiff     minimum pixel difference to be counted; > 0
+ * \param[out]   pfract      fraction of pixels with diff greater than mindiff
+ * \param[out]   ppixdiff1   [optional] showing difference (gray or color)
+ * \param[out]   ppixdiff2   [optional] showing pixels of sufficient diff
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This takes 2 pix and determines, using 2 input parameters:
- *           * @dilation specifies the amount of grayscale or color
+ *           * %dilation specifies the amount of grayscale or color
  *             dilation to apply to the images, to compensate for
  *             a small amount of misregistration.  A typical number might
  *             be 5, which uses a 5x5 Sel.  Grayscale dilation expands
  *             lighter pixels into darker pixel regions.
- *           * @mindiff determines the threshold on the difference in
+ *           * %mindiff determines the threshold on the difference in
  *             pixel values to be counted -- two pixels are not similar
- *             if their difference in value is at least @mindiff.  For
+ *             if their difference in value is at least %mindiff.  For
  *             color pixels, we use the maximum component difference.
  *      (2) The pixelwise comparison is always done with the UL corners
  *          aligned.  The sizes of pix1 and pix2 need not be the same,
@@ -1452,7 +1596,7 @@ PIX        *pixt1, *pixt2;
  *          is either gray or RGB depending on the colormap.
  *      (4) Two optional diff images can be retrieved (typ. for debugging):
  *           pixdiff1: the gray or color difference
- *           pixdiff2: thresholded to 1 bpp for pixels exceeding @mindiff
+ *           pixdiff2: thresholded to 1 bpp for pixels exceeding %mindiff
  *      (5) The returned value of fract can be compared to some threshold,
  *          which is application dependent.
  *      (6) This method is in analogy to the two-sided hausdorff transform,
@@ -1465,6 +1609,7 @@ PIX        *pixt1, *pixt2;
  *          other way.  Take the component-wise max of the two results,
  *          and threshold to get the fraction of pixels with a difference
  *          below the threshold.
+ * </pre>
  */
 l_int32
 pixGetPerceptualDiff(PIX        *pixs1,
@@ -1482,11 +1627,11 @@ PIX     *pix10, *pix11;
 
     PROCNAME("pixGetPerceptualDiff");
 
+    if (ppixdiff1) *ppixdiff1 = NULL;
+    if (ppixdiff2) *ppixdiff2 = NULL;
     if (!pfract)
         return ERROR_INT("&fract not defined", procName, 1);
     *pfract = 1.0;  /* init to completely different */
-    if (ppixdiff1) *ppixdiff1 = NULL;
-    if (ppixdiff2) *ppixdiff2 = NULL;
     if ((dilation & 1) == 0)
         return ERROR_INT("dilation must be odd", procName, 1);
     if (!pixs1)
@@ -1502,8 +1647,8 @@ PIX     *pix10, *pix11;
 
         /* Integer downsample if requested */
     if (sampling > 1) {
-        pix1 = pixScaleByIntSubsampling(pixs1, sampling);
-        pix2 = pixScaleByIntSubsampling(pixs2, sampling);
+        pix1 = pixScaleByIntSampling(pixs1, sampling);
+        pix2 = pixScaleByIntSampling(pixs2, sampling);
     } else {
         pix1 = pixClone(pixs1);
         pix2 = pixClone(pixs2);
@@ -1537,7 +1682,7 @@ PIX     *pix10, *pix11;
          * for RGB images, the dilations and max selection are done
          * component-wise, and the conversion to grayscale also uses the
          * maximum component.  The resulting grayscale images are
-         * thresholded using @mindiff. */
+         * thresholded using %mindiff. */
     if (d1 == 8) {
         pix5 = pixDilateGray(pix3, dilation, dilation);
         pixCompareGray(pix4, pix5, L_COMPARE_SUBTRACT, 0, NULL, NULL, NULL,
@@ -1599,14 +1744,15 @@ PIX     *pix10, *pix11;
 
 
 /*!
- *  pixGetPSNR()
+ * \brief   pixGetPSNR()
  *
- *      Input:  pix1, pix2 (8 or 32 bpp; no colormap)
- *              factor (sampling factor; >= 1)
- *              &psnr (<return> power signal/noise ratio difference)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix1, pix2     8 or 32 bpp; no colormap
+ * \param[in]    factor         sampling factor; >= 1
+ * \param[out]   ppsnr          power signal/noise ratio difference
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This computes the power S/N ratio, in dB, for the difference
  *          between two images.  By convention, the power S/N
  *          for a grayscale image is ('log' == log base 10,
@@ -1626,6 +1772,7 @@ PIX     *pix10, *pix11;
  *          and the PSNR is infinity.  For that case, this returns
  *          PSNR = 1000, which corresponds to the very small MSE of
  *          about 10^(-48).
+ * </pre>
  */
 l_int32
 pixGetPSNR(PIX        *pix1,
@@ -1674,7 +1821,7 @@ l_float32  mse;  /* mean squared error */
             for (j = 0; j < w; j += factor) {
                 v1 = GET_DATA_BYTE(line1, j);
                 v2 = GET_DATA_BYTE(line2, j);
-                mse += (v1 - v2) * (v1 - v2);
+                mse += (l_float32)(v1 - v2) * (v1 - v2);
             }
         }
     } else {  /* d == 32 */
@@ -1684,13 +1831,13 @@ l_float32  mse;  /* mean squared error */
             for (j = 0; j < w; j += factor) {
                 extractRGBValues(line1[j], &r1, &g1, &b1);
                 extractRGBValues(line2[j], &r2, &g2, &b2);
-                mse += ((r1 - r2) * (r1 - r2) +
+                mse += ((l_float32)(r1 - r2) * (r1 - r2) +
                         (g1 - g2) * (g1 - g2) +
                         (b1 - b2) * (b1 - b2)) / 3.0;
             }
         }
     }
-    mse = mse / (w * h);
+    mse = mse / ((l_float32)(w) * h);
 
     *ppsnr = -4.3429448 * log(mse / (255 * 255));
     return 0;
@@ -1698,20 +1845,1345 @@ l_float32  mse;  /* mean squared error */
 
 
 /*------------------------------------------------------------------*
+ *             Comparison of photo regions by histogram             *
+ *------------------------------------------------------------------*/
+/*!
+ * \brief   pixaComparePhotoRegionsByHisto()
+ *
+ * \param[in]    pixa        any depth; colormap OK
+ * \param[in]    minratio    requiring sizes be compatible; < 1.0
+ * \param[in]    factor      subsampling; >= 1
+ * \param[in]    textthresh  threshold for text/photo; use 0 for default
+ * \param[in]    nx, ny      num subregions to use for histograms; e.g. 3x3
+ * \param[in]    simthresh   threshold for similarity; use 0 for default
+ * \param[out]   pnai array  giving similarity class indices
+ * \param[out]   pscores     [optional] score matrix as 1-D array of size N^2
+ * \param[out]   ppixd       [optional] pix of similarity classes
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This function takes a pixa of cropped photo images and
+ *          compares each one to the others for similarity.
+ *          Each image is first tested to see if it is a photo that can
+ *          be compared by tiled histograms.  If so, it is padded to put
+ *          the centroid in the center of the image, and the histograms
+ *          are generated.  The final step of comparing each histogram
+ *          with all the others is very fast.
+ *      (2) An initial filter gives %score = 0 if the ratio of widths
+ *          and heights (smallest / largest) does not exceed a
+ *          threshold %minratio.  If set at 1.0, both images must be
+ *          exactly the same size.  A typical value for %minratio is 0.9.
+ *      (3) The comparison score between two images is a value in [0.0 .. 1.0].
+ *          If the comparison score >= %simthresh, the images are placed in
+ *          the same similarity class.  Default value for %simthresh is 0.25.
+ *      (4) An array %nai of similarity class indices for pix in the
+ *          input pixa is returned.
+ *      (5) There are two debugging options:
+ *          * An optional 2D matrix of scores is returned as a 1D array.
+ *            A visualization of this is written to a temp file.
+ *          * An optional pix showing the similarity classes can be
+ *            returned.  Text in each input pix is reproduced.
+ *      (6) See the notes in pixComparePhotoRegionsByHisto() for details
+ *          on the implementation.
+ * </pre>
+ */
+l_int32
+pixaComparePhotoRegionsByHisto(PIXA        *pixa,
+                               l_float32    minratio,
+                               l_float32    textthresh,
+                               l_int32      factor,
+                               l_int32      nx,
+                               l_int32      ny,
+                               l_float32    simthresh,
+                               NUMA       **pnai,
+                               l_float32  **pscores,
+                               PIX        **ppixd)
+{
+char       *text;
+l_int32     i, j, n, w, h, w1, h1, w2, h2, ival, index;
+l_float32   score;
+l_float32  *scores;
+NUMA       *nai, *naw, *nah;
+NUMAA      *naa;
+NUMAA     **n3a;  /* array of naa */
+PIX        *pix;
+
+    PROCNAME("pixaComparePhotoRegionsByHisto");
+
+    if (pscores) *pscores = NULL;
+    if (ppixd) *ppixd = NULL;
+    if (!pnai)
+        return ERROR_INT("&na not defined", procName, 1);
+    *pnai = NULL;
+    if (!pixa)
+        return ERROR_INT("pixa not defined", procName, 1);
+    if (minratio < 0.0 || minratio > 1.0)
+        return ERROR_INT("minratio not in [0.0 ... 1.0]", procName, 1);
+    if (textthresh <= 0.0) textthresh = 1.3;
+    if (factor < 1)
+        return ERROR_INT("subsampling factor must be >= 1", procName, 1);
+    if (nx < 1 || ny < 1)
+        return ERROR_INT("nx and ny must both be > 0", procName, 1);
+    if (simthresh <= 0.0) simthresh = 0.25;
+    if (simthresh > 1.0)
+        return ERROR_INT("simthresh invalid; should be near 0.25", procName, 1);
+
+        /* Prepare the histograms */
+    n = pixaGetCount(pixa);
+    if ((n3a = (NUMAA **)LEPT_CALLOC(n, sizeof(NUMAA *))) == NULL)
+        return ERROR_INT("calloc fail for n3a", procName, 1);
+    naw = numaCreate(0);
+    nah = numaCreate(0);
+    for (i = 0; i < n; i++) {
+        pix = pixaGetPix(pixa, i, L_CLONE);
+        text = pixGetText(pix);
+        pixSetResolution(pix, 150, 150);
+        pixGenPhotoHistos(pix, NULL, factor, textthresh, nx, ny,
+                          &naa, &w, &h, FALSE);
+        n3a[i] = naa;
+        numaAddNumber(naw, w);
+        numaAddNumber(nah, h);
+        if (naa)
+            fprintf(stderr, "Image %s is photo\n", text);
+        else
+            fprintf(stderr, "Image %s is NOT photo\n", text);
+        pixDestroy(&pix);
+    }
+
+        /* Do the comparisons.  We are making a set of classes, where
+         * all similar images are placed in the same class.  There are
+         * 'n' input images.  The classes are labeled by 'index' (all
+         * similar images get the same 'index' value), and 'nai' maps
+         * the index of the image in the input array to the index
+         * of the similarity class.  */
+    if ((scores = (l_float32 *)LEPT_CALLOC(n * n, sizeof(l_float32))) == NULL) {
+        L_ERROR("calloc fail for scores\n", procName);
+        goto cleanup;
+    }
+    nai = numaMakeConstant(-1, n);  /* index */
+    for (i = 0, index = 0; i < n; i++) {
+        scores[n * i + i] = 1.0;
+        numaGetIValue(nai, i, &ival);
+        if (ival != -1)  /* already set */
+            continue;
+        numaSetValue(nai, i, index);
+        if (n3a[i] == NULL) {  /* not a photo */
+            index++;
+            continue;
+        }
+        numaGetIValue(naw, i, &w1);
+        numaGetIValue(nah, i, &h1);
+        for (j = i + 1; j < n; j++) {
+            numaGetIValue(nai, j, &ival);
+            if (ival != -1)  /* already set */
+                continue;
+            if (n3a[j] == NULL)  /* not a photo */
+                continue;
+            numaGetIValue(naw, j, &w2);
+            numaGetIValue(nah, j, &h2);
+            compareTilesByHisto(n3a[i], n3a[j], minratio, w1, h1, w2, h2,
+                                &score, NULL);
+            scores[n * i + j] = score;
+            scores[n * j + i] = score;  /* the score array is symmetric */
+/*            fprintf(stderr, "score = %5.3f\n", score); */
+            if (score > simthresh) {
+                numaSetValue(nai, j, index);
+                fprintf(stderr, "Setting %d similar to %d, in class %d\n",
+                        j, i, index);
+            }
+        }
+        index++;
+    }
+    *pnai = nai;
+
+        /* Debug: optionally save and display the score array.
+         * All images that are photos are represented by a point on
+         * the diagonal. Other images in the same similarity class
+         * are on the same horizontal raster line to the right.
+         * The array has been symmetrized, so images in the same
+         * same similarity class also appear on the same column below. */
+    if (pscores) {
+        l_int32    wpl, fact;
+        l_uint32  *line, *data;
+        PIX       *pix2, *pix3;
+        pix2 = pixCreate(n, n, 8);
+        data = pixGetData(pix2);
+        wpl = pixGetWpl(pix2);
+        for (i = 0; i < n; i++) {
+            line = data + i * wpl;
+            for (j = 0; j < n; j++) {
+                SET_DATA_BYTE(line, j,
+                              L_MIN(255, 4.0 * 255 * scores[n * i + j]));
+            }
+        }
+        fact = L_MAX(2, 1000 / n);
+        pix3 = pixExpandReplicate(pix2, fact);
+        fprintf(stderr, "Writing to /tmp/lept/comp/scorearray.png\n");
+        lept_mkdir("lept/comp");
+        pixWrite("/tmp/lept/comp/scorearray.png", pix3, IFF_PNG);
+        pixDestroy(&pix2);
+        pixDestroy(&pix3);
+        *pscores = scores;
+    } else {
+        LEPT_FREE(scores);
+    }
+
+        /* Debug: optionally display and save the image comparisons.
+         * Image similarity classes are displayed by column; similar
+         * images are displayed in the same column. */
+    if (ppixd)
+        *ppixd = pixaDisplayTiledByIndex(pixa, nai, 200, 20, 2, 6, 0x0000ff00);
+
+cleanup:
+    numaDestroy(&naw);
+    numaDestroy(&nah);
+    for (i = 0; i < n; i++)
+        numaaDestroy(&n3a[i]);
+    LEPT_FREE(n3a);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixComparePhotoRegionsByHisto()
+ *
+ * \param[in]    pix1, pix2    any depth; colormap OK
+ * \param[in]    box1, box2    [optional] photo regions from each; can be null
+ * \param[in]    minratio      requiring sizes be compatible; < 1.0
+ * \param[in]    factor        subsampling factor; >= 1
+ * \param[in]    nx, ny        num subregions to use for histograms; e.g. 3x3
+ * \param[out]   pscore        similarity score of histograms
+ * \param[in]    debugflag     1 for debug output; 0 for no debugging
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This function compares two grayscale photo regions.  If a
+ *          box is given, the region is clipped; otherwise assume
+ *          the entire images are photo regions.  This is done with a
+ *          set of (nx * ny) spatially aligned histograms, which are
+ *          aligned using the centroid of the inverse image.
+ *      (2) An initial filter gives %score = 0 if the ratio of widths
+ *          and heights (smallest / largest) does not exceed a
+ *          threshold %minratio.  This must be between 0.5 and 1.0.
+ *          If set at 1.0, both images must be exactly the same size.
+ *          A typical value for %minratio is 0.9.
+ *      (3) Because this function should not be used on text or
+ *          line graphics, which can give false positive results
+ *          (i.e., high scores for different images), filter the images
+ *          using pixGenPhotoHistos(), which returns tiled histograms
+ *          only if an image is not text and comparison is expected
+ *          to work with histograms.  If either image fails the test,
+ *          the comparison returns a score of 0.0.
+ *      (4) The white value counts in the histograms are removed; they
+ *          are typically pixels that were padded to achieve alignment.
+ *      (5) For an efficient representation of the histogram, normalize
+ *          using a multiplicative factor so that the number in the
+ *          maximum bucket is 255.  It then takes 256 bytes to store.
+ *      (6) When comparing the histograms of two regions, use the
+ *          Earth Mover distance (EMD), with the histograms normalized
+ *          so that the sum over bins is the same.  Further normalize
+ *          by dividing by 255, so that the result is in [0.0 ... 1.0].
+ *      (7) Get a similarity score S = 1.0 - k * D, where
+ *            k is a constant, say in the range 5-10
+ *            D = normalized EMD
+ *          and for multiple tiles, take the Min(S) to be the final score.
+ *          Using aligned tiles gives protection against accidental
+ *          similarity of the overall grayscale histograms.
+ *          A small number of aligned tiles works well.
+ *      (8) With debug on, you get a pdf that shows, for each tile,
+ *          the images, histograms and score.
+ * </pre>
+ */
+l_int32
+pixComparePhotoRegionsByHisto(PIX        *pix1,
+                              PIX        *pix2,
+                              BOX        *box1,
+                              BOX        *box2,
+                              l_float32   minratio,
+                              l_int32     factor,
+                              l_int32     nx,
+                              l_int32     ny,
+                              l_float32  *pscore,
+                              l_int32     debugflag)
+{
+l_int32    w1, h1, w2, h2, w1c, h1c, w2c, h2c;
+l_float32  wratio, hratio;
+NUMAA     *naa1, *naa2;
+PIX       *pix3, *pix4;
+PIXA      *pixa;
+
+    PROCNAME("pixComparePhotoRegionsByHisto");
+
+    if (!pscore)
+        return ERROR_INT("&score not defined", procName, 1);
+    *pscore = 0.0;
+    if (!pix1 || !pix2)
+        return ERROR_INT("pix1 and pix2 not both defined", procName, 1);
+    if (minratio < 0.5 || minratio > 1.0)
+        return ERROR_INT("minratio not in [0.5 ... 1.0]", procName, 1);
+    if (factor < 1)
+        return ERROR_INT("subsampling factor must be >= 1", procName, 1);
+    if (nx < 1 || ny < 1)
+        return ERROR_INT("nx and ny must both be > 0", procName, 1);
+
+    if (debugflag)
+        lept_mkdir("lept/comp");
+
+        /* Initial filter by size */
+    if (box1)
+        boxGetGeometry(box1, NULL, NULL, &w1, &h1);
+    else
+        pixGetDimensions(pix1, &w1, &h1, NULL);
+    if (box2)
+        boxGetGeometry(box2, NULL, NULL, &w2, &h2);
+    else
+        pixGetDimensions(pix1, &w2, &h2, NULL);
+    wratio = (w1 < w2) ? (l_float32)w1 / (l_float32)w2 :
+             (l_float32)w2 / (l_float32)w1;
+    hratio = (h1 < h2) ? (l_float32)h1 / (l_float32)h2 :
+             (l_float32)h2 / (l_float32)h1;
+    if (wratio < minratio || hratio < minratio)
+        return 0;
+
+        /* Initial crop, if necessary, and make histos */
+    if (box1)
+        pix3 = pixClipRectangle(pix1, box1, NULL);
+    else
+        pix3 = pixClone(pix1);
+    pixGenPhotoHistos(pix3, NULL, factor, 0, nx, ny,
+                      &naa1, &w1c, &h1c, debugflag);
+    pixDestroy(&pix3);
+    if (!naa1) return 0;
+    if (box2)
+        pix4 = pixClipRectangle(pix2, box2, NULL);
+    else
+        pix4 = pixClone(pix2);
+    pixGenPhotoHistos(pix4, NULL, factor, 0, nx, ny,
+                      &naa2, &w2c, &h2c, debugflag);
+    pixDestroy(&pix4);
+    if (!naa2) return 0;
+
+        /* Compare histograms */
+    pixa = (debugflag) ? pixaCreate(0) : NULL;
+    compareTilesByHisto(naa1, naa2, minratio, w1c, h1c, w2c, h2c, pscore, pixa);
+    pixaDestroy(&pixa);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixGenPhotoHistos()
+ *
+ * \param[in]    pixs      depth > 1 bpp; colormap OK
+ * \param[in]    box       [optional] region to be selected; can be null
+ * \param[in]    factor    subsampling; >= 1
+ * \param[in]    thresh    threshold for photo/text; use 0 for default
+ * \param[in]    nx, ny    number of subregions to use for histograms; e.g. 3x3
+ * \param[out]   pnaa      nx * ny 256-entry gray histograms
+ * \param[out]   pw        width of image used to make histograms
+ * \param[out]   ph        height of image used to make histograms
+ * \param[in]    debugflag 1 for debug output; 0 for no debugging
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This crops and converts to 8 bpp if necessary.  It adds a
+ *          minimal white boundary such that the centroid of the
+ *          photo-inverted image is in the center. This allows
+ *          automatic alignment with histograms of other image regions.
+ *      (2) The white value in the histogram is removed, because of
+ *          the padding.
+ *      (3) Use 0 for conservative default (1.3) for thresh.
+ *      (4) For an efficient representation of the histogram, normalize
+ *          using a multiplicative factor so that the number in the
+ *          maximum bucket is 255.  It then takes 256 bytes to store.
+ *      (5) With debug on, you get a pdf that shows, for each tile,
+ *          the images and histograms.
+ * </pre>
+ */
+l_int32
+pixGenPhotoHistos(PIX        *pixs,
+                  BOX        *box,
+                  l_int32     factor,
+                  l_float32   thresh,
+                  l_int32     nx,
+                  l_int32     ny,
+                  NUMAA     **pnaa,
+                  l_int32    *pw,
+                  l_int32    *ph,
+                  l_int32     debugflag)
+{
+NUMAA  *naa;
+PIX    *pix1, *pix2, *pix3, *pixm;
+PIXA   *pixa;
+
+    PROCNAME("pixGenPhotoHistos");
+
+    if (pnaa) *pnaa = NULL;
+    if (pw) *pw = 0;
+    if (ph) *ph = 0;
+    if (!pnaa)
+        return ERROR_INT("&naa not defined", procName, 1);
+    if (!pw || !ph)
+        return ERROR_INT("&w and &h not both defined", procName, 1);
+    if (!pixs || pixGetDepth(pixs) == 1)
+        return ERROR_INT("pixs not defined or 1 bpp", procName, 1);
+    if (factor < 1)
+        return ERROR_INT("subsampling factor must be >= 1", procName, 1);
+    if (nx < 1 || ny < 1)
+        return ERROR_INT("nx and ny must both be > 0", procName, 1);
+    if (thresh <= 0.0) thresh = 1.3;  /* default */
+
+    pixa = NULL;
+    if (debugflag) {
+        pixa = pixaCreate(0);
+        lept_mkdir("lept/comp");
+    }
+
+        /* Initial crop, if necessary */
+    if (box)
+        pix1 = pixClipRectangle(pixs, box, NULL);
+    else
+        pix1 = pixClone(pixs);
+
+        /* Convert to 8 bpp and pad to center the centroid */
+    pix2 = pixConvertTo8(pix1, FALSE);
+    pix3 = pixPadToCenterCentroid(pix2, factor);
+
+        /* Set to 255 all pixels above 230.  Do this so that light gray
+         * pixels do not enter into the comparison. */
+    pixm = pixThresholdToBinary(pix3, 230);
+    pixInvert(pixm, pixm);
+    pixSetMaskedGeneral(pix3, pixm, 255, 0, 0);
+    pixDestroy(&pixm);
+
+    if (debugflag) {
+        PIX   *pix4, *pix5, *pix6, *pix7, *pix8;
+        PIXA  *pixa2;
+        pix4 = pixConvertTo32(pix2);
+        pix5 = pixConvertTo32(pix3);
+        pix6 = pixScaleToSize(pix4, 400, 0);
+        pix7 = pixScaleToSize(pix5, 400, 0);
+        pixa2 = pixaCreate(2);
+        pixaAddPix(pixa2, pix6, L_INSERT);
+        pixaAddPix(pixa2, pix7, L_INSERT);
+        pix8 = pixaDisplayTiledInRows(pixa2, 32, 1000, 1.0, 0, 50, 3);
+        pixaAddPix(pixa, pix8, L_INSERT);
+        pixDestroy(&pix4);
+        pixDestroy(&pix5);
+        pixaDestroy(&pixa2);
+    }
+    pixDestroy(&pix1);
+    pixDestroy(&pix2);
+
+        /* Test if this is a photoimage */
+    pixDecideIfPhotoImage(pix3, factor, nx, ny, thresh, &naa, pixa);
+    if (naa) {
+        *pnaa = naa;
+        *pw = pixGetWidth(pix3);
+        *ph = pixGetHeight(pix3);
+    }
+
+    if (pixa) {
+        fprintf(stderr, "Writing to /tmp/lept/comp/tiledhistos.pdf\n");
+        pixaConvertToPdf(pixa, 300, 1.0, L_FLATE_ENCODE, 0, NULL,
+                         "/tmp/lept/comp/tiledhistos.pdf");
+        pixaDestroy(&pixa);
+    }
+
+    pixDestroy(&pix3);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixPadToCenterCentroid()
+ *
+ * \param[in]    pixs     any depth, colormap OK
+ * \param[in]    factor   subsampling for centroid; >= 1
+ * \return  pixd padded with white pixels, or NULL on error.
+ *
+ * <pre>
+ * Notes:
+ *      (1) This add minimum white padding to an 8 bpp pix, such that
+ *          the centroid of the photometric inverse is in the center of
+ *          the resulting image.  Thus in computing the centroid,
+ *          black pixels have weight 255, and white pixels have weight 0.
+ * </pre>
+ */
+PIX *
+pixPadToCenterCentroid(PIX     *pixs,
+                       l_int32  factor)
+
+{
+l_float32  cx, cy;
+l_int32    xs, ys, delx, dely, icx, icy, ws, hs, wd, hd;
+PIX       *pix1, *pixd;
+
+    PROCNAME("pixPadToCenterCentroid");
+
+    if (!pixs)
+        return (PIX *)ERROR_PTR("pixs not defined", procName, NULL);
+    if (factor < 1)
+        return (PIX *)ERROR_PTR("invalid sampling factor", procName, NULL);
+
+    pix1 = pixConvertTo8(pixs, FALSE);
+    pixCentroid8(pix1, factor, &cx, &cy);
+    icx = (l_int32)(cx + 0.5);
+    icy = (l_int32)(cy + 0.5);
+    pixGetDimensions(pix1, &ws, &hs, NULL);
+    delx = ws - 2 * icx;
+    dely = hs - 2 * icy;
+    xs = L_MAX(0, delx);
+    ys = L_MAX(0, dely);
+    wd = 2 * L_MAX(icx, ws - icx);
+    hd = 2 * L_MAX(icy, hs - icy);
+    pixd = pixCreate(wd, hd, 8);
+    pixSetAll(pixd);  /* to white */
+    pixCopyResolution(pixd, pixs);
+    pixRasterop(pixd, xs, ys, ws, hs, PIX_SRC, pix1, 0, 0);
+    pixDestroy(&pix1);
+    return pixd;
+}
+
+
+/*!
+ * \brief   pixCentroid8()
+ *
+ * \param[in]    pixs    8 bpp
+ * \param[in]    factor  subsampling factor; >= 1
+ * \param[out]   pcx     x value of centroid
+ * \param[out]   pcy     y value of centroid
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This first does a photometric inversion (black = 255, white = 0).
+ *          It then finds the centroid of the result.  The inversion is
+ *          done because white is usually background, so the centroid
+ *          is computed based on the "foreground" gray pixels, and the
+ *          darker the pixel, the more weight it is given.
+ * </pre>
+ */
+l_int32
+pixCentroid8(PIX        *pixs,
+             l_int32     factor,
+             l_float32  *pcx,
+             l_float32  *pcy)
+{
+l_int32    i, j, w, h, wpl, val;
+l_float32  sumx, sumy, sumv;
+l_uint32  *data, *line;
+PIX       *pix1;
+
+    PROCNAME("pixCentroid8");
+
+    if (pcx) *pcx = 0.0;
+    if (pcy) *pcy = 0.0;
+    if (!pixs || pixGetDepth(pixs) != 8)
+        return ERROR_INT("pixs undefined or not 8 bpp", procName, 1);
+    if (factor < 1)
+        return ERROR_INT("subsampling factor must be >= 1", procName, 1);
+    if (!pcx || !pcy)
+        return ERROR_INT("&cx and &cy not both defined", procName, 1);
+
+    pix1 = pixInvert(NULL, pixs);
+    pixGetDimensions(pix1, &w, &h, NULL);
+    data = pixGetData(pix1);
+    wpl = pixGetWpl(pix1);
+    sumx = sumy = sumv = 0.0;
+    for (i = 0; i < h; i++) {
+        line = data + i * wpl;
+        for (j = 0; j < w; j++) {
+            val = GET_DATA_BYTE(line, j);
+            sumx += val * j;
+            sumy += val * i;
+            sumv += val;
+        }
+    }
+    pixDestroy(&pix1);
+
+    if (sumv == 0) {
+        L_INFO("input image is white\n", procName);
+        *pcx = (l_float32)(w) / 2;
+        *pcy = (l_float32)(h) / 2;
+    } else {
+        *pcx = sumx / sumv;
+        *pcy = sumy / sumv;
+    }
+
+    return 0;
+}
+
+
+/*!
+ * \brief   pixDecideIfPhotoImage()
+ *
+ * \param[in]    pix         8 bpp, centroid in center
+ * \param[in]    factor      subsampling for histograms; >= 1
+ * \param[in]    nx, ny      number of subregions to use for histograms
+ * \param[in]    thresh      threshold for photo/text; use 0 for default
+ * \param[out]   pnaa        array of normalized histograms
+ * \param[in]    pixadebug   [optional] use only for debug output
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) The input image must be 8 bpp (no colormap), and padded with
+ *          white pixels so the centroid of photo-inverted pixels is at
+ *          the center of the image.
+ *      (2) If the pix is not almost certainly a photoimage, the returned
+ *          histograms (%naa) are null.
+ *      (3) If histograms are generated, the white (255) count is set
+ *          to 0.  This removes all pixels values above 230, including
+ *          white padding from the centroid matching operation, from
+ *          consideration.  The resulting histograms are then normalized
+ *          so the maximum count is 255.
+ *      (4) Default for %thresh is 1.3; this seems sufficiently conservative.
+ *      (5) Use %pixadebug == NULL unless debug output is requested.
+ * </pre>
+ */
+l_int32
+pixDecideIfPhotoImage(PIX       *pix,
+                      l_int32    factor,
+                      l_int32    nx,
+                      l_int32    ny,
+                      l_float32  thresh,
+                      NUMAA    **pnaa,
+                      PIXA      *pixadebug)
+{
+char       buf[64];
+l_int32    i, n, istext, isphoto;
+l_float32  maxval, sum1, sum2, ratio;
+L_BMF     *bmf;
+NUMA      *na1, *na2, *na3, *narv;
+NUMAA     *naa;
+PIX       *pix1;
+PIXA      *pixa, *pixa2;
+
+    PROCNAME("pixDecideIfPhotoImage");
+
+    if (!pnaa)
+        return ERROR_INT("&naa not defined", procName, 1);
+    *pnaa = NULL;
+    if (!pix || pixGetDepth(pix) != 8 || pixGetColormap(pix))
+        return ERROR_INT("pix undefined or invalid", procName, 1);
+    if (thresh <= 0.0) thresh = 1.3;  /* default */
+
+        /* Look for text lines */
+    pixDecideIfText(pix, NULL, &istext, pixadebug);
+    if (istext) {
+        L_INFO("Image is text\n", procName);
+        return 0;
+    }
+
+        /* Evaluate histograms in each tile */
+    pixa = pixaSplitPix(pix, nx, ny, 0, 0);
+    n = nx * ny;
+    bmf = (pixadebug) ? bmfCreate(NULL, 6) : NULL;
+    naa = numaaCreate(n);
+    for (i = 0; i < n; i++) {
+        pix1 = pixaGetPix(pixa, i, L_CLONE);
+
+            /* Get histograms, set white count to 0, normalize max to 255 */
+        na1 = pixGetGrayHistogram(pix1, factor);
+        numaSetValue(na1, 255, 0);
+        na2 = numaWindowedMean(na1, 5);  /* do some smoothing */
+        numaGetMax(na2, &maxval, NULL);
+        na3 = numaTransform(na2, 0, 255.0 / maxval);
+        if (pixadebug) {
+            snprintf(buf, sizeof(buf), "/tmp/lept/comp/plot.%d", i);
+            gplotSimple1(na3, GPLOT_PNG, buf, "Histos");
+        }
+
+        numaaAddNuma(naa, na3, L_INSERT);
+        numaDestroy(&na1);
+        numaDestroy(&na2);
+        pixDestroy(&pix1);
+    }
+    if (pixadebug) {
+        pixa2 = pixaReadFiles("/tmp/lept/comp", ".png");
+        pixaJoin(pixa, pixa2, 0, -1);
+        pixaDestroy(&pixa2);
+    }
+
+        /* Compute the standard deviation between these histos to decide
+         * if the image is photo or something more like line art,
+         * which does not support good comparison by tiled histograms.  */
+    grayInterHistogramStats(naa, 5, NULL, NULL, NULL, &narv);
+
+        /* For photos, the root variance has a larger weight of
+         * values in the range [50 ... 150] compared to [200 ... 230],
+         * than text or line art.  For the latter, most of the variance
+         * between tiles is in the lightest parts of the image, well
+         * above 150.  */
+    numaGetSumOnInterval(narv, 50, 150, &sum1);
+    numaGetSumOnInterval(narv, 200, 230, &sum2);
+    if (sum2 == 0.0)  /* shouldn't happen */
+        isphoto = 0;  /* be conservative */
+    else {
+        ratio = sum1 / sum2;
+        isphoto = (ratio > thresh) ? 1 : 0;
+        if (pixadebug) {
+            if (isphoto)
+                L_INFO("ratio %f > %f; isphoto is true\n",
+                       procName, ratio, thresh);
+            else
+                L_INFO("ratio %f < %f; isphoto is false\n",
+                       procName, ratio, thresh);
+        }
+    }
+    if (isphoto)
+        *pnaa = naa;
+    else
+        numaaDestroy(&naa);
+    bmfDestroy(&bmf);
+    numaDestroy(&narv);
+    pixaDestroy(&pixa);
+    return 0;
+}
+
+
+/*!
+ * \brief   compareTilesByHisto()
+ *
+ * \param[in]    naa1, naa2      each is a set of 256 entry histograms
+ * \param[in]    minratio        requiring image sizes be compatible; < 1.0
+ * \param[in]    w1, h1, w2, h2  image sizes from which histograms were made
+ * \param[out]   pscore          similarity score of histograms
+ * \param[in]    pixadebug       [optional] use only for debug output
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) naa1 and naa2 must be generated using pixGenPhotoHistos(),
+ *          using the same tile sizes.
+ *      (2) The image dimensions must be similar.  The score is 0.0
+ *          if the ratio of widths and heights (smallest / largest)
+ *          exceeds a threshold %minratio, which must be between
+ *          0.5 and 1.0.  If set at 1.0, both images must be exactly
+ *          the same size.  A typical value for %minratio is 0.9.
+ *      (2) The input pixadebug is null unless debug output is requested.
+ * </pre>
+ */
+l_int32
+compareTilesByHisto(NUMAA      *naa1,
+                    NUMAA      *naa2,
+                    l_float32   minratio,
+                    l_int32     w1,
+                    l_int32     h1,
+                    l_int32     w2,
+                    l_int32     h2,
+                    l_float32  *pscore,
+                    PIXA       *pixadebug)
+{
+char       buf1[128], buf2[128];
+l_int32    i, n;
+l_float32  wratio, hratio, score, minscore, dist;
+L_BMF     *bmf;
+NUMA      *na1, *na2, *nadist, *nascore;
+
+    PROCNAME("compareTilesByHisto");
+
+    if (!pscore)
+        return ERROR_INT("&score not defined", procName, 1);
+    *pscore = 0.0;
+    if (!naa1 || !naa2)
+        return ERROR_INT("naa1 and naa2 not both defined", procName, 1);
+
+        /* Filter for different sizes */
+    n = numaaGetCount(naa1);
+    if (n != numaaGetCount(naa2))
+        return ERROR_INT("naa1 and naa2 are different size", procName, 1);
+
+    if (pixadebug) {
+        lept_rmdir("lept/comptile");
+        lept_mkdir("lept/comptile");
+    }
+
+    wratio = (w1 < w2) ? (l_float32)w1 / (l_float32)w2 :
+             (l_float32)w2 / (l_float32)w1;
+    hratio = (h1 < h2) ? (l_float32)h1 / (l_float32)h2 :
+             (l_float32)h2 / (l_float32)h1;
+    if (wratio < minratio || hratio < minratio) {
+        if (pixadebug)
+            L_INFO("Sizes differ: wratio = %f, hratio = %f\n",
+                   procName, wratio, hratio);
+        return 0;
+    }
+
+        /* Evaluate histograms in each tile.  Remove white before
+         * computing EMD, because there are may be a lot of white
+         * pixels due to padding, and we don't want to include them.
+         * This also makes the debug histo plots more informative. */
+    minscore = 1.0;
+    nadist = numaCreate(n);
+    nascore = numaCreate(n);
+    bmf = (pixadebug) ? bmfCreate(NULL, 6) : NULL;
+    for (i = 0; i < n; i++) {
+        na1 = numaaGetNuma(naa1, i, L_CLONE);
+        na2 = numaaGetNuma(naa2, i, L_CLONE);
+        numaSetValue(na1, 255, 0.0);
+        numaSetValue(na2, 255, 0.0);
+
+            /* To compare histograms, use the normalized earthmover distance.
+             * Further normalize to get the EM distance as a fraction of the
+             * maximum distance in the histogram (255).  Finally, scale this
+             * up by 10.0, and subtract from 1.0 to get a similarity score. */
+        numaEarthMoverDistance(na1, na2, &dist);
+        score = L_MAX(0.0, 1.0 - 10.0 * (dist / 255.));
+        numaAddNumber(nadist, dist);
+        numaAddNumber(nascore, score);
+        minscore = L_MIN(minscore, score);
+        if (pixadebug) {
+            snprintf(buf1, sizeof(buf1), "/tmp/lept/comptile/plot.%d", i);
+            gplotSimple2(na1, na2, GPLOT_PNG, buf1, "Histos");
+        }
+        numaDestroy(&na1);
+        numaDestroy(&na2);
+    }
+    *pscore = minscore;
+
+    if (pixadebug) {
+        for (i = 0; i < n; i++) {
+            PIX  *pix1, *pix2;
+            snprintf(buf1, sizeof(buf1), "/tmp/lept/comptile/plot.%d.png", i);
+            pix1 = pixRead(buf1);
+            numaGetFValue(nadist, i, &dist);
+            numaGetFValue(nascore, i, &score);
+            snprintf(buf2, sizeof(buf2),
+                 "Image %d\ndist = %5.3f, score = %5.3f", i, dist, score);
+            pix2 = pixAddTextlines(pix1, bmf, buf2, 0x0000ff00, L_ADD_BELOW);
+            pixaAddPix(pixadebug, pix2, L_INSERT);
+            pixDestroy(&pix1);
+        }
+        fprintf(stderr, "Writing to /tmp/lept/comptile/comparegray.pdf\n");
+        pixaConvertToPdf(pixadebug, 300, 1.0, L_FLATE_ENCODE, 0, NULL,
+                         "/tmp/lept/comptile/comparegray.pdf");
+        numaWriteDebug("/tmp/lept/comptile/scores.na", nascore);
+        numaWriteDebug("/tmp/lept/comptile/dists.na", nadist);
+    }
+
+    bmfDestroy(&bmf);
+    numaDestroy(&nadist);
+    numaDestroy(&nascore);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixCompareGrayByHisto()
+ *
+ * \param[in]    pix1, pix2  any depth; colormap OK
+ * \param[in]    box1, box2  [optional] region selected from each; can be null
+ * \param[in]    minratio    requiring sizes be compatible; < 1.0
+ * \param[in]    maxgray     max value to keep in histo; >= 200, 255 to keep all
+ * \param[in]    factor      subsampling factor; >= 1
+ * \param[in]    nx, ny      num subregions to use for histograms; e.g. 3x3
+ * \param[out]   pscore      similarity score of histograms
+ * \param[in]    debugflag   1 for debug output; 0 for no debugging
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This function compares two grayscale photo regions.  It can
+ *          do it with a single histogram from each region, or with a
+ *          set of (nx * ny) spatially aligned histograms.  For both
+ *          cases, align the regions using the centroid of the inverse
+ *          image, and crop to the smallest of the two.
+ *      (2) An initial filter gives %score = 0 if the ratio of widths
+ *          and heights (smallest / largest) does not exceed a
+ *          threshold %minratio.  This must be between 0.5 and 1.0.
+ *          If set at 1.0, both images must be exactly the same size.
+ *          A typical value for %minratio is 0.9.
+ *      (3) The lightest values in the histogram can be disregarded.
+ *          Set %maxgray to the lightest value to be kept.  For example,
+ *          to eliminate white (255), set %maxgray = 254.  %maxgray must
+ *          be >= 200.
+ *      (4) For an efficient representation of the histogram, normalize
+ *          using a multiplicative factor so that the number in the
+ *          maximum bucket is 255.  It then takes 256 bytes to store.
+ *      (5) When comparing the histograms of two regions:
+ *          ~ Use %maxgray = 254 to ignore the white pixels, the number
+ *            of which may be sensitive to the crop region if the pixels
+ *            outside that region are white.
+ *          ~ Use the Earth Mover distance (EMD), with the histograms
+ *            normalized so that the sum over bins is the same.
+ *            Further normalize by dividing by 255, so that the result
+ *            is in [0.0 ... 1.0].
+ *      (6) Get a similarity score S = 1.0 - k * D, where
+ *            k is a constant, say in the range 5-10
+ *            D = normalized EMD
+ *          and for multiple tiles, take the Min(S) to be the final score.
+ *          Using aligned tiles gives protection against accidental
+ *          similarity of the overall grayscale histograms.
+ *          A small number of aligned tiles works well.
+ *      (7) With debug on, you get a pdf that shows, for each tile,
+ *          the images, histograms and score.
+ *      (8) When to use:
+ *          (a) Because this function should not be used on text or
+ *              line graphics, which can give false positive results
+ *              (i.e., high scores for different images), the input
+ *              images should be filtered.
+ *          (b) To filter, first use pixDecideIfText().  If that function
+ *              says the image is text, do not use it.  If the function
+ *              says it is not text, it still may be line graphics, and
+ *              in that case, use:
+ *                 pixGetGrayHistogramTiled()
+ *                 grayInterHistogramStats()
+ *              to determine whether it is photo or line graphics.
+ * </pre>
+ */
+l_int32
+pixCompareGrayByHisto(PIX        *pix1,
+                      PIX        *pix2,
+                      BOX        *box1,
+                      BOX        *box2,
+                      l_float32   minratio,
+                      l_int32     maxgray,
+                      l_int32     factor,
+                      l_int32     nx,
+                      l_int32     ny,
+                      l_float32  *pscore,
+                      l_int32     debugflag)
+{
+l_int32    w1, h1, w2, h2;
+l_float32  wratio, hratio;
+BOX       *box3, *box4;
+PIX       *pix3, *pix4, *pix5, *pix6, *pix7, *pix8;
+PIXA      *pixa;
+
+    PROCNAME("pixCompareGrayByHisto");
+
+    if (!pscore)
+        return ERROR_INT("&score not defined", procName, 1);
+    *pscore = 0.0;
+    if (!pix1 || !pix2)
+        return ERROR_INT("pix1 and pix2 not both defined", procName, 1);
+    if (minratio < 0.5 || minratio > 1.0)
+        return ERROR_INT("minratio not in [0.5 ... 1.0]", procName, 1);
+    if (maxgray < 200)
+        return ERROR_INT("invalid maxgray; should be >= 200", procName, 1);
+    maxgray = L_MIN(255, maxgray);
+    if (factor < 1)
+        return ERROR_INT("subsampling factor must be >= 1", procName, 1);
+    if (nx < 1 || ny < 1)
+        return ERROR_INT("nx and ny must both be > 0", procName, 1);
+
+    if (debugflag)
+        lept_mkdir("lept/comp");
+
+        /* Initial filter by size */
+    if (box1)
+        boxGetGeometry(box1, NULL, NULL, &w1, &h1);
+    else
+        pixGetDimensions(pix1, &w1, &h1, NULL);
+    if (box2)
+        boxGetGeometry(box2, NULL, NULL, &w2, &h2);
+    else
+        pixGetDimensions(pix1, &w2, &h2, NULL);
+    wratio = (w1 < w2) ? (l_float32)w1 / (l_float32)w2 :
+             (l_float32)w2 / (l_float32)w1;
+    hratio = (h1 < h2) ? (l_float32)h1 / (l_float32)h2 :
+             (l_float32)h2 / (l_float32)h1;
+    if (wratio < minratio || hratio < minratio)
+        return 0;
+
+        /* Initial crop, if necessary */
+    if (box1)
+        pix3 = pixClipRectangle(pix1, box1, NULL);
+    else
+        pix3 = pixClone(pix1);
+    if (box2)
+        pix4 = pixClipRectangle(pix2, box2, NULL);
+    else
+        pix4 = pixClone(pix2);
+
+        /* Convert to 8 bpp, align centroids and do maximal crop */
+    pix5 = pixConvertTo8(pix3, FALSE);
+    pix6 = pixConvertTo8(pix4, FALSE);
+    pixCropAlignedToCentroid(pix5, pix6, factor, &box3, &box4);
+    pix7 = pixClipRectangle(pix5, box3, NULL);
+    pix8 = pixClipRectangle(pix6, box4, NULL);
+    pixa = (debugflag) ? pixaCreate(0) : NULL;
+    if (debugflag) {
+        PIX     *pix9, *pix10, *pix11, *pix12, *pix13;
+        PIXA    *pixa2;
+        pix9 = pixConvertTo32(pix5);
+        pix10 = pixConvertTo32(pix6);
+        pixRenderBoxArb(pix9, box3, 2, 255, 0, 0);
+        pixRenderBoxArb(pix10, box4, 2, 255, 0, 0);
+        pix11 = pixScaleToSize(pix9, 400, 0);
+        pix12 = pixScaleToSize(pix10, 400, 0);
+        pixa2 = pixaCreate(2);
+        pixaAddPix(pixa2, pix11, L_INSERT);
+        pixaAddPix(pixa2, pix12, L_INSERT);
+        pix13 = pixaDisplayTiledInRows(pixa2, 32, 1000, 1.0, 0, 50, 0);
+        pixaAddPix(pixa, pix13, L_INSERT);
+        pixDestroy(&pix9);
+        pixDestroy(&pix10);
+        pixaDestroy(&pixa2);
+    }
+    pixDestroy(&pix3);
+    pixDestroy(&pix4);
+    pixDestroy(&pix5);
+    pixDestroy(&pix6);
+    boxDestroy(&box3);
+    boxDestroy(&box4);
+
+        /* Tile and compare histograms */
+    pixCompareTilesByHisto(pix7, pix8, maxgray, factor, nx, ny, pscore, pixa);
+    pixaDestroy(&pixa);
+    pixDestroy(&pix7);
+    pixDestroy(&pix8);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixCompareTilesByHisto()
+ *
+ * \param[in]    pix1, pix2     8 bpp
+ * \param[in]    maxgray        max value to keep in histo; 255 to keep all
+ * \param[in]    factor         subsampling factor; >= 1
+ * \param[in]    nx, ny         number of subregions to use for histograms
+ * \param[out]   pscore         similarity score of histograms
+ * \param[in]    pixadebug      [optional] use only for debug output
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This static function is only called from pixCompareGrayByHisto().
+ *          The input images have been converted to 8 bpp if necessary,
+ *          aligned and cropped.
+ *      (2) The input pixadebug is null unless debug output is requested.
+ *      (3) See pixCompareGrayByHisto() for details.
+ * </pre>
+ */
+static l_int32
+pixCompareTilesByHisto(PIX        *pix1,
+                       PIX        *pix2,
+                       l_int32     maxgray,
+                       l_int32     factor,
+                       l_int32     nx,
+                       l_int32     ny,
+                       l_float32  *pscore,
+                       PIXA       *pixadebug)
+{
+char       buf[64];
+l_int32    i, j, n;
+l_float32  score, minscore, maxval1, maxval2, dist;
+L_BMF     *bmf;
+NUMA      *na1, *na2, *na3, *na4, *na5, *na6, *na7;
+PIX       *pix3, *pix4;
+PIXA      *pixa1, *pixa2;
+
+    PROCNAME("pixCompareTilesByHisto");
+
+    if (!pscore)
+        return ERROR_INT("&score not defined", procName, 1);
+    *pscore = 0.0;
+    if (!pix1 || !pix2)
+        return ERROR_INT("pix1 and pix2 not both defined", procName, 1);
+
+        /* Evaluate histograms in each tile */
+    pixa1 = pixaSplitPix(pix1, nx, ny, 0, 0);
+    pixa2 = pixaSplitPix(pix2, nx, ny, 0, 0);
+    n = nx * ny;
+    na7 = (pixadebug) ? numaCreate(n) : NULL;
+    bmf = (pixadebug) ? bmfCreate(NULL, 6) : NULL;
+    minscore = 1.0;
+    for (i = 0; i < n; i++) {
+        pix3 = pixaGetPix(pixa1, i, L_CLONE);
+        pix4 = pixaGetPix(pixa2, i, L_CLONE);
+
+            /* Get histograms, set white count to 0, normalize max to 255 */
+        na1 = pixGetGrayHistogram(pix3, factor);
+        na2 = pixGetGrayHistogram(pix4, factor);
+        if (maxgray < 255) {
+            for (j = maxgray + 1; j <= 255; j++) {
+                numaSetValue(na1, j, 0);
+                numaSetValue(na2, j, 0);
+            }
+        }
+        na3 = numaWindowedMean(na1, 5);
+        na4 = numaWindowedMean(na2, 5);
+        numaGetMax(na3, &maxval1, NULL);
+        numaGetMax(na4, &maxval2, NULL);
+        na5 = numaTransform(na3, 0, 255.0 / maxval1);
+        na6 = numaTransform(na4, 0, 255.0 / maxval2);
+        if (pixadebug) {
+            gplotSimple2(na5, na6, GPLOT_PNG, "/tmp/lept/comp/plot1", "Histos");
+        }
+
+            /* To compare histograms, use the normalized earthmover distance.
+             * Further normalize to get the EM distance as a fraction of the
+             * maximum distance in the histogram (255).  Finally, scale this
+             * up by 10.0, and subtract from 1.0 to get a similarity score. */
+        numaEarthMoverDistance(na5, na6, &dist);
+        score = L_MAX(0.0, 1.0 - 8.0 * (dist / 255.));
+        if (pixadebug) numaAddNumber(na7, score);
+        minscore = L_MIN(minscore, score);
+        if (pixadebug) {
+            PIX     *pix5, *pix6, *pix7, *pix8, *pix9, *pix10;
+            PIXA    *pixa3;
+            l_int32  w, h, wscale;
+            pixa3 = pixaCreate(3);
+            pixGetDimensions(pix3, &w, &h, NULL);
+            wscale = (w > h) ? 700 : 400;
+            pix5 = pixScaleToSize(pix3, wscale, 0);
+            pix6 = pixScaleToSize(pix4, wscale, 0);
+            pixaAddPix(pixa3, pix5, L_INSERT);
+            pixaAddPix(pixa3, pix6, L_INSERT);
+            pix7 = pixRead("/tmp/lept/comp/plot1.png");
+            pix8 = pixScaleToSize(pix7, 700, 0);
+            snprintf(buf, sizeof(buf), "%5.3f", score);
+            pix9 = pixAddTextlines(pix8, bmf, buf, 0x0000ff00, L_ADD_RIGHT);
+            pixaAddPix(pixa3, pix9, L_INSERT);
+            pix10 = pixaDisplayTiledInRows(pixa3, 32, 1000, 1.0, 0, 50, 0);
+            pixaAddPix(pixadebug, pix10, L_INSERT);
+            pixDestroy(&pix7);
+            pixDestroy(&pix8);
+            pixaDestroy(&pixa3);
+        }
+        numaDestroy(&na1);
+        numaDestroy(&na2);
+        numaDestroy(&na3);
+        numaDestroy(&na4);
+        numaDestroy(&na5);
+        numaDestroy(&na6);
+        pixDestroy(&pix3);
+        pixDestroy(&pix4);
+    }
+    *pscore = minscore;
+
+    if (pixadebug) {
+        pixaConvertToPdf(pixadebug, 300, 1.0, L_FLATE_ENCODE, 0, NULL,
+                         "/tmp/lept/comp/comparegray.pdf");
+        numaWriteDebug("/tmp/lept/comp/tilescores.na", na7);
+    }
+
+    bmfDestroy(&bmf);
+    numaDestroy(&na7);
+    pixaDestroy(&pixa1);
+    pixaDestroy(&pixa2);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixCropAlignedToCentroid()
+ *
+ * \param[in]    pix1, pix2   any depth; colormap OK
+ * \param[in]    factor       subsampling; >= 1
+ * \param[out]   pbox1        crop box for pix1
+ * \param[out]   pbox2        crop box for pix2
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This finds the maximum crop boxes for two 8 bpp images when
+ *          their centroids of their photometric inverses are aligned.
+ *          Black pixels have weight 255; white pixels have weight 0.
+ * </pre>
+ */
+l_int32
+pixCropAlignedToCentroid(PIX     *pix1,
+                         PIX     *pix2,
+                         l_int32  factor,
+                         BOX    **pbox1,
+                         BOX    **pbox2)
+{
+l_float32  cx1, cy1, cx2, cy2;
+l_int32    w1, h1, w2, h2, icx1, icy1, icx2, icy2;
+l_int32    xm, xm1, xm2, xp, xp1, xp2, ym, ym1, ym2, yp, yp1, yp2;
+PIX       *pix3, *pix4;
+
+    PROCNAME("pixCropAlignedToCentroid");
+
+    if (pbox1) *pbox1 = NULL;
+    if (pbox2) *pbox2 = NULL;
+    if (!pix1 || !pix2)
+        return ERROR_INT("pix1 and pix2 not both defined", procName, 1);
+    if (factor < 1)
+        return ERROR_INT("subsampling factor must be >= 1", procName, 1);
+    if (!pbox1 || !pbox2)
+        return ERROR_INT("&box1 and &box2 not both defined", procName, 1);
+
+    pix3 = pixConvertTo8(pix1, FALSE);
+    pix4 = pixConvertTo8(pix2, FALSE);
+    pixCentroid8(pix3, factor, &cx1, &cy1);
+    pixCentroid8(pix4, factor, &cx2, &cy2);
+    pixGetDimensions(pix3, &w1, &h1, NULL);
+    pixGetDimensions(pix4, &w2, &h2, NULL);
+    pixDestroy(&pix3);
+    pixDestroy(&pix4);
+
+    icx1 = (l_int32)(cx1 + 0.5);
+    icy1 = (l_int32)(cy1 + 0.5);
+    icx2 = (l_int32)(cx2 + 0.5);
+    icy2 = (l_int32)(cy2 + 0.5);
+    xm = L_MIN(icx1, icx2);
+    xm1 = icx1 - xm;
+    xm2 = icx2 - xm;
+    xp = L_MIN(w1 - icx1, w2 - icx2);  /* one pixel beyond to the right */
+    xp1 = icx1 + xp;
+    xp2 = icx2 + xp;
+    ym = L_MIN(icy1, icy2);
+    ym1 = icy1 - ym;
+    ym2 = icy2 - ym;
+    yp = L_MIN(h1 - icy1, h2 - icy2);  /* one pixel below the bottom */
+    yp1 = icy1 + yp;
+    yp2 = icy2 + yp;
+    *pbox1 = boxCreate(xm1, ym1, xp1 - xm1, yp1 - ym1);
+    *pbox2 = boxCreate(xm2, ym2, xp2 - xm2, yp2 - ym2);
+    return 0;
+}
+
+
+/*!
+ * \brief   l_compressGrayHistograms()
+ *
+ * \param[in]    naa     set of 256-entry histograms
+ * \param[in]    w, h    size of image
+ * \param[out]   psize   size of byte array
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This first writes w and h to the byte array as 4 byte ints.
+ *      (2) Then it normalizes each histogram to a max value of 255,
+ *          and saves each value as a byte.  If there are
+ *          N histograms, the output bytearray has 8 + 256 * N bytes.
+ *      (3) Further compression of the array with zlib yields only about
+ *          a 25% decrease in size, so we don't bother.  If size reduction
+ *          were important, a lossy transform using a 1-dimensional DCT
+ *          would be effective, because we don't care about the fine
+ *          details of these histograms.
+ * </pre>
+ */
+l_uint8 *
+l_compressGrayHistograms(NUMAA   *naa,
+                         l_int32  w,
+                         l_int32  h,
+                         size_t  *psize)
+{
+l_uint8   *bytea;
+l_int32    i, j, n, nn, ival;
+l_float32  maxval;
+NUMA      *na1, *na2;
+
+    PROCNAME("l_compressGrayHistograms");
+
+    if (!psize)
+        return (l_uint8 *)ERROR_PTR("&size not defined", procName, NULL);
+    *psize = 0;
+    if (!naa)
+        return (l_uint8 *)ERROR_PTR("naa not defined", procName, NULL);
+    n = numaaGetCount(naa);
+    for (i = 0; i < n; i++) {
+        nn = numaaGetNumaCount(naa, i);
+        if (nn != 256) {
+            L_ERROR("%d numbers in numa[%d]\n", procName, nn, i);
+            return NULL;
+        }
+    }
+
+    if ((bytea = (l_uint8 *)LEPT_CALLOC(8 + 256 * n, sizeof(l_uint8))) == NULL)
+        return (l_uint8 *)ERROR_PTR("bytea not made", procName, NULL);
+    *psize = 8 + 256 * n;
+    l_setDataFourBytes(bytea, 0, w);
+    l_setDataFourBytes(bytea, 1, h);
+    for (i = 0; i < n; i++) {
+        na1 = numaaGetNuma(naa, i, L_COPY);
+        numaGetMax(na1, &maxval, NULL);
+        na2 = numaTransform(na1, 0, 255.0 / maxval);
+        for (j = 0; j < 256; j++) {
+            numaGetIValue(na2, j, &ival);
+            bytea[8 + 256 * i + j] = ival;
+        }
+        numaDestroy(&na1);
+        numaDestroy(&na2);
+    }
+
+    return bytea;
+}
+
+
+/*!
+ * \brief   l_uncompressGrayHistograms()
+ *
+ * \param[in]    bytea    byte array of size 8 + 256 * N, N an integer
+ * \param[in]    size     size of byte array
+ * \param[out]   pw       width of the image that generated the histograms
+ * \param[out]   ph       height of the image
+ * \return  numaa     representing N histograms, each with 256 bins,
+ *                    or NULL on error.
+ *
+ * <pre>
+ * Notes:
+ *      (1) The first 8 bytes are read as two 32-bit ints.
+ *      (2) Then this constructs a numaa representing some number of
+ *          gray histograms that are normalized such that the max value
+ *          in each histogram is 255.  The data is stored as a byte
+ *          array, with 256 bytes holding the data for each histogram.
+ *          Each gray histogram was computed from a tile of a grayscale image.
+ * </pre>
+ */
+NUMAA *
+l_uncompressGrayHistograms(l_uint8  *bytea,
+                           size_t    size,
+                           l_int32  *pw,
+                           l_int32  *ph)
+{
+l_int32  i, j, n;
+NUMA    *na;
+NUMAA   *naa;
+
+    PROCNAME("l_uncompressGrayHistograms");
+
+    if (pw) *pw = 0;
+    if (ph) *ph = 0;
+    if (!pw || !ph)
+        return (NUMAA *)ERROR_PTR("&w and &h not both defined", procName, NULL);
+    if (!bytea)
+        return (NUMAA *)ERROR_PTR("bytea not defined", procName, NULL);
+    n = (size - 8) / 256;
+    if ((size - 8) % 256 != 0)
+        return (NUMAA *)ERROR_PTR("bytea size is invalid", procName, NULL);
+
+    *pw = l_getDataFourBytes(bytea, 0);
+    *ph = l_getDataFourBytes(bytea, 1);
+    naa = numaaCreate(n);
+    for (i = 0; i < n; i++) {
+        na = numaCreate(256);
+        for (j = 0; j < 256; j++)
+            numaAddNumber(na, bytea[8 + 256 * i + j]);
+        numaaAddNuma(naa, na, L_INSERT);
+    }
+
+    return naa;
+}
+
+
+/*------------------------------------------------------------------*
  *             Translated images at the same resolution             *
  *------------------------------------------------------------------*/
 /*!
- *  pixCompareWithTranslation()
+ * \brief   pixCompareWithTranslation()
  *
- *      Input:  pix1, pix2 (any depth; colormap OK)
- *              thresh (threshold for converting to 1 bpp)
- *              &delx (<return> x translation on pix2 to align with pix1)
- *              &dely (<return> y translation on pix2 to align with pix1)
- *              &score (<return> correlation score at best alignment)
- *              debugflag (1 for debug output; 0 for no debugging)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix1, pix2    any depth; colormap OK
+ * \param[in]    thresh        threshold for converting to 1 bpp
+ * \param[out]   pdelx         x translation on pix2 to align with pix1
+ * \param[out]   pdely         y translation on pix2 to align with pix1
+ * \param[out]   pscore        correlation score at best alignment
+ * \param[in]    debugflag     1 for debug output; 0 for no debugging
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This does a coarse-to-fine search for best translational
  *          alignment of two images, measured by a scoring function
  *          that is the correlation between the fg pixels.
@@ -1727,6 +3199,7 @@ l_float32  mse;  /* mean squared error */
  *          other doesn't.  The black pixels are where both images
  *          have fg pixels, and white pixels are where neither image
  *          has fg pixels.
+ * </pre>
  */
 l_int32
 pixCompareWithTranslation(PIX        *pix1,
@@ -1747,12 +3220,13 @@ PIXA      *pixa1, *pixa2, *pixadb;
 
     PROCNAME("pixCompareWithTranslation");
 
+    if (pdelx) *pdelx = 0;
+    if (pdely) *pdely = 0;
+    if (pscore) *pscore = 0.0;
     if (!pdelx || !pdely)
         return ERROR_INT("&delx and &dely not defined", procName, 1);
-    *pdelx = *pdely = 0;
     if (!pscore)
         return ERROR_INT("&score not defined", procName, 1);
-    *pscore = 0.0;
     if (!pix1)
         return ERROR_INT("pix1 not defined", procName, 1);
     if (!pix2)
@@ -1822,10 +3296,10 @@ PIXA      *pixa1, *pixa2, *pixadb;
 
     if (debugflag) {
         pixaConvertToPdf(pixadb, 300, 1.0, L_FLATE_ENCODE, 0, NULL,
-                         "/tmp/cmp.pdf");
-        convertFilesToPdf("/tmp", "correl_", 30, 1.0, L_FLATE_ENCODE,
+                         "/tmp/lept/comp/compare.pdf");
+        convertFilesToPdf("/tmp/lept/comp", "correl_", 30, 1.0, L_FLATE_ENCODE,
                           0, "Correlation scores at levels 1 through 5",
-                          "/tmp/correl.pdf");
+                          "/tmp/lept/comp/correl.pdf");
         pixaDestroy(&pixadb);
     }
 
@@ -1834,41 +3308,42 @@ PIXA      *pixa1, *pixa2, *pixadb;
     *pscore = score;
     pixaDestroy(&pixa1);
     pixaDestroy(&pixa2);
-    FREE(subtab);
-    FREE(stab);
-    FREE(ctab);
+    LEPT_FREE(subtab);
+    LEPT_FREE(stab);
+    LEPT_FREE(ctab);
     return 0;
 }
 
 
 /*!
- *  pixBestCorrelation()
+ * \brief   pixBestCorrelation()
  *
- *      Input:  pix1   (1 bpp)
- *              pix2   (1 bpp)
- *              area1  (number of on pixels in pix1)
- *              area2  (number of on pixels in pix2)
- *              etransx (estimated x translation of pix2 to align with pix1)
- *              etransy (estimated y translation of pix2 to align with pix1)
- *              maxshift  (max x and y shift of pix2, around the estimated
- *                          alignment location, relative to pix1)
- *              tab8 (<optional> sum tab for ON pixels in byte; can be NULL)
- *              &delx (<optional return> best x shift of pix2 relative to pix1
- *              &dely (<optional return> best y shift of pix2 relative to pix1
- *              &score (<optional return> maximum score found; can be NULL)
- *              debugflag (<= 0 to skip; positive to generate output.
- *                         The integer is used to label the debug image.)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix1      1 bpp
+ * \param[in]    pix2      1 bpp
+ * \param[in]    area1     number of on pixels in pix1
+ * \param[in]    area2     number of on pixels in pix2
+ * \param[in]    etransx   estimated x translation of pix2 to align with pix1
+ * \param[in]    etransy   estimated y translation of pix2 to align with pix1
+ * \param[in]    maxshift  max x and y shift of pix2, around the estimated
+ *                         alignment location, relative to pix1
+ * \param[in]    tab8      [optional] sum tab for ON pixels in byte; can be NULL
+ * \param[out]   pdelx     [optional] best x shift of pix2 relative to pix1
+ * \param[out]   pdely     [optional] best y shift of pix2 relative to pix1
+ * \param[out]   pscore    [optional] maximum score found; can be NULL
+ * \param[in]    debugflag   <= 0 to skip; positive to generate output.
+ *                           The integer is used to label the debug image.
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This maximizes the correlation score between two 1 bpp images,
  *          by starting with an estimate of the alignment
- *          (@etransx, @etransy) and computing the correlation around this.
- *          It optionally returns the shift (@delx, @dely) that maximizes
+ *          (%etransx, %etransy) and computing the correlation around this.
+ *          It optionally returns the shift (%delx, %dely) that maximizes
  *          the correlation score when pix2 is shifted by this amount
  *          relative to pix1.
  *      (2) Get the centroids of pix1 and pix2, using pixCentroid(),
- *          to compute (@etransx, @etransy).  Get the areas using
+ *          to compute (%etransx, %etransy).  Get the areas using
  *          pixCountPixels().
  *      (3) The centroid of pix2 is shifted with respect to the centroid
  *          of pix1 by all values between -maxshiftx and maxshiftx,
@@ -1878,6 +3353,7 @@ PIXA      *pixa1, *pixa2, *pixadb;
  *          Consequently, if pix1 and pix2 are large, you should do this
  *          in a coarse-to-fine sequence.  See the use of this function
  *          in pixCompareWithTranslation().
+ * </pre>
  */
 l_int32
 pixBestCorrelation(PIX        *pix1,
@@ -1897,7 +3373,7 @@ l_int32    shiftx, shifty, delx, dely;
 l_int32   *tab;
 l_float32  maxscore, score;
 FPIX      *fpix;
-PIX       *pixt1, *pixt2;
+PIX       *pix3, *pix4;
 
     PROCNAME("pixBestCorrelation");
 
@@ -1943,19 +3419,21 @@ PIX       *pixt1, *pixt2;
     }
 
     if (debugflag > 0) {
+        lept_mkdir("lept/comp");
         char  buf[128];
-        pixt1 = fpixDisplayMaxDynamicRange(fpix);
-        pixt2 = pixExpandReplicate(pixt1, 20);
-        snprintf(buf, sizeof(buf), "/tmp/correl_%d.png", debugflag);
-        pixWrite(buf, pixt2, IFF_PNG);
-        pixDestroy(&pixt1);
-        pixDestroy(&pixt2);
+        pix3 = fpixDisplayMaxDynamicRange(fpix);
+        pix4 = pixExpandReplicate(pix3, 20);
+        snprintf(buf, sizeof(buf), "/tmp/lept/comp/correl_%d.png",
+                 debugflag);
+        pixWrite(buf, pix4, IFF_PNG);
+        pixDestroy(&pix3);
+        pixDestroy(&pix4);
         fpixDestroy(&fpix);
     }
 
     if (pdelx) *pdelx = delx;
     if (pdely) *pdely = dely;
     if (pscore) *pscore = maxscore;
-    if (!tab8) FREE(tab);
+    if (!tab8) LEPT_FREE(tab);
     return 0;
 }

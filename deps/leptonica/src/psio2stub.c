@@ -24,10 +24,12 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  psio2stub.c
+/*!
+ * \file psio2stub.c
+ * <pre>
  *
  *     Stubs for psio2.c functions
+ * </pre>
  */
 
 #include "allheaders.h"
@@ -73,7 +75,7 @@ void getScaledParametersPS(BOX *box, l_int32 wpix, l_int32 hpix, l_int32 res,
                            l_float32 scale, l_float32 *pxpt, l_float32 *pypt,
                            l_float32 *pwpt, l_float32 *phpt)
 {
-    L_ERROR("function not present", "getScaledParametersPS");
+    L_ERROR("function not present\n", "getScaledParametersPS");
     return;
 }
 
@@ -81,7 +83,7 @@ void getScaledParametersPS(BOX *box, l_int32 wpix, l_int32 hpix, l_int32 res,
 
 void convertByteToHexAscii(l_uint8 byteval, char *pnib1, char *pnib2)
 {
-    L_ERROR("function not present", "convertByteToHexAscii");
+    L_ERROR("function not present\n", "convertByteToHexAscii");
     return;
 }
 
@@ -123,31 +125,6 @@ char * generateJpegPS(const char *filein, L_COMP_DATA *cid,
 
 /* ----------------------------------------------------------------------*/
 
-L_COMP_DATA * pixGenerateJpegData(PIX *pixs, l_int32 ascii85flag,
-                                  l_int32 quality)
-{
-    return (L_COMP_DATA *)ERROR_PTR("function not present",
-                                    "pixGenerateJpegData", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
-L_COMP_DATA * l_generateJpegData(const char *fname, l_int32 ascii85flag)
-{
-    return (L_COMP_DATA *)ERROR_PTR("function not present",
-                                    "l_generateJpegData", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
-void l_compdataDestroy(L_COMP_DATA  **pcid)
-{
-    L_ERROR("function not present", "l_compdataDestroy");
-    return;
-}
-
-/* ----------------------------------------------------------------------*/
-
 l_int32 convertG4ToPSEmbed(const char *filein, const char *fileout)
 {
     return ERROR_INT("function not present", "convertG4ToPSEmbed", 1);
@@ -184,24 +161,8 @@ char * generateG4PS(const char *filein, L_COMP_DATA *cid, l_float32 xpt,
 
 /* ----------------------------------------------------------------------*/
 
-L_COMP_DATA * pixGenerateG4Data(PIX *pixs, l_int32 ascii85flag)
-{
-    return (L_COMP_DATA *)ERROR_PTR("function not present",
-                                    "pixGenerateG4Data", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
-L_COMP_DATA * l_generateG4Data(const char *fname, l_int32 ascii85flag)
-{
-    return (L_COMP_DATA *)ERROR_PTR("function not present",
-                                    "l_generateG4Data", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
 l_int32 convertTiffMultipageToPS(const char *filein, const char *fileout,
-                                 const char *tempfile, l_float32 fillfract)
+                                 l_float32 fillfract)
 {
     return ERROR_INT("function not present", "convertTiffMultipageToPS", 1);
 }
@@ -244,38 +205,6 @@ char * generateFlatePS(const char *filein, L_COMP_DATA *cid,
 
 /* ----------------------------------------------------------------------*/
 
-L_COMP_DATA * l_generateFlateData(const char *fname, l_int32 ascii85flag)
-{
-    return (L_COMP_DATA *)ERROR_PTR("function not present",
-                                    "l_generateFlateData", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
-L_COMP_DATA * pixGenerateFlateData(PIX *pixs, l_int32 ascii85flag)
-{
-    return (L_COMP_DATA *)ERROR_PTR("function not present",
-                                    "pixGenerateFlateData", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
-l_int32 l_generateCIData(const char *fname, l_int32 type, l_int32 quality,
-                         l_int32 ascii85, L_COMP_DATA **pcid)
-{
-    return ERROR_INT("function not present", "l_generateCIData", 1);
-}
-
-/* ----------------------------------------------------------------------*/
-
-l_int32 pixGenerateCIData(PIX *pixs, l_int32 type, l_int32 quality,
-                         l_int32 ascii85, L_COMP_DATA **pcid)
-{
-    return ERROR_INT("function not present", "pixGenerateCIData", 1);
-}
-
-/* ----------------------------------------------------------------------*/
-
 l_int32 pixWriteMemPS(l_uint8 **pdata, size_t *psize, PIX *pix, BOX *box,
                       l_int32 res, l_float32 scale)
 {
@@ -298,23 +227,9 @@ l_int32 getResA4Page(l_int32 w, l_int32 h, l_float32 fillfract)
 
 /* ----------------------------------------------------------------------*/
 
-char * encodeAscii85(l_uint8 *inarray, l_int32 insize, l_int32 *poutsize)
-{
-    return (char *)ERROR_PTR("function not present", "encodeAscii85", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
-l_uint8 * decodeAscii85(char *ina, l_int32 insize, l_int32 *poutsize)
-{
-    return (l_uint8 *)ERROR_PTR("function not present", "decodeAscii85", NULL);
-}
-
-/* ----------------------------------------------------------------------*/
-
 void l_psWriteBoundingBox(l_int32 flag)
 {
-    L_ERROR("function not present", "l_psWriteBoundingBox");
+    L_ERROR("function not present\n", "l_psWriteBoundingBox");
     return;
 }
 

@@ -24,17 +24,19 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  gifiostub.c
+/*!
+ * \file gifiostub.c
+ * <pre>
  *
  *     Stubs for gifio.c functions
+ * </pre>
  */
-
-#include "allheaders.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif  /* HAVE_CONFIG_H */
+
+#include "allheaders.h"
 
 /* -----------------------------------------------------------------*/
 #if  (!HAVE_LIBGIF) && (!HAVE_LIBUNGIF)     /* defined in environ.h */
@@ -47,16 +49,16 @@ PIX * pixReadStreamGif(FILE *fp)
 
 /* ----------------------------------------------------------------------*/
 
-l_int32 pixWriteStreamGif(FILE *fp, PIX *pix)
+PIX * pixReadMemGif(const l_uint8 *cdata, size_t size)
 {
-    return ERROR_INT("function not present", "pixWriteStreamGif", 1);
+    return (PIX *)ERROR_PTR("function not present", "pixReadMemGif", NULL);
 }
 
 /* ----------------------------------------------------------------------*/
 
-PIX * pixReadMemGif(const l_uint8 *cdata, size_t size)
+l_int32 pixWriteStreamGif(FILE *fp, PIX *pix)
 {
-    return (PIX *)ERROR_PTR("function not present", "pixReadMemGif", NULL);
+    return ERROR_INT("function not present", "pixWriteStreamGif", 1);
 }
 
 /* ----------------------------------------------------------------------*/
@@ -68,4 +70,3 @@ l_int32 pixWriteMemGif(l_uint8 **pdata, size_t *psize, PIX *pix)
 
 /* -----------------------------------------------------------------*/
 #endif      /* !HAVE_LIBGIF && !HAVE_LIBUNGIF */
-/* -----------------------------------------------------------------*/

@@ -24,13 +24,14 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  spixio.c
+/*!
+ * \file spixio.c
+ * <pre>
  *
  *    This does fast serialization of a pix in memory to file,
  *    copying the raw data for maximum speed.  The underlying
  *    function serializes it to memory, and it is wrapped to be
- *    callable from standard pixRead and pixWrite functions.
+ *    callable from standard pixRead() and pixWrite() file functions.
  *
  *      Reading spix from file
  *           PIX        *pixReadStreamSpix()
@@ -47,10 +48,21 @@
  *           l_int32     pixSerializeToMemory()
  *           PIX        *pixDeserializeFromMemory()
  *
+ *    Note: these functions have not been extensively tested for fuzzing
+ *    (bad input data that can result in, e.g., memory faults).
+ *    The spix serialization format is only defined here, in leptonica.
+ *    The image data is uncompressed and the serialization is not intended
+ *    to be a secure file format from untrusted sources.
+ * </pre>
  */
 
 #include <string.h>
 #include "allheaders.h"
+
+    /* Image dimension limits */
+static const l_int32  L_MAX_ALLOWED_WIDTH = 1000000;
+static const l_int32  L_MAX_ALLOWED_HEIGHT = 1000000;
+static const l_int64  L_MAX_ALLOWED_AREA = 400000000LL;
 
 #ifndef  NO_CONSOLE_IO
 #define  DEBUG_SERIALIZE      0
@@ -61,14 +73,16 @@
  *                          Reading spix from file                       *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixReadStreamSpix()
+ * \brief   pixReadStreamSpix()
  *
- *      Input:  stream
- *      Return: pix, or null on error.
+ * \param[in]    fp     file stream
+ * \return  pix, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If called from pixReadStream(), the stream is positioned
  *          at the beginning of the file.
+ * </pre>
  */
 PIX *
 pixReadStreamSpix(FILE  *fp)
@@ -84,29 +98,29 @@ PIX      *pix;
 
     if ((data = l_binaryReadStream(fp, &nbytes)) == NULL)
         return (PIX *)ERROR_PTR("data not read", procName, NULL);
-    if ((pix = pixReadMemSpix(data, nbytes)) == NULL) {
-        FREE(data);
+    pix = pixReadMemSpix(data, nbytes);
+    LEPT_FREE(data);
+    if (!pix)
         return (PIX *)ERROR_PTR("pix not made", procName, NULL);
-    }
-
-    FREE(data);
     return pix;
 }
 
 
 /*!
- *  readHeaderSpix()
+ * \brief   readHeaderSpix()
  *
- *      Input:  filename
- *              &width (<return>)
- *              &height (<return>)
- *              &bps (<return>, bits/sample)
- *              &spp (<return>, samples/pixel)
- *              &iscmap (<optional return>; input NULL to ignore)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    filename
+ * \param[out]   pwidth     width
+ * \param[out]   pheight    height
+ * \param[out]   pbps       bits/sample
+ * \param[out]   pspp       samples/pixel
+ * \param[out]   piscmap    [optional]  input NULL to ignore
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If there is a colormap, iscmap is returned as 1; else 0.
+ * </pre>
  */
 l_int32
 readHeaderSpix(const char *filename,
@@ -134,18 +148,20 @@ FILE    *fp;
 
 
 /*!
- *  freadHeaderSpix()
+ * \brief   freadHeaderSpix()
  *
- *      Input:  stream
- *              &width (<return>)
- *              &height (<return>)
- *              &bps (<return>, bits/sample)
- *              &spp (<return>, samples/pixel)
- *              &iscmap (<optional return>; input NULL to ignore)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fp        file stream
+ * \param[out]   pwidth    width
+ * \param[out]   pheight   height
+ * \param[out]   pbps      bits/sample
+ * \param[out]   pspp      samples/pixel
+ * \param[out]   piscmap   [optional]  input NULL to ignore
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If there is a colormap, iscmap is returned as 1; else 0.
+ * </pre>
  */
 l_int32
 freadHeaderSpix(FILE     *fp,
@@ -155,8 +171,8 @@ freadHeaderSpix(FILE     *fp,
                 l_int32  *pspp,
                 l_int32  *piscmap)
 {
-l_int32    nbytes, ret;
-l_uint32  *data;
+l_int32   nbytes, ret;
+l_uint32  data[6];
 
     PROCNAME("freadHeaderSpix");
 
@@ -168,29 +184,28 @@ l_uint32  *data;
     nbytes = fnbytesInFile(fp);
     if (nbytes < 32)
         return ERROR_INT("file too small to be spix", procName, 1);
-    if ((data = (l_uint32 *)CALLOC(6, sizeof(l_uint32))) == NULL)
-        return ERROR_INT("CALLOC fail for data", procName, 1);
     if (fread(data, 4, 6, fp) != 6)
         return ERROR_INT("error reading data", procName, 1);
     ret = sreadHeaderSpix(data, pwidth, pheight, pbps, pspp, piscmap);
-    FREE(data);
     return ret;
 }
 
 
 /*!
- *  sreadHeaderSpix()
+ * \brief   sreadHeaderSpix()
  *
- *      Input:  data
- *              &width (<return>)
- *              &height (<return>)
- *              &bps (<return>, bits/sample)
- *              &spp (<return>, samples/pixel)
- *              &iscmap (<optional return>; input NULL to ignore)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    data
+ * \param[out]   pwidth    width
+ * \param[out]   pheight   height
+ * \param[out]   pbps      bits/sample
+ * \param[out]   pspp      samples/pixel
+ * \param[out]   piscmap   [optional]  input NULL to ignore
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If there is a colormap, iscmap is returned as 1; else 0.
+ * </pre>
  */
 l_int32
 sreadHeaderSpix(const l_uint32  *data,
@@ -240,11 +255,11 @@ l_int32  d, ncolors;
  *                            Writing spix to file                       *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixWriteStreamSpix()
+ * \brief   pixWriteStreamSpix()
  *
- *      Input:  stream
- *              pix
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fp     file stream
+ * \param[in]    pix
+ * \return  0 if OK; 1 on error
  */
 l_int32
 pixWriteStreamSpix(FILE  *fp,
@@ -263,7 +278,7 @@ size_t    size;
     if (pixWriteMemSpix(&data, &size, pix))
         return ERROR_INT("failure to write pix to memory", procName, 1);
     fwrite(data, 1, size, fp);
-    FREE(data);
+    LEPT_FREE(data);
     return 0;
 }
 
@@ -272,11 +287,11 @@ size_t    size;
  *       Low-level serialization of pix to/from memory (uncompressed)    *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixReadMemSpix()
+ * \brief   pixReadMemSpix()
  *
- *      Input:  data (const; uncompressed)
- *              size (of data)
- *      Return: pix, or null on error
+ * \param[in]    data    const; uncompressed
+ * \param[in]    size    bytes of data
+ * \return  pix, or NULL on error
  */
 PIX *
 pixReadMemSpix(const l_uint8  *data,
@@ -287,12 +302,12 @@ pixReadMemSpix(const l_uint8  *data,
 
 
 /*!
- *  pixWriteMemSpix()
+ * \brief   pixWriteMemSpix()
  *
- *      Input:  &data (<return> data of serialized, uncompressed pix)
- *              &size (<return> size of returned data)
- *              pix (all depths; colormap OK)
- *      Return: 0 if OK, 1 on error
+ * \param[out]   pdata    data of serialized, uncompressed pix
+ * \param[out]   psize    size of returned data
+ * \param[in]    pix      all depths; colormap OK
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixWriteMemSpix(l_uint8  **pdata,
@@ -304,14 +319,15 @@ pixWriteMemSpix(l_uint8  **pdata,
 
 
 /*!
- *  pixSerializeToMemory()
+ * \brief   pixSerializeToMemory()
  *
- *      Input:  pixs (all depths, colormap OK)
- *              &data (<return> serialized data in memory)
- *              &nbytes (<return> number of bytes in data string)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs     all depths, colormap OK
+ * \param[out]   pdata    serialized data in memory
+ * \param[out]   pnbytes  number of bytes in data string
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This does a fast serialization of the principal elements
  *          of the pix, as follows:
  *            "spix"    (4 bytes) -- ID for file type
@@ -324,6 +340,7 @@ pixWriteMemSpix(l_uint8  **pdata,
  *            rdatasize (4 bytes) -- size of serialized raster data
  *                                   = 4 * wpl * h
  *            rdata     (rdatasize)
+ * </pre>
  */
 l_int32
 pixSerializeToMemory(PIX        *pixs,
@@ -356,8 +373,11 @@ PIXCMAP   *cmap;
         pixcmapSerializeToMemory(cmap, 4, &ncolors, &cdata);
 
     nbytes = 24 + 4 * ncolors + 4 + rdatasize;
-    if ((data = (l_uint32 *)CALLOC(nbytes / 4, sizeof(l_uint32))) == NULL)
+    if ((data = (l_uint32 *)LEPT_CALLOC(nbytes / 4, sizeof(l_uint32)))
+         == NULL) {
+        LEPT_FREE(cdata);
         return ERROR_INT("data not made", procName, 1);
+    }
     *pdata = data;
     *pnbytes = nbytes;
     id = (char *)data;
@@ -382,29 +402,32 @@ PIXCMAP   *cmap;
             rdatasize, ncolors, nbytes);
 #endif  /* DEBUG_SERIALIZE */
 
-    FREE(cdata);
+    LEPT_FREE(cdata);
     return 0;
 }
 
 
 /*!
- *  pixDeserializeFromMemory()
+ * \brief   pixDeserializeFromMemory()
  *
- *      Input:  data (serialized data in memory)
- *              nbytes (number of bytes in data string)
- *      Return: pix, or NULL on error
+ * \param[in]    data     serialized data in memory
+ * \param[in]    nbytes   number of bytes in data string
+ * \return  pix, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See pixSerializeToMemory() for the binary format.
+ *      (2) Note the image size limits.
+ * </pre>
  */
 PIX *
 pixDeserializeFromMemory(const l_uint32  *data,
                          size_t           nbytes)
 {
 char      *id;
-l_int32    w, h, d, imdatasize, ncolors;
+l_int32    w, h, d, pixdata_size, memdata_size, imdata_size, ncolors;
 l_uint32  *imdata;  /* data in pix raster */
-PIX       *pixd;
+PIX       *pix1, *pixd;
 PIXCMAP   *cmap;
 
     PROCNAME("pixDeserializeFromMemory");
@@ -420,27 +443,49 @@ PIXCMAP   *cmap;
     w = data[1];
     h = data[2];
     d = data[3];
+    ncolors = data[5];
+    imdata_size = data[6 + ncolors];
+
+        /* Sanity checks on the amount of image data */
+    if (w < 1 || w > L_MAX_ALLOWED_WIDTH)
+        return (PIX *)ERROR_PTR("invalid width", procName, NULL);
+    if (h < 1 || h > L_MAX_ALLOWED_HEIGHT)
+        return (PIX *)ERROR_PTR("invalid height", procName, NULL);
+    if (1LL * w * h > L_MAX_ALLOWED_AREA)
+        return (PIX *)ERROR_PTR("area too large", procName, NULL);
+    if (ncolors < 0 || ncolors > 256)
+        return (PIX *)ERROR_PTR("invalid ncolors", procName, NULL);
+    if ((pix1 = pixCreateHeader(w, h, d)) == NULL)  /* just make the header */
+        return (PIX *)ERROR_PTR("failed to make header", procName, NULL);
+    pixdata_size = 4 * h * pixGetWpl(pix1);
+    memdata_size = nbytes - 24 - 4 * ncolors - 4;
+    imdata_size = data[6 + ncolors];
+    pixDestroy(&pix1);
+    if (pixdata_size != memdata_size || pixdata_size != imdata_size) {
+        L_ERROR("pixdata_size = %d, memdata_size = %d, imdata_size = %d "
+                "not all equal!\n", procName, pixdata_size, memdata_size,
+                imdata_size);
+        return NULL;
+    }
+
     if ((pixd = pixCreate(w, h, d)) == NULL)
         return (PIX *)ERROR_PTR("pix not made", procName, NULL);
-
-    ncolors = data[5];
     if (ncolors > 0) {
         cmap = pixcmapDeserializeFromMemory((l_uint8 *)(&data[6]), 4, ncolors);
-        if (!cmap)
+        if (!cmap) {
+            pixDestroy(&pixd);
             return (PIX *)ERROR_PTR("cmap not made", procName, NULL);
+        }
         pixSetColormap(pixd, cmap);
     }
 
     imdata = pixGetData(pixd);
-    imdatasize = nbytes - 24 - 4 * ncolors - 4;
-    if (imdatasize != data[6 + ncolors])
-        L_ERROR("imdatasize is inconsistent with nbytes\n", procName);
-    memcpy((char *)imdata, (char *)(data + 7 + ncolors), imdatasize);
+    memcpy((char *)imdata, (char *)(data + 7 + ncolors), imdata_size);
 
 #if  DEBUG_SERIALIZE
     fprintf(stderr, "Deserialize: "
             "raster size = %d, ncolors in cmap = %d, total bytes = %lu\n",
-            imdatasize, ncolors, nbytes);
+            imdata_size, ncolors, nbytes);
 #endif  /* DEBUG_SERIALIZE */
 
     return pixd;

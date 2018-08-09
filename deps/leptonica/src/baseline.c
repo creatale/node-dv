@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  baseline.c
+/*!
+ * \file baseline.c
+ * <pre>
  *
  *      Locate text baselines in an image
  *           NUMA     *pixFindBaselines()
@@ -38,19 +39,16 @@
  *           NUMA     *pixGetLocalSkewAngles()
  *
  *  We have two apparently different functions here:
- *    - finding baselines
- *    - finding a projective transform to remove keystone warping
+ *    ~ finding baselines
+ *    ~ finding a projective transform to remove keystone warping
  *  The function pixGetLocalSkewAngles() returns an array of angles,
  *  one for each raster line, and the baselines of the text lines
  *  should intersect the left edge of the image with that angle.
+ * </pre>
  */
 
 #include <math.h>
 #include "allheaders.h"
-
-#ifndef  NO_CONSOLE_IO
-#define  DEBUG_PLOT          0
-#endif  /* NO_CONSOLE_IO */
 
     /* Min to travel after finding max before abandoning peak */
 static const l_int32  MIN_DIST_IN_PEAK = 35;
@@ -78,15 +76,16 @@ static const l_float32  MIN_ALLOWED_CONFIDENCE = 3.0;
  *                    Locate text baselines in an image                *
  *---------------------------------------------------------------------*/
 /*!
- *  pixFindBaselines()
+ * \brief   pixFindBaselines()
  *
- *      Input:  pixs (1 bpp)
- *              &pta (<optional return> pairs of pts corresponding to
- *                    approx. ends of each text line)
- *              debug (usually 0; set to 1 for debugging output)
- *      Return: na (of baseline y values), or null on error
+ * \param[in]    pixs     1 bpp, 300 ppi
+ * \param[out]   ppta     [optional] pairs of pts corresponding to
+ *                        approx. ends of each text line
+ * \param[in]    pixadb   for debug output; use NULL to skip
+ * \return  na of baseline y values, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Input binary image must have text lines already aligned
  *          horizontally.  This can be done by either rotating the
  *          image with pixDeskew(), or, if a projective transform
@@ -108,13 +107,12 @@ static const l_float32  MIN_ALLOWED_CONFIDENCE = 3.0;
  *          combine this data to normalize the peak heights, by weighting
  *          the differential signal in the region of each baseline
  *          by the inverse of the width of the text line found there.
- *      (6) There are various debug sections that can be turned on
- *          with the debug flag.
+ * </pre>
  */
 NUMA *
-pixFindBaselines(PIX     *pixs,
-                 PTA    **ppta,
-                 l_int32  debug)
+pixFindBaselines(PIX   *pixs,
+                 PTA  **ppta,
+                 PIXA  *pixadb)
 {
 l_int32    h, i, j, nbox, val1, val2, ndiff, bx, by, bw, bh;
 l_int32    imaxloc, peakthresh, zerothresh, inpeak;
@@ -124,26 +122,27 @@ l_float32  maxval;
 BOXA      *boxa1, *boxa2, *boxa3;
 GPLOT     *gplot;
 NUMA      *nasum, *nadiff, *naloc, *naval;
-PIX       *pixt1, *pixt2;
+PIX       *pix1, *pix2;
 PTA       *pta;
 
     PROCNAME("pixFindBaselines");
 
-    if (!pixs)
-        return (NUMA *)ERROR_PTR("pixs not defined", procName, NULL);
-    pta = NULL;
-    if (ppta) {
-        pta = ptaCreate(0);
-        *ppta = pta;
-    }
+    if (ppta) *ppta = NULL;
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return (NUMA *)ERROR_PTR("pixs undefined or not 1 bpp", procName, NULL);
 
         /* Close up the text characters, removing noise */
-    pixt1 = pixMorphSequence(pixs, "c25.1 + e3.1", 0);
+    pix1 = pixMorphSequence(pixs, "c25.1 + e15.1", 0);
+
+        /* Estimate the resolution */
+    if (pixadb) pixaAddPix(pixadb, pixScale(pix1, 0.25, 0.25), L_INSERT);
 
         /* Save the difference of adjacent row sums.
          * The high positive-going peaks are the baselines */
-    if ((nasum = pixCountPixelsByRow(pixt1, NULL)) == NULL)
+    if ((nasum = pixCountPixelsByRow(pix1, NULL)) == NULL) {
+        pixDestroy(&pix1);
         return (NUMA *)ERROR_PTR("nasum not made", procName, NULL);
+    }
     h = pixGetHeight(pixs);
     nadiff = numaCreate(h);
     numaGetIValue(nasum, 0, &val2);
@@ -152,18 +151,26 @@ PTA       *pta;
         numaGetIValue(nasum, i + 1, &val2);
         numaAddNumber(nadiff, val1 - val2);
     }
+    numaDestroy(&nasum);
 
-    if (debug)  /* show the difference signal */
-        gplotSimple1(nadiff, GPLOT_X11, "junkdiff", "difference");
+    if (pixadb) {  /* show the difference signal */
+        lept_mkdir("lept/baseline");
+        gplotSimple1(nadiff, GPLOT_PNG, "/tmp/lept/baseline/diff", "Diff Sig");
+        pix2 = pixRead("/tmp/lept/baseline/diff.png");
+        pixaAddPix(pixadb, pix2, L_INSERT);
+    }
 
         /* Use the zeroes of the profile to locate each baseline. */
     array = numaGetIArray(nadiff);
     ndiff = numaGetCount(nadiff);
     numaGetMax(nadiff, &maxval, &imaxloc);
+    numaDestroy(&nadiff);
+
         /* Use this to begin locating a new peak: */
     peakthresh = (l_int32)maxval / PEAK_THRESHOLD_RATIO;
         /* Use this to begin a region between peaks: */
     zerothresh = (l_int32)maxval / ZERO_THRESHOLD_RATIO;
+
     naloc = numaCreate(0);
     naval = numaCreate(0);
     inpeak = FALSE;
@@ -188,31 +195,50 @@ PTA       *pta;
             }
         }
     }
+    LEPT_FREE(array);
 
         /* If array[ndiff-1] is max, eg. no descenders, baseline at bottom */
     if (inpeak) {
         numaAddNumber(naval, max);
         numaAddNumber(naloc, maxloc);
     }
-    FREE(array);
 
-    if (debug) {  /* show the raster locations for the peaks */
-        gplot = gplotCreate("junkloc", GPLOT_X11, "Peak locations",
+    if (pixadb) {  /* show the raster locations for the peaks */
+        gplot = gplotCreate("/tmp/lept/baseline/loc", GPLOT_PNG, "Peak locs",
                             "rasterline", "height");
         gplotAddPlot(gplot, naloc, naval, GPLOT_POINTS, "locs");
         gplotMakeOutput(gplot);
         gplotDestroy(&gplot);
+        pix2 = pixRead("/tmp/lept/baseline/loc.png");
+        pixaAddPix(pixadb, pix2, L_INSERT);
     }
+    numaDestroy(&naval);
 
         /* Generate an approximate profile of text line width.
          * First, filter the boxes of text, where there may be
          * more than one box for a given textline. */
-    pixt2 = pixMorphSequence(pixt1, "r11 + c25.1 + o7.1 +c1.3", 0);
-    boxa1 = pixConnComp(pixt2, NULL, 4);
+    pix2 = pixMorphSequence(pix1, "r11 + c20.1 + o30.1 +c1.3", 0);
+    if (pixadb) pixaAddPix(pixadb, pix2, L_COPY);
+    boxa1 = pixConnComp(pix2, NULL, 4);
+    pixDestroy(&pix1);
+    pixDestroy(&pix2);
+    if (boxaGetCount(boxa1) == 0) {
+        numaDestroy(&naloc);
+        boxaDestroy(&boxa1);
+        L_INFO("no compnents after filtering\n", procName);
+        return NULL;
+    }
     boxa2 = boxaTransform(boxa1, 0, 0, 4., 4.);
     boxa3 = boxaSort(boxa2, L_SORT_BY_Y, L_SORT_INCREASING, NULL);
+    boxaDestroy(&boxa1);
+    boxaDestroy(&boxa2);
 
-        /* Then find the baseline segments */
+        /* Optionally, find the baseline segments */
+    pta = NULL;
+    if (ppta) {
+        pta = ptaCreate(0);
+        *ppta = pta;
+    }
     if (pta) {
       nloc = numaGetCount(naloc);
       nbox = boxaGetCount(boxa3);
@@ -228,32 +254,22 @@ PTA       *pta;
           }
       }
     }
+    boxaDestroy(&boxa3);
 
-    if (debug) {  /* display baselines */
-        PIX     *pixd;
+    if (pixadb && pta) {  /* display baselines */
         l_int32  npts, x1, y1, x2, y2;
-        if (pta) {
-            pixd = pixConvertTo32(pixs);
-            npts = ptaGetCount(pta);
-            for (i = 0; i < npts; i += 2) {
-                ptaGetIPt(pta, i, &x1, &y1);
-                ptaGetIPt(pta, i + 1, &x2, &y2);
-                pixRenderLineArb(pixd, x1, y1, x2, y2, 1, 255, 0, 0);
-            }
-            pixDisplay(pixd, 200, 200);
-            pixWrite("junkbaselines", pixd, IFF_PNG);
-            pixDestroy(&pixd);
+        pix1 = pixConvertTo32(pixs);
+        npts = ptaGetCount(pta);
+        for (i = 0; i < npts; i += 2) {
+            ptaGetIPt(pta, i, &x1, &y1);
+            ptaGetIPt(pta, i + 1, &x2, &y2);
+            pixRenderLineArb(pix1, x1, y1, x2, y2, 2, 255, 0, 0);
         }
+        pixWriteDebug("/tmp/lept/baseline/baselines.png", pix1, IFF_PNG);
+        pixaAddPix(pixadb, pixScale(pix1, 0.25, 0.25), L_INSERT);
+        pixDestroy(&pix1);
     }
 
-    boxaDestroy(&boxa1);
-    boxaDestroy(&boxa2);
-    boxaDestroy(&boxa3);
-    pixDestroy(&pixt1);
-    pixDestroy(&pixt2);
-    numaDestroy(&nasum);
-    numaDestroy(&nadiff);
-    numaDestroy(&naval);
     return naloc;
 }
 
@@ -262,27 +278,29 @@ PTA       *pta;
  *               Projective transform to remove local skew             *
  *---------------------------------------------------------------------*/
 /*!
- *  pixDeskewLocal()
+ * \brief   pixDeskewLocal()
  *
- *      Input:  pixs
- *              nslices  (the number of horizontal overlapping slices; must
- *                  be larger than 1 and not exceed 20; use 0 for default)
- *              redsweep (sweep reduction factor: 1, 2, 4 or 8;
- *                        use 0 for default value)
- *              redsearch (search reduction factor: 1, 2, 4 or 8, and
- *                         not larger than redsweep; use 0 for default value)
- *              sweeprange (half the full range, assumed about 0; in degrees;
- *                          use 0.0 for default value)
- *              sweepdelta (angle increment of sweep; in degrees;
- *                          use 0.0 for default value)
- *              minbsdelta (min binary search increment angle; in degrees;
- *                          use 0.0 for default value)
- *      Return: pixd, or null on error
+ * \param[in]    pixs        1 bpp
+ * \param[in]    nslices     the number of horizontal overlapping slices;
+ *                           must be larger than 1 and not exceed 20;
+ *                           use 0 for default
+ * \param[in]    redsweep    sweep reduction factor: 1, 2, 4 or 8;
+ *                           use 0 for default value
+ * \param[in]    redsearch   search reduction factor: 1, 2, 4 or 8, and
+ *                           not larger than redsweep; use 0 for default value
+ * \param[in]    sweeprange  half the full range, assumed about 0; in degrees;
+ *                           use 0.0 for default value
+ * \param[in]    sweepdelta  angle increment of sweep; in degrees;
+ *                           use 0.0 for default value
+ * \param[in]    minbsdelta  min binary search increment angle; in degrees;
+ *                           use 0.0 for default value
+ * \return  pixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This function allows deskew of a page whose skew changes
  *          approximately linearly with vertical position.  It uses
- *          a projective tranform that in effect does a differential
+ *          a projective transform that in effect does a differential
  *          shear about the LHS of the page, and makes all text lines
  *          horizontal.
  *      (2) The origin of the keystoning can be either a cheap document
@@ -296,6 +314,7 @@ PTA       *pta;
  *          by rotating or horizontally shearing it.
  *          Typically, this can be achieved by vertically aligning
  *          the page edge.
+ * </pre>
  */
 PIX *
 pixDeskewLocal(PIX       *pixs,
@@ -312,8 +331,8 @@ PTA       *ptas, *ptad;
 
     PROCNAME("pixDeskewLocal");
 
-    if (!pixs)
-        return (PIX *)ERROR_PTR("pixs not defined", procName, NULL);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return (PIX *)ERROR_PTR("pixs undefined or not 1 bpp", procName, NULL);
 
         /* Skew array gives skew angle (deg) as fctn of raster line
          * where it intersects the LHS of the image */
@@ -336,32 +355,34 @@ PTA       *ptas, *ptad;
  *                       Determine the local skew                      *
  *---------------------------------------------------------------------*/
 /*!
- *  pixGetLocalSkewTransform()
+ * \brief   pixGetLocalSkewTransform()
  *
- *      Input:  pixs
- *              nslices  (the number of horizontal overlapping slices; must
- *                  be larger than 1 and not exceed 20; use 0 for default)
- *              redsweep (sweep reduction factor: 1, 2, 4 or 8;
- *                        use 0 for default value)
- *              redsearch (search reduction factor: 1, 2, 4 or 8, and
- *                         not larger than redsweep; use 0 for default value)
- *              sweeprange (half the full range, assumed about 0; in degrees;
- *                          use 0.0 for default value)
- *              sweepdelta (angle increment of sweep; in degrees;
- *                          use 0.0 for default value)
- *              minbsdelta (min binary search increment angle; in degrees;
- *                          use 0.0 for default value)
- *              &ptas  (<return> 4 points in the source)
- *              &ptad  (<return> the corresponding 4 pts in the dest)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs
+ * \param[in]    nslices  the number of horizontal overlapping slices; must
+ *                  be larger than 1 and not exceed 20; use 0 for default
+ * \param[in]    redsweep sweep reduction factor: 1, 2, 4 or 8;
+ *                        use 0 for default value
+ * \param[in]    redsearch search reduction factor: 1, 2, 4 or 8, and
+ *                         not larger than redsweep; use 0 for default value
+ * \param[in]    sweeprange half the full range, assumed about 0; in degrees;
+ *                          use 0.0 for default value
+ * \param[in]    sweepdelta angle increment of sweep; in degrees;
+ *                          use 0.0 for default value
+ * \param[in]    minbsdelta min binary search increment angle; in degrees;
+ *                          use 0.0 for default value
+ * \param[out]   pptas  4 points in the source
+ * \param[out]   pptad  the corresponding 4 pts in the dest
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This generates two pairs of points in the src, each pair
  *          corresponding to a pair of points that would lie along
  *          the same raster line in a transformed (dewarped) image.
  *      (2) The sets of 4 src and 4 dest points returned by this function
  *          can then be used, in a projective or bilinear transform,
  *          to remove keystoning in the src.
+ * </pre>
  */
 l_int32
 pixGetLocalSkewTransform(PIX       *pixs,
@@ -384,8 +405,8 @@ PTA       *ptas, *ptad;
     if (!pptas || !pptad)
         return ERROR_INT("&ptas and &ptad not defined", procName, 1);
     *pptas = *pptad = NULL;
-    if (!pixs)
-        return ERROR_INT("pixs not defined", procName, 1);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (nslices < 2 || nslices > 20)
         nslices = DEFAULT_SLICES;
     if (redsweep < 1 || redsweep > 8)
@@ -401,7 +422,7 @@ PTA       *ptas, *ptad;
 
     naskew = pixGetLocalSkewAngles(pixs, nslices, redsweep, redsearch,
                                    sweeprange, sweepdelta, minbsdelta,
-                                   NULL, NULL);
+                                   NULL, NULL, 0);
     if (!naskew)
         return ERROR_INT("naskew not made", procName, 1);
 
@@ -445,26 +466,28 @@ PTA       *ptas, *ptad;
 
 
 /*!
- *  pixGetLocalSkewAngles()
+ * \brief   pixGetLocalSkewAngles()
  *
- *      Input:  pixs
- *              nslices  (the number of horizontal overlapping slices; must
- *                  be larger than 1 and not exceed 20; use 0 for default)
- *              redsweep (sweep reduction factor: 1, 2, 4 or 8;
- *                        use 0 for default value)
- *              redsearch (search reduction factor: 1, 2, 4 or 8, and
- *                         not larger than redsweep; use 0 for default value)
- *              sweeprange (half the full range, assumed about 0; in degrees;
- *                          use 0.0 for default value)
- *              sweepdelta (angle increment of sweep; in degrees;
- *                          use 0.0 for default value)
- *              minbsdelta (min binary search increment angle; in degrees;
- *                          use 0.0 for default value)
- *              &a (<optional return> slope of skew as fctn of y)
- *              &b (<optional return> intercept at y=0 of skew as fctn of y)
- *      Return: naskew, or null on error
+ * \param[in]    pixs         1 bpp
+ * \param[in]    nslices      the number of horizontal overlapping slices; must
+ *                            be larger than 1 and not exceed 20; 0 for default
+ * \param[in]    redsweep     sweep reduction factor: 1, 2, 4 or 8;
+ *                            use 0 for default value
+ * \param[in]    redsearch    search reduction factor: 1, 2, 4 or 8, and not
+ *                            larger than redsweep; use 0 for default value
+ * \param[in]    sweeprange   half the full range, assumed about 0; in degrees;
+ *                            use 0.0 for default value
+ * \param[in]    sweepdelta   angle increment of sweep; in degrees;
+ *                            use 0.0 for default value
+ * \param[in]    minbsdelta   min binary search increment angle; in degrees;
+ *                            use 0.0 for default value
+ * \param[out]   pa [optional] slope of skew as fctn of y
+ * \param[out]   pb [optional] intercept at y=0 of skew as fctn of y
+ * \param[in]    debug   1 for generating plot of skew angle vs. y; 0 otherwise
+ * \return  naskew, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The local skew is measured in a set of overlapping strips.
  *          We then do a least square linear fit parameters to get
  *          the slope and intercept parameters a and b in
@@ -477,6 +500,7 @@ PTA       *ptas, *ptad;
  *          each text line has a baseline that should intersect
  *          the left edge of the image with the angle given by this
  *          array, evaluated at the raster line of intersection.
+ * </pre>
  */
 NUMA *
 pixGetLocalSkewAngles(PIX        *pixs,
@@ -487,19 +511,21 @@ pixGetLocalSkewAngles(PIX        *pixs,
                       l_float32   sweepdelta,
                       l_float32   minbsdelta,
                       l_float32  *pa,
-                      l_float32  *pb)
+                      l_float32  *pb,
+                      l_int32     debug)
 {
 l_int32    w, h, hs, i, ystart, yend, ovlap, npts;
 l_float32  angle, conf, ycenter, a, b;
 BOX       *box;
-NUMA      *naskew;
+GPLOT     *gplot;
+NUMA      *naskew, *nax, *nay;
 PIX       *pix;
 PTA       *pta;
 
     PROCNAME("pixGetLocalSkewAngles");
 
-    if (!pixs)
-        return (NUMA *)ERROR_PTR("pixs not defined", procName, NULL);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return (NUMA *)ERROR_PTR("pixs undefined or not 1 bpp", procName, NULL);
     if (nslices < 2 || nslices > 20)
         nslices = DEFAULT_SLICES;
     if (redsweep < 1 || redsweep > 8)
@@ -513,15 +539,14 @@ PTA       *pta;
     if (minbsdelta == 0.0)
         minbsdelta = DEFAULT_MINBS_DELTA;
 
-    h = pixGetHeight(pixs);
-    w = pixGetWidth(pixs);
+    pixGetDimensions(pixs, &w, &h, NULL);
     hs = h / nslices;
     ovlap = (l_int32)(OVERLAP_FRACTION * hs);
     pta = ptaCreate(nslices);
     for (i = 0; i < nslices; i++) {
         ystart = L_MAX(0, hs * i - ovlap);
         yend = L_MIN(h - 1, hs * (i + 1) + ovlap);
-        ycenter = (ystart + yend) / 2;
+        ycenter = (l_float32)(ystart + yend) / 2;
         box = boxCreate(0, ystart, w, yend - ystart + 1);
         pix = pixClipRectangle(pixs, box, NULL);
         pixFindSkewSweepAndSearch(pix, &angle, &conf, redsweep, redsearch,
@@ -531,7 +556,6 @@ PTA       *pta;
         pixDestroy(&pix);
         boxDestroy(&box);
     }
-/*    ptaWriteStream(stderr, pta, 0); */
 
         /* Do linear least squares fit */
     if ((npts = ptaGetCount(pta)) < 2) {
@@ -549,20 +573,19 @@ PTA       *pta;
         numaAddNumber(naskew, angle);
     }
 
-#if  DEBUG_PLOT
-{ NUMA   *nax, *nay;
-  GPLOT  *gplot;
-    ptaGetArrays(pta, &nax, &nay);
-    gplot = gplotCreate("junkskew", GPLOT_X11, "skew as fctn of y",
-                        "y (in raster lines from top)", "angle (in degrees)");
-    gplotAddPlot(gplot, NULL, naskew, GPLOT_POINTS, "linear lsf");
-    gplotAddPlot(gplot, nax, nay, GPLOT_POINTS, "actual data pts");
-    gplotMakeOutput(gplot);
-    gplotDestroy(&gplot);
-    numaDestroy(&nax);
-    numaDestroy(&nay);
-}
-#endif  /* DEBUG_PLOT */
+    if (debug) {
+        lept_mkdir("lept/baseline");
+        ptaGetArrays(pta, &nax, &nay);
+        gplot = gplotCreate("/tmp/lept/baseline/skew", GPLOT_PNG,
+                            "skew as fctn of y", "y (in raster lines from top)",
+                            "angle (in degrees)");
+        gplotAddPlot(gplot, NULL, naskew, GPLOT_POINTS, "linear lsf");
+        gplotAddPlot(gplot, nax, nay, GPLOT_POINTS, "actual data pts");
+        gplotMakeOutput(gplot);
+        gplotDestroy(&gplot);
+        numaDestroy(&nax);
+        numaDestroy(&nay);
+    }
 
     ptaDestroy(&pta);
     return naskew;

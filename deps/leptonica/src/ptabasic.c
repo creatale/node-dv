@@ -25,8 +25,9 @@
  *====================================================================*/
 
 
-/*
- *   ptabasic.c
+/*!
+ * \file  ptabasic.c
+ * <pre>
  *
  *      Pta creation, destruction, copy, clone, empty
  *           PTA            *ptaCreate()
@@ -57,8 +58,11 @@
  *      Pta serialized for I/O
  *           PTA            *ptaRead()
  *           PTA            *ptaReadStream()
+ *           PTA            *ptaReadMem()
+ *           l_int32         ptaWriteDebug()
  *           l_int32         ptaWrite()
  *           l_int32         ptaWriteStream()
+ *           l_int32         ptaWriteMem()
  *
  *      Ptaa creation, destruction
  *           PTAA           *ptaaCreate()
@@ -82,8 +86,11 @@
  *      Ptaa serialized for I/O
  *           PTAA           *ptaaRead()
  *           PTAA           *ptaaReadStream()
+ *           PTAA           *ptaaReadMem()
  *           l_int32         ptaaWrite()
  *           l_int32         ptaaWriteStream()
+ *           l_int32         ptaaWriteMem()
+ * </pre>
  */
 
 #include <string.h>
@@ -100,10 +107,10 @@ static l_int32 ptaaExtendArray(PTAA *ptaa);
  *                Pta creation, destruction, copy, clone               *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaCreate()
+ * \brief   ptaCreate()
  *
- *      Input:  n  (initial array sizes)
- *      Return: pta, or null on error.
+ * \param[in]    n  initial array sizes
+ * \return  pta, or NULL on error.
  */
 PTA *
 ptaCreate(l_int32  n)
@@ -115,27 +122,28 @@ PTA  *pta;
     if (n <= 0)
         n = INITIAL_PTR_ARRAYSIZE;
 
-    if ((pta = (PTA *)CALLOC(1, sizeof(PTA))) == NULL)
-        return (PTA *)ERROR_PTR("pta not made", procName, NULL);
+    pta = (PTA *)LEPT_CALLOC(1, sizeof(PTA));
     pta->n = 0;
     pta->nalloc = n;
     ptaChangeRefcount(pta, 1);  /* sets to 1 */
 
-    if ((pta->x = (l_float32 *)CALLOC(n, sizeof(l_float32))) == NULL)
-        return (PTA *)ERROR_PTR("x array not made", procName, NULL);
-    if ((pta->y = (l_float32 *)CALLOC(n, sizeof(l_float32))) == NULL)
-        return (PTA *)ERROR_PTR("y array not made", procName, NULL);
+    pta->x = (l_float32 *)LEPT_CALLOC(n, sizeof(l_float32));
+    pta->y = (l_float32 *)LEPT_CALLOC(n, sizeof(l_float32));
+    if (!pta->x || !pta->y) {
+        ptaDestroy(&pta);
+        return (PTA *)ERROR_PTR("x and y arrays not both made", procName, NULL);
+    }
 
     return pta;
 }
 
 
 /*!
- *  ptaCreateFromNuma()
+ * \brief   ptaCreateFromNuma()
  *
- *      Input:  nax (<optional> can be null)
- *              nay
- *      Return: pta, or null on error.
+ * \param[in]    nax [optional] can be null
+ * \param[in]    nay
+ * \return  pta, or NULL on error.
  */
 PTA *
 ptaCreateFromNuma(NUMA  *nax,
@@ -169,14 +177,16 @@ PTA       *pta;
 
 
 /*!
- *  ptaDestroy()
+ * \brief   ptaDestroy()
  *
- *      Input:  &pta (<to be nulled>)
- *      Return: void
+ * \param[in,out]   ppta to be nulled
+ * \return  void
  *
- *  Note:
- *      - Decrements the ref count and, if 0, destroys the pta.
- *      - Always nulls the input ptr.
+ * <pre>
+ * Notes:
+ *      (1) Decrements the ref count and, if 0, destroys the pta.
+ *      (2) Always nulls the input ptr.
+ * </pre>
  */
 void
 ptaDestroy(PTA  **ppta)
@@ -195,9 +205,9 @@ PTA  *pta;
 
     ptaChangeRefcount(pta, -1);
     if (ptaGetRefcount(pta) <= 0) {
-        FREE(pta->x);
-        FREE(pta->y);
-        FREE(pta);
+        LEPT_FREE(pta->x);
+        LEPT_FREE(pta->y);
+        LEPT_FREE(pta);
     }
 
     *ppta = NULL;
@@ -206,10 +216,10 @@ PTA  *pta;
 
 
 /*!
- *  ptaCopy()
+ * \brief   ptaCopy()
  *
- *      Input:  pta
- *      Return: copy of pta, or null on error
+ * \param[in]    pta
+ * \return  copy of pta, or NULL on error
  */
 PTA *
 ptaCopy(PTA  *pta)
@@ -236,12 +246,12 @@ PTA       *npta;
 
 
 /*!
- *  ptaCopyRange()
+ * \brief   ptaCopyRange()
  *
- *      Input:  ptas
- *              istart  (starting index in ptas)
- *              iend  (ending index in ptas; use 0 to copy to end)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    ptas
+ * \param[in]    istart  starting index in ptas
+ * \param[in]    iend  ending index in ptas; use 0 to copy to end
+ * \return  0 if OK, 1 on error
  */
 PTA *
 ptaCopyRange(PTA     *ptas,
@@ -277,10 +287,10 @@ PTA     *ptad;
 
 
 /*!
- *  ptaClone()
+ * \brief   ptaClone()
  *
- *      Input:  pta
- *      Return: ptr to same pta, or null on error
+ * \param[in]    pta
+ * \return  ptr to same pta, or NULL on error
  */
 PTA *
 ptaClone(PTA  *pta)
@@ -296,12 +306,15 @@ ptaClone(PTA  *pta)
 
 
 /*!
- *  ptaEmpty()
+ * \brief   ptaEmpty()
  *
- *      Input:  pta
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pta
+ * \return  0 if OK, 1 on error
  *
- *  Note: this only resets the "n" field, for reuse
+ * <pre>
+ * Notes:
+ *      This only resets the Pta::n field, for reuse
+ * </pre>
  */
 l_int32
 ptaEmpty(PTA  *pta)
@@ -319,11 +332,11 @@ ptaEmpty(PTA  *pta)
  *                         Pta array extension                         *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaAddPt()
+ * \brief   ptaAddPt()
  *
- *      Input:  pta
- *              x, y
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pta
+ * \param[in]    x, y
+ * \return  0 if OK, 1 on error
  */
 l_int32
 ptaAddPt(PTA       *pta,
@@ -349,10 +362,10 @@ l_int32  n;
 
 
 /*!
- *  ptaExtendArrays()
+ * \brief   ptaExtendArrays()
  *
- *      Input:  pta
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pta
+ * \return  0 if OK; 1 on error
  */
 static l_int32
 ptaExtendArrays(PTA  *pta)
@@ -380,12 +393,12 @@ ptaExtendArrays(PTA  *pta)
  *                     Pta insertion and removal                       *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaInsertPt()
+ * \brief   ptaInsertPt()
  *
- *      Input:  pta
- *              index (at which pt is to be inserted)
- *              x, y (point values)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pta
+ * \param[in]    index at which pt is to be inserted
+ * \param[in]    x, y point values
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaInsertPt(PTA     *pta,
@@ -417,16 +430,18 @@ l_int32  i, n;
 
 
 /*!
- *  ptaRemovePt()
+ * \brief   ptaRemovePt()
  *
- *      Input:  pta
- *              index (of point to be removed)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pta
+ * \param[in]    index of point to be removed
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This shifts pta[i] --> pta[i - 1] for all i > index.
  *      (2) It should not be used repeatedly on large arrays,
  *          because the function is O(n).
+ * </pre>
  */
 l_int32
 ptaRemovePt(PTA     *pta,
@@ -480,10 +495,10 @@ ptaChangeRefcount(PTA     *pta,
 
 
 /*!
- *  ptaGetCount()
+ * \brief   ptaGetCount()
  *
- *      Input:  pta
- *      Return: count, or 0 if no pta
+ * \param[in]    pta
+ * \return  count, or 0 if no pta
  */
 l_int32
 ptaGetCount(PTA  *pta)
@@ -498,13 +513,13 @@ ptaGetCount(PTA  *pta)
 
 
 /*!
- *  ptaGetPt()
+ * \brief   ptaGetPt()
  *
- *      Input:  pta
- *              index  (into arrays)
- *              &x (<optional return> float x value)
- *              &y (<optional return> float y value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pta
+ * \param[in]    index  into arrays
+ * \param[out]   px [optional] float x value
+ * \param[out]   py [optional] float y value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaGetPt(PTA        *pta,
@@ -528,13 +543,13 @@ ptaGetPt(PTA        *pta,
 
 
 /*!
- *  ptaGetIPt()
+ * \brief   ptaGetIPt()
  *
- *      Input:  pta
- *              index  (into arrays)
- *              &x (<optional return> integer x value)
- *              &y (<optional return> integer y value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pta
+ * \param[in]    index  into arrays
+ * \param[out]   px [optional] integer x value
+ * \param[out]   py [optional] integer y value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaGetIPt(PTA      *pta,
@@ -558,12 +573,12 @@ ptaGetIPt(PTA      *pta,
 
 
 /*!
- *  ptaSetPt()
+ * \brief   ptaSetPt()
  *
- *      Input:  pta
- *              index  (into arrays)
- *              x, y
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pta
+ * \param[in]    index  into arrays
+ * \param[in]    x, y
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaSetPt(PTA       *pta,
@@ -585,15 +600,17 @@ ptaSetPt(PTA       *pta,
 
 
 /*!
- *  ptaGetArrays()
+ * \brief   ptaGetArrays()
  *
- *      Input:  pta
- *              &nax (<optional return> numa of x array)
- *              &nay (<optional return> numa of y array)
- *      Return: 0 if OK; 1 on error or if pta is empty
+ * \param[in]    pta
+ * \param[out]   pnax [optional] numa of x array
+ * \param[out]   pnay [optional] numa of y array
+ * \return  0 if OK; 1 on error or if pta is empty
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This copies the internal arrays into new Numas.
+ * </pre>
  */
 l_int32
 ptaGetArrays(PTA    *pta,
@@ -638,10 +655,10 @@ NUMA    *nax, *nay;
  *                       Pta serialized for I/O                        *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaRead()
+ * \brief   ptaRead()
  *
- *      Input:  filename
- *      Return: pta, or null on error
+ * \param[in]    filename
+ * \return  pta, or NULL on error
  */
 PTA *
 ptaRead(const char  *filename)
@@ -653,29 +670,27 @@ PTA   *pta;
 
     if (!filename)
         return (PTA *)ERROR_PTR("filename not defined", procName, NULL);
+
     if ((fp = fopenReadStream(filename)) == NULL)
         return (PTA *)ERROR_PTR("stream not opened", procName, NULL);
-
-    if ((pta = ptaReadStream(fp)) == NULL) {
-        fclose(fp);
-        return (PTA *)ERROR_PTR("pta not read", procName, NULL);
-    }
-
+    pta = ptaReadStream(fp);
     fclose(fp);
+    if (!pta)
+        return (PTA *)ERROR_PTR("pta not read", procName, NULL);
     return pta;
 }
 
 
 /*!
- *  ptaReadStream()
+ * \brief   ptaReadStream()
  *
- *      Input:  stream
- *      Return: pta, or null on error
+ * \param[in]    fp file stream
+ * \return  pta, or NULL on error
  */
 PTA *
 ptaReadStream(FILE  *fp)
 {
-char       typestr[128];
+char       typestr[128];  /* hardcoded below in fscanf */
 l_int32    i, n, ix, iy, type, version;
 l_float32  x, y;
 PTA       *pta;
@@ -689,7 +704,7 @@ PTA       *pta;
         return (PTA *)ERROR_PTR("not a pta file", procName, NULL);
     if (version != PTA_VERSION_NUMBER)
         return (PTA *)ERROR_PTR("invalid pta version", procName, NULL);
-    if (fscanf(fp, " Number of pts = %d; format = %s\n", &n, typestr) != 2)
+    if (fscanf(fp, " Number of pts = %d; format = %127s\n", &n, typestr) != 2)
         return (PTA *)ERROR_PTR("not a pta file", procName, NULL);
     if (!strcmp(typestr, "float"))
         type = 0;
@@ -700,12 +715,16 @@ PTA       *pta;
         return (PTA *)ERROR_PTR("pta not made", procName, NULL);
     for (i = 0; i < n; i++) {
         if (type == 0) {  /* data is float */
-            if (fscanf(fp, "   (%f, %f)\n", &x, &y) != 2)
+            if (fscanf(fp, "   (%f, %f)\n", &x, &y) != 2) {
+                ptaDestroy(&pta);
                 return (PTA *)ERROR_PTR("error reading floats", procName, NULL);
+            }
             ptaAddPt(pta, x, y);
         } else {   /* data is integer */
-            if (fscanf(fp, "   (%d, %d)\n", &ix, &iy) != 2)
+            if (fscanf(fp, "   (%d, %d)\n", &ix, &iy) != 2) {
+                ptaDestroy(&pta);
                 return (PTA *)ERROR_PTR("error reading ints", procName, NULL);
+            }
             ptaAddPt(pta, ix, iy);
         }
     }
@@ -715,19 +734,81 @@ PTA       *pta;
 
 
 /*!
- *  ptaWrite()
+ * \brief   ptaReadMem()
  *
- *      Input:  filename
- *              pta
- *              type  (0 for float values; 1 for integer values)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    data  serialization in ascii
+ * \param[in]    size  of data in bytes; can use strlen to get it
+ * \return  pta, or NULL on error
+ */
+PTA *
+ptaReadMem(const l_uint8  *data,
+           size_t          size)
+{
+FILE  *fp;
+PTA   *pta;
+
+    PROCNAME("ptaReadMem");
+
+    if (!data)
+        return (PTA *)ERROR_PTR("data not defined", procName, NULL);
+    if ((fp = fopenReadFromMemory(data, size)) == NULL)
+        return (PTA *)ERROR_PTR("stream not opened", procName, NULL);
+
+    pta = ptaReadStream(fp);
+    fclose(fp);
+    if (!pta) L_ERROR("pta not read\n", procName);
+    return pta;
+}
+
+
+/*!
+ * \brief   ptaWriteDebug()
+ *
+ * \param[in]    filename
+ * \param[in]    pta
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) Debug version, intended for use in the library when writing
+ *          to files in a temp directory with names that are compiled in.
+ *          This is used instead of ptaWrite() for all such library calls.
+ *      (2) The global variable LeptDebugOK defaults to 0, and can be set
+ *          or cleared by the function setLeptDebugOK().
+ * </pre>
+ */
+l_int32
+ptaWriteDebug(const char  *filename,
+              PTA         *pta,
+              l_int32      type)
+{
+    PROCNAME("ptaWriteDebug");
+
+    if (LeptDebugOK) {
+        return ptaWrite(filename, pta, type);
+    } else {
+        L_INFO("write to named temp file %s is disabled\n", procName, filename);
+        return 0;
+    }
+}
+
+
+/*!
+ * \brief   ptaWrite()
+ *
+ * \param[in]    filename
+ * \param[in]    pta
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK, 1 on error
  */
 l_int32
 ptaWrite(const char  *filename,
          PTA         *pta,
          l_int32      type)
 {
-FILE  *fp;
+l_int32  ret;
+FILE    *fp;
 
     PROCNAME("ptaWrite");
 
@@ -738,21 +819,21 @@ FILE  *fp;
 
     if ((fp = fopenWriteStream(filename, "w")) == NULL)
         return ERROR_INT("stream not opened", procName, 1);
-    if (ptaWriteStream(fp, pta, type))
-        return ERROR_INT("pta not written to stream", procName, 1);
+    ret = ptaWriteStream(fp, pta, type);
     fclose(fp);
-
+    if (ret)
+        return ERROR_INT("pta not written to stream", procName, 1);
     return 0;
 }
 
 
 /*!
- *  ptaWriteStream()
+ * \brief   ptaWriteStream()
  *
- *      Input:  stream
- *              pta
- *              type  (0 for float values; 1 for integer values)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fp file stream
+ * \param[in]    pta
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaWriteStream(FILE    *fp,
@@ -789,14 +870,70 @@ l_float32  x, y;
 }
 
 
+/*!
+ * \brief   ptaWriteMem()
+ *
+ * \param[out]   pdata data of serialized pta; ascii
+ * \param[out]   psize size of returned data
+ * \param[in]    pta
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) Serializes a pta in memory and puts the result in a buffer.
+ * </pre>
+ */
+l_int32
+ptaWriteMem(l_uint8  **pdata,
+            size_t    *psize,
+            PTA       *pta,
+            l_int32    type)
+{
+l_int32  ret;
+FILE    *fp;
+
+    PROCNAME("ptaWriteMem");
+
+    if (pdata) *pdata = NULL;
+    if (psize) *psize = 0;
+    if (!pdata)
+        return ERROR_INT("&data not defined", procName, 1);
+    if (!psize)
+        return ERROR_INT("&size not defined", procName, 1);
+    if (!pta)
+        return ERROR_INT("pta not defined", procName, 1);
+
+#if HAVE_FMEMOPEN
+    if ((fp = open_memstream((char **)pdata, psize)) == NULL)
+        return ERROR_INT("stream not opened", procName, 1);
+    ret = ptaWriteStream(fp, pta, type);
+#else
+    L_INFO("work-around: writing to a temp file\n", procName);
+  #ifdef _WIN32
+    if ((fp = fopenWriteWinTempfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #else
+    if ((fp = tmpfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #endif  /* _WIN32 */
+    ret = ptaWriteStream(fp, pta, type);
+    rewind(fp);
+    *pdata = l_binaryReadStream(fp, psize);
+#endif  /* HAVE_FMEMOPEN */
+    fclose(fp);
+    return ret;
+}
+
+
 /*---------------------------------------------------------------------*
  *                     PTAA creation, destruction                      *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaaCreate()
+ * \brief   ptaaCreate()
  *
- *      Input:  n  (initial number of ptrs)
- *      Return: ptaa, or null on error
+ * \param[in]    n  initial number of ptrs
+ * \return  ptaa, or NULL on error
  */
 PTAA *
 ptaaCreate(l_int32  n)
@@ -808,23 +945,23 @@ PTAA  *ptaa;
     if (n <= 0)
         n = INITIAL_PTR_ARRAYSIZE;
 
-    if ((ptaa = (PTAA *)CALLOC(1, sizeof(PTAA))) == NULL)
+    if ((ptaa = (PTAA *)LEPT_CALLOC(1, sizeof(PTAA))) == NULL)
         return (PTAA *)ERROR_PTR("ptaa not made", procName, NULL);
     ptaa->n = 0;
     ptaa->nalloc = n;
-
-    if ((ptaa->pta = (PTA **)CALLOC(n, sizeof(PTA *))) == NULL)
+    if ((ptaa->pta = (PTA **)LEPT_CALLOC(n, sizeof(PTA *))) == NULL) {
+        ptaaDestroy(&ptaa);
         return (PTAA *)ERROR_PTR("pta ptrs not made", procName, NULL);
-
+    }
     return ptaa;
 }
 
 
 /*!
- *  ptaaDestroy()
+ * \brief   ptaaDestroy()
  *
- *      Input:  &ptaa <to be nulled>
- *      Return: void
+ * \param[in,out]   pptaa to be nulled
+ * \return  void
  */
 void
 ptaaDestroy(PTAA  **pptaa)
@@ -844,9 +981,9 @@ PTAA    *ptaa;
 
     for (i = 0; i < ptaa->n; i++)
         ptaDestroy(&ptaa->pta[i]);
-    FREE(ptaa->pta);
+    LEPT_FREE(ptaa->pta);
 
-    FREE(ptaa);
+    LEPT_FREE(ptaa);
     *pptaa = NULL;
     return;
 }
@@ -856,12 +993,12 @@ PTAA    *ptaa;
  *                          PTAA array extension                       *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaaAddPta()
+ * \brief   ptaaAddPta()
  *
- *      Input:  ptaa
- *              pta  (to be added)
- *              copyflag  (L_INSERT, L_COPY, L_CLONE)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    ptaa
+ * \param[in]    pta  to be added
+ * \param[in]    copyflag  L_INSERT, L_COPY, L_CLONE
+ * \return  0 if OK, 1 on error
  */
 l_int32
 ptaaAddPta(PTAA    *ptaa,
@@ -901,10 +1038,10 @@ PTA     *ptac;
 
 
 /*!
- *  ptaaExtendArray()
+ * \brief   ptaaExtendArray()
  *
- *      Input:  ptaa
- *      Return: 0 if OK, 1 on error
+ * \param[in]    ptaa
+ * \return  0 if OK, 1 on error
  */
 static l_int32
 ptaaExtendArray(PTAA  *ptaa)
@@ -928,10 +1065,10 @@ ptaaExtendArray(PTAA  *ptaa)
  *                          Ptaa accessors                             *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaaGetCount()
+ * \brief   ptaaGetCount()
  *
- *      Input:  ptaa
- *      Return: count, or 0 if no ptaa
+ * \param[in]    ptaa
+ * \return  count, or 0 if no ptaa
  */
 l_int32
 ptaaGetCount(PTAA  *ptaa)
@@ -946,12 +1083,12 @@ ptaaGetCount(PTAA  *ptaa)
 
 
 /*!
- *  ptaaGetPta()
+ * \brief   ptaaGetPta()
  *
- *      Input:  ptaa
- *              index  (to the i-th pta)
- *              accessflag  (L_COPY or L_CLONE)
- *      Return: pta, or null on error
+ * \param[in]    ptaa
+ * \param[in]    index  to the i-th pta
+ * \param[in]    accessflag  L_COPY or L_CLONE
+ * \return  pta, or NULL on error
  */
 PTA *
 ptaaGetPta(PTAA    *ptaa,
@@ -975,14 +1112,14 @@ ptaaGetPta(PTAA    *ptaa,
 
 
 /*!
- *  ptaaGetPt()
+ * \brief   ptaaGetPt()
  *
- *      Input:  ptaa
- *              ipta  (to the i-th pta)
- *              jpt (index to the j-th pt in the pta)
- *              &x (<optional return> float x value)
- *              &y (<optional return> float y value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    ptaa
+ * \param[in]    ipta  to the i-th pta
+ * \param[in]    jpt index to the j-th pt in the pta
+ * \param[out]   px [optional] float x value
+ * \param[out]   py [optional] float y value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaaGetPt(PTAA       *ptaa,
@@ -1018,11 +1155,11 @@ PTA  *pta;
  *                        Ptaa array modifiers                         *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaaInitFull()
+ * \brief   ptaaInitFull()
  *
- *      Input:  ptaa (can have non-null ptrs in the ptr array)
- *              pta (to be replicated into the entire ptr array)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    ptaa can have non-null ptrs in the ptr array
+ * \param[in]    pta to be replicated into the entire ptr array
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaaInitFull(PTAA  *ptaa,
@@ -1049,17 +1186,19 @@ PTA     *ptat;
 
 
 /*!
- *  ptaaReplacePta()
+ * \brief   ptaaReplacePta()
  *
- *      Input:  ptaa
- *              index  (to the index-th pta)
- *              pta (insert and replace any existing one)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    ptaa
+ * \param[in]    index  to the index-th pta
+ * \param[in]    pta insert and replace any existing one
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Any existing pta is destroyed, and the input one
  *          is inserted in its place.
  *      (2) If the index is invalid, return 1 (error)
+ * </pre>
  */
 l_int32
 ptaaReplacePta(PTAA    *ptaa,
@@ -1085,12 +1224,12 @@ l_int32  n;
 
 
 /*!
- *  ptaaAddPt()
+ * \brief   ptaaAddPt()
  *
- *      Input:  ptaa
- *              ipta  (to the i-th pta)
- *              x,y (point coordinates)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    ptaa
+ * \param[in]    ipta  to the i-th pta
+ * \param[in]    x,y point coordinates
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaaAddPt(PTAA      *ptaa,
@@ -1115,15 +1254,17 @@ PTA  *pta;
 
 
 /*!
- *  ptaaTruncate()
+ * \brief   ptaaTruncate()
  *
- *      Input:  ptaa
- *      Return: 0 if OK, 1 on error
+ * \param[in]    ptaa
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This identifies the largest index containing a pta that
  *          has any points within it, destroys all pta above that index,
  *          and resets the count.
+ * </pre>
  */
 l_int32
 ptaaTruncate(PTAA  *ptaa)
@@ -1160,10 +1301,10 @@ PTA     *pta;
  *                       Ptaa serialized for I/O                       *
  *---------------------------------------------------------------------*/
 /*!
- *  ptaaRead()
+ * \brief   ptaaRead()
  *
- *      Input:  filename
- *      Return: ptaa, or null on error
+ * \param[in]    filename
+ * \return  ptaa, or NULL on error
  */
 PTAA *
 ptaaRead(const char  *filename)
@@ -1175,24 +1316,22 @@ PTAA  *ptaa;
 
     if (!filename)
         return (PTAA *)ERROR_PTR("filename not defined", procName, NULL);
+
     if ((fp = fopenReadStream(filename)) == NULL)
         return (PTAA *)ERROR_PTR("stream not opened", procName, NULL);
-
-    if ((ptaa = ptaaReadStream(fp)) == NULL) {
-        fclose(fp);
-        return (PTAA *)ERROR_PTR("ptaa not read", procName, NULL);
-    }
-
+    ptaa = ptaaReadStream(fp);
     fclose(fp);
+    if (!ptaa)
+        return (PTAA *)ERROR_PTR("ptaa not read", procName, NULL);
     return ptaa;
 }
 
 
 /*!
- *  ptaaReadStream()
+ * \brief   ptaaReadStream()
  *
- *      Input:  stream
- *      Return: ptaa, or null on error
+ * \param[in]    fp file stream
+ * \return  ptaa, or NULL on error
  */
 PTAA *
 ptaaReadStream(FILE  *fp)
@@ -1216,8 +1355,10 @@ PTAA    *ptaa;
     if ((ptaa = ptaaCreate(n)) == NULL)
         return (PTAA *)ERROR_PTR("ptaa not made", procName, NULL);
     for (i = 0; i < n; i++) {
-        if ((pta = ptaReadStream(fp)) == NULL)
+        if ((pta = ptaReadStream(fp)) == NULL) {
+            ptaaDestroy(&ptaa);
             return (PTAA *)ERROR_PTR("error reading pta", procName, NULL);
+        }
         ptaaAddPta(ptaa, pta, L_INSERT);
     }
 
@@ -1226,19 +1367,81 @@ PTAA    *ptaa;
 
 
 /*!
- *  ptaaWrite()
+ * \brief   ptaaReadMem()
  *
- *      Input:  filename
- *              ptaa
- *              type  (0 for float values; 1 for integer values)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    data  serialization in ascii
+ * \param[in]    size  of data in bytes; can use strlen to get it
+ * \return  ptaa, or NULL on error
+ */
+PTAA *
+ptaaReadMem(const l_uint8  *data,
+            size_t          size)
+{
+FILE  *fp;
+PTAA  *ptaa;
+
+    PROCNAME("ptaaReadMem");
+
+    if (!data)
+        return (PTAA *)ERROR_PTR("data not defined", procName, NULL);
+    if ((fp = fopenReadFromMemory(data, size)) == NULL)
+        return (PTAA *)ERROR_PTR("stream not opened", procName, NULL);
+
+    ptaa = ptaaReadStream(fp);
+    fclose(fp);
+    if (!ptaa) L_ERROR("ptaa not read\n", procName);
+    return ptaa;
+}
+
+
+/*!
+ * \brief   ptaaWriteDebug()
+ *
+ * \param[in]    filename
+ * \param[in]    ptaa
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) Debug version, intended for use in the library when writing
+ *          to files in a temp directory with names that are compiled in.
+ *          This is used instead of ptaaWrite() for all such library calls.
+ *      (2) The global variable LeptDebugOK defaults to 0, and can be set
+ *          or cleared by the function setLeptDebugOK().
+ * </pre>
+ */
+l_int32
+ptaaWriteDebug(const char  *filename,
+               PTAA        *ptaa,
+               l_int32      type)
+{
+    PROCNAME("ptaaWriteDebug");
+
+    if (LeptDebugOK) {
+        return ptaaWrite(filename, ptaa, type);
+    } else {
+        L_INFO("write to named temp file %s is disabled\n", procName, filename);
+        return 0;
+    }
+}
+
+
+/*!
+ * \brief   ptaaWrite()
+ *
+ * \param[in]    filename
+ * \param[in]    ptaa
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK, 1 on error
  */
 l_int32
 ptaaWrite(const char  *filename,
           PTAA        *ptaa,
           l_int32      type)
 {
-FILE  *fp;
+l_int32  ret;
+FILE    *fp;
 
     PROCNAME("ptaaWrite");
 
@@ -1249,21 +1452,21 @@ FILE  *fp;
 
     if ((fp = fopenWriteStream(filename, "w")) == NULL)
         return ERROR_INT("stream not opened", procName, 1);
-    if (ptaaWriteStream(fp, ptaa, type))
-        return ERROR_INT("ptaa not written to stream", procName, 1);
+    ret = ptaaWriteStream(fp, ptaa, type);
     fclose(fp);
-
+    if (ret)
+        return ERROR_INT("ptaa not written to stream", procName, 1);
     return 0;
 }
 
 
 /*!
- *  ptaaWriteStream()
+ * \brief   ptaaWriteStream()
  *
- *      Input:  stream
- *              ptaa
- *              type  (0 for float values; 1 for integer values)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fp file stream
+ * \param[in]    ptaa
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK; 1 on error
  */
 l_int32
 ptaaWriteStream(FILE    *fp,
@@ -1291,3 +1494,60 @@ PTA     *pta;
 
     return 0;
 }
+
+
+/*!
+ * \brief   ptaaWriteMem()
+ *
+ * \param[out]   pdata data of serialized ptaa; ascii
+ * \param[out]   psize size of returned data
+ * \param[in]    ptaa
+ * \param[in]    type  0 for float values; 1 for integer values
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) Serializes a ptaa in memory and puts the result in a buffer.
+ * </pre>
+ */
+l_int32
+ptaaWriteMem(l_uint8  **pdata,
+             size_t    *psize,
+             PTAA      *ptaa,
+             l_int32    type)
+{
+l_int32  ret;
+FILE    *fp;
+
+    PROCNAME("ptaaWriteMem");
+
+    if (pdata) *pdata = NULL;
+    if (psize) *psize = 0;
+    if (!pdata)
+        return ERROR_INT("&data not defined", procName, 1);
+    if (!psize)
+        return ERROR_INT("&size not defined", procName, 1);
+    if (!ptaa)
+        return ERROR_INT("ptaa not defined", procName, 1);
+
+#if HAVE_FMEMOPEN
+    if ((fp = open_memstream((char **)pdata, psize)) == NULL)
+        return ERROR_INT("stream not opened", procName, 1);
+    ret = ptaaWriteStream(fp, ptaa, type);
+#else
+    L_INFO("work-around: writing to a temp file\n", procName);
+  #ifdef _WIN32
+    if ((fp = fopenWriteWinTempfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #else
+    if ((fp = tmpfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #endif  /* _WIN32 */
+    ret = ptaaWriteStream(fp, ptaa, type);
+    rewind(fp);
+    *pdata = l_binaryReadStream(fp, psize);
+#endif  /* HAVE_FMEMOPEN */
+    fclose(fp);
+    return ret;
+}
+

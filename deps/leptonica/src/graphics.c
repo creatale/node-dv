@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  graphics.c
+/*!
+ * \file graphics.c
+ * <pre>
  *
  *      Pta generation for arbitrary shapes built with lines
  *          PTA        *generatePtaLine()
@@ -37,14 +38,18 @@
  *          PTAA       *generatePtaaBoxa()
  *          PTAA       *generatePtaaHashBoxa()
  *          PTA        *generatePtaPolyline()
+ *          PTA        *generatePtaGrid()
  *          PTA        *convertPtaLineTo4cc()
  *          PTA        *generatePtaFilledCircle()
  *          PTA        *generatePtaFilledSquare()
  *          PTA        *generatePtaLineFromPt()
  *          l_int32     locatePtRadially()
  *
- *      Pta generation for plotting functions on images
- *          PTA        *generatePlotPtaFromNuma()
+ *      Rendering function plots directly on images
+ *          l_int32     pixRenderPlotFromNuma()
+ *          l_int32     pixRenderPlotFromNumaGen()
+ *          PTA        *makePlotPtaFromNuma()
+ *          PTA        *makePlotPtaFromNumaGen()
  *
  *      Pta rendering
  *          l_int32     pixRenderPta()
@@ -67,6 +72,7 @@
  *          l_int32     pixRenderHashBox()
  *          l_int32     pixRenderHashBoxArb()
  *          l_int32     pixRenderHashBoxBlend()
+ *          l_int32     pixRenderHashMaskArb()
  *
  *          l_int32     pixRenderHashBoxa()
  *          l_int32     pixRenderHashBoxaArb()
@@ -75,6 +81,8 @@
  *          l_int32     pixRenderPolyline()
  *          l_int32     pixRenderPolylineArb()
  *          l_int32     pixRenderPolylineBlend()
+ *
+ *          l_int32     pixRenderGrid()
  *
  *          l_int32     pixRenderRandomCmapPtaa()
  *
@@ -87,11 +95,23 @@
  *          PIX        *fpixAutoRenderContours()
  *          PIX        *fpixRenderContours()
  *
+ *      Boundary pt generation on 1 bpp images
+ *          PTA        *pixGeneratePtaBoundary()
+ *
  *  The line rendering functions are relatively crude, but they
  *  get the job done for most simple situations.  We use the pta
- *  as an intermediate data structure.  A pta is generated
- *  for a line.  One of two rendering functions are used to
- *  render this onto a Pix.
+ *  (array of points) as an intermediate data structure.  For example,
+ *  to render a line we first generate a pta.
+ *
+ *  Some rendering functions come in sets of three.  For example
+ *       pixRenderLine() -- render on 1 bpp pix
+ *       pixRenderLineArb() -- render on 32 bpp pix with arbitrary (r,g,b)
+ *       pixRenderLineBlend() -- render on 32 bpp pix, blending the
+ *               (r,g,b) graphic object with the underlying rgb pixels.
+ *
+ *  There are also procedures for plotting a function, computed
+ *  from the row or column pixels, directly on the image.
+ * </pre>
  */
 
 #include <string.h>
@@ -103,14 +123,16 @@
  *        Pta generation for arbitrary shapes built with lines      *
  *------------------------------------------------------------------*/
 /*!
- *  generatePtaLine()
+ * \brief   generatePtaLine()
  *
- *      Input:  x1, y1  (end point 1)
- *              x2, y2  (end point 2)
- *      Return: pta, or null on error
+ * \param[in]    x1, y1  end point 1
+ * \param[in]    x2, y2  end point 2
+ * \return  pta, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Uses Bresenham line drawing, which results in an 8-connected line.
+ * </pre>
  */
 PTA  *
 generatePtaLine(l_int32  x1,
@@ -125,7 +147,10 @@ PTA       *pta;
     PROCNAME("generatePtaLine");
 
         /* Generate line parameters */
-    if (L_ABS(x2 - x1) >= L_ABS(y2 - y1)) {
+    if (x1 == x2 && y1 == y2) {  /* same point */
+        getyofx = TRUE;
+        npts = 1;
+    } else if (L_ABS(x2 - x1) >= L_ABS(y2 - y1)) {
         getyofx = TRUE;
         npts = L_ABS(x2 - x1) + 1;
         diff = x2 - x1;
@@ -167,12 +192,12 @@ PTA       *pta;
 
 
 /*!
- *  generatePtaWideLine()
+ * \brief   generatePtaWideLine()
  *
- *      Input:  x1, y1  (end point 1)
- *              x2, y2  (end point 2)
- *              width
- *      Return: ptaj, or null on error
+ * \param[in]    x1, y1  end point 1
+ * \param[in]    x2, y2  end point 2
+ * \param[in]    width
+ * \return  ptaj, or NULL on error
  */
 PTA  *
 generatePtaWideLine(l_int32  x1,
@@ -206,10 +231,10 @@ PTA     *pta, *ptaj;
                 y1a = y1 + (i + 1) / 2;
                 y2a = y2 + (i + 1) / 2;
             }
-            if ((pta = generatePtaLine(x1, y1a, x2, y2a)) == NULL)
-                return (PTA *)ERROR_PTR("pta not made", procName, NULL);
-            ptaJoin(ptaj, pta, 0, -1);
-            ptaDestroy(&pta);
+            if ((pta = generatePtaLine(x1, y1a, x2, y2a)) != NULL) {
+                ptaJoin(ptaj, pta, 0, -1);
+                ptaDestroy(&pta);
+            }
         }
     } else  {  /* "vertical" line  */
         for (i = 1; i < width; i++) {
@@ -220,10 +245,10 @@ PTA     *pta, *ptaj;
                 x1a = x1 + (i + 1) / 2;
                 x2a = x2 + (i + 1) / 2;
             }
-            if ((pta = generatePtaLine(x1a, y1, x2a, y2)) == NULL)
-                return (PTA *)ERROR_PTR("pta not made", procName, NULL);
-            ptaJoin(ptaj, pta, 0, -1);
-            ptaDestroy(&pta);
+            if ((pta = generatePtaLine(x1a, y1, x2a, y2)) != NULL) {
+                ptaJoin(ptaj, pta, 0, -1);
+                ptaDestroy(&pta);
+            }
         }
     }
 
@@ -232,15 +257,17 @@ PTA     *pta, *ptaj;
 
 
 /*!
- *  generatePtaBox()
+ * \brief   generatePtaBox()
  *
- *      Input:  box
- *              width (of line)
- *      Return: ptad, or null on error
+ * \param[in]    box
+ * \param[in]    width of line
+ * \return  ptad, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Because the box is constructed so that we don't have any
  *          overlapping lines, there is no need to remove duplicates.
+ * </pre>
  */
 PTA  *
 generatePtaBox(BOX     *box,
@@ -304,18 +331,20 @@ PTA     *ptad, *pta;
 
 
 /*!
- *  generatePtaBoxa()
+ * \brief   generatePtaBoxa()
  *
- *      Input:  boxa
- *              width
- *              removedups  (1 to remove, 0 to leave)
- *      Return: ptad, or null on error
+ * \param[in]    boxa
+ * \param[in]    width
+ * \param[in]    removedups  1 to remove, 0 to leave
+ * \return  ptad, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If the boxa has overlapping boxes, and if blending will
  *          be used to give a transparent effect, transparency
  *          artifacts at line intersections can be removed using
  *          removedups = 1.
+ * </pre>
  */
 PTA  *
 generatePtaBoxa(BOXA    *boxa,
@@ -346,7 +375,7 @@ PTA     *ptad, *ptat, *pta;
     }
 
     if (removedups)
-        ptad = ptaRemoveDuplicates(ptat, 0);
+        ptad = ptaRemoveDupsByAset(ptat);
     else
         ptad = ptaClone(ptat);
 
@@ -356,19 +385,21 @@ PTA     *ptad, *ptat, *pta;
 
 
 /*!
- *  generatePtaHashBox()
+ * \brief   generatePtaHashBox()
  *
- *      Input:  box
- *              spacing (spacing between lines; must be > 1)
- *              width  (of line)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *      Return: ptad, or null on error
+ * \param[in]    box
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  of line
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \return  ptad, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The orientation takes on one of 4 orientations (horiz, vertical,
  *          slope +1, slope -1).
- *      (2) The full outline is also drawn if @outline = 1.
+ *      (2) The full outline is also drawn if %outline = 1.
+ * </pre>
  */
 PTA  *
 generatePtaHashBox(BOX     *box,
@@ -449,24 +480,26 @@ PTA     *ptad, *pta;
 
 
 /*!
- *  generatePtaHashBoxa()
+ * \brief   generatePtaHashBoxa()
  *
- *      Input:  boxa
- *              spacing (spacing between lines; must be > 1)
- *              width  (of line)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *              removedups  (1 to remove, 0 to leave)
- *      Return: ptad, or null on error
+ * \param[in]    boxa
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  of line
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    removedups  1 to remove, 0 to leave
+ * \return  ptad, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The orientation takes on one of 4 orientations (horiz, vertical,
  *          slope +1, slope -1).
- *      (2) The full outline is also drawn if @outline = 1.
+ *      (2) The full outline is also drawn if %outline = 1.
  *      (3) If the boxa has overlapping boxes, and if blending will
  *          be used to give a transparent effect, transparency
  *          artifacts at line intersections can be removed using
  *          removedups = 1.
+ * </pre>
  */
 PTA  *
 generatePtaHashBoxa(BOXA    *boxa,
@@ -505,7 +538,7 @@ PTA     *ptad, *ptat, *pta;
     }
 
     if (removedups)
-        ptad = ptaRemoveDuplicates(ptat, 0);
+        ptad = ptaRemoveDupsByAset(ptat);
     else
         ptad = ptaClone(ptat);
 
@@ -515,16 +548,18 @@ PTA     *ptad, *ptat, *pta;
 
 
 /*!
- *  generatePtaaBoxa()
+ * \brief   generatePtaaBoxa()
  *
- *      Input:  boxa
- *      Return: ptaa, or null on error
+ * \param[in]    boxa
+ * \return  ptaa, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This generates a pta of the four corners for each box in
  *          the boxa.
  *      (2) Each of these pta can be rendered onto a pix with random colors,
  *          by using pixRenderRandomCmapPtaa() with closeflag = 1.
+ * </pre>
  */
 PTAA  *
 generatePtaaBoxa(BOXA  *boxa)
@@ -558,22 +593,24 @@ PTAA    *ptaa;
 
 
 /*!
- *  generatePtaaHashBoxa()
+ * \brief   generatePtaaHashBoxa()
  *
- *      Input:  boxa
- *              spacing (spacing between hash lines; must be > 1)
- *              width  (hash line width)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *      Return: ptaa, or null on error
+ * \param[in]    boxa
+ * \param[in]    spacing spacing between hash lines; must be > 1
+ * \param[in]    width  hash line width
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \return  ptaa, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The orientation takes on one of 4 orientations (horiz, vertical,
  *          slope +1, slope -1).
- *      (2) The full outline is also drawn if @outline = 1.
+ *      (2) The full outline is also drawn if %outline = 1.
  *      (3) Each of these pta can be rendered onto a pix with random colors,
  *          by using pixRenderRandomCmapPtaa() with closeflag = 1.
  *
+ * </pre>
  */
 PTAA *
 generatePtaaHashBoxa(BOXA    *boxa,
@@ -615,13 +652,13 @@ PTAA    *ptaa;
 
 
 /*!
- *  generatePtaPolyline()
+ * \brief   generatePtaPolyline()
  *
- *      Input:  pta (vertices of polyline)
- *              width
- *              closeflag (1 to close the contour; 0 otherwise)
- *              removedups  (1 to remove, 0 to leave)
- *      Return: ptad, or null on error
+ * \param[in]    ptas vertices of polyline
+ * \param[in]    width
+ * \param[in]    closeflag 1 to close the contour; 0 otherwise
+ * \param[in]    removedups  1 to remove, 0 to leave
+ * \return  ptad, or NULL on error
  */
 PTA *
 generatePtaPolyline(PTA     *ptas,
@@ -664,7 +701,7 @@ PTA     *ptad, *ptat, *pta;
     }
 
     if (removedups)
-        ptad = ptaRemoveDuplicates(ptat, 0);
+        ptad = ptaRemoveDupsByAset(ptat);
     else
         ptad = ptaClone(ptat);
 
@@ -674,17 +711,70 @@ PTA     *ptad, *ptat, *pta;
 
 
 /*!
- *  convertPtaLineTo4cc()
+ * \brief   generatePtaGrid()
  *
- *      Input:  ptas (8-connected line of points)
- *      Return: ptad (4-connected line), or null on error
+ * \param[in]    w, h of region where grid will be displayed
+ * \param[in]    nx, ny  number of rectangles in each direction in grid
+ * \param[in]    width of rendered lines
+ * \return  ptad, or NULL on error
+ */
+PTA  *
+generatePtaGrid(l_int32  w,
+                l_int32  h,
+                l_int32  nx,
+                l_int32  ny,
+                l_int32  width)
+{
+l_int32  i, j, bx, by, x1, x2, y1, y2;
+BOX     *box;
+BOXA    *boxa;
+PTA     *pta;
+
+    PROCNAME("generatePtaGrid");
+
+    if (nx < 1 || ny < 1)
+        return (PTA *)ERROR_PTR("nx and ny must be > 0", procName, NULL);
+    if (w < 2 * nx || h < 2 * ny)
+        return (PTA *)ERROR_PTR("w and/or h too small", procName, NULL);
+    if (width < 1) {
+        L_WARNING("width < 1; setting to 1\n", procName);
+        width = 1;
+    }
+
+    boxa = boxaCreate(nx * ny);
+    bx = (w + nx - 1) / nx;
+    by = (h + ny - 1) / ny;
+    for (i = 0; i < ny; i++) {
+        y1 = by * i;
+        y2 = L_MIN(y1 + by, h - 1);
+        for (j = 0; j < nx; j++) {
+            x1 = bx * j;
+            x2 = L_MIN(x1 + bx, w - 1);
+            box = boxCreate(x1, y1, x2 - x1 + 1, y2 - y1 + 1);
+            boxaAddBox(boxa, box, L_INSERT);
+        }
+    }
+
+    pta = generatePtaBoxa(boxa, width, 1);
+    boxaDestroy(&boxa);
+    return pta;
+}
+
+
+/*!
+ * \brief   convertPtaLineTo4cc()
  *
- *  Notes:
+ * \param[in]    ptas 8-connected line of points
+ * \return  ptad 4-connected line, or NULL on error
+ *
+ * <pre>
+ * Notes:
  *      (1) When a polyline is generated with width = 1, the resulting
  *          line is not 4-connected in general.  This function adds
  *          points as necessary to convert the line to 4-cconnected.
  *          It is useful when rendering 1 bpp on a pix.
  *      (2) Do not use this for lines generated with width > 1.
+ * </pre>
  */
 PTA *
 convertPtaLineTo4cc(PTA  *ptas)
@@ -715,17 +805,19 @@ PTA     *ptad;
 
 
 /*!
- *  generatePtaFilledCircle()
+ * \brief   generatePtaFilledCircle()
  *
- *      Input:  radius
- *      Return: pta, or null on error
+ * \param[in]    radius
+ * \return  pta, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The circle is has diameter = 2 * radius + 1.
  *      (2) It is located with the center of the circle at the
  *          point (radius, radius).
  *      (3) Consequently, it typically must be translated if
  *          it is to represent a set of pixels in an image.
+ * </pre>
  */
 PTA *
 generatePtaFilledCircle(l_int32  radius)
@@ -755,15 +847,17 @@ PTA       *pta;
 
 
 /*!
- *  generatePtaFilledSquare()
+ * \brief   generatePtaFilledSquare()
  *
- *      Input:  side
- *      Return: pta, or null on error
+ * \param[in]    side
+ * \return  pta, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The center of the square can be chosen to be at
  *          (side / 2, side / 2).  It must be translated by this amount
  *          when used for replication.
+ * </pre>
  */
 PTA *
 generatePtaFilledSquare(l_int32  side)
@@ -785,17 +879,19 @@ PTA     *pta;
 
 
 /*!
- *  generatePtaLineFromPt()
+ * \brief   generatePtaLineFromPt()
  *
- *      Input:  x, y  (point of origination)
- *              length (of line, including starting point)
- *              radang (angle in radians, CW from horizontal)
- *      Return: pta, or null on error
+ * \param[in]    x, y  point of origination
+ * \param[in]    length of line, including starting point
+ * \param[in]    radang angle in radians, CW from horizontal
+ * \return  pta, or NULL on error
  *
- *  Notes:
- *      (1) The @length of the line is 1 greater than the distance
+ * <pre>
+ * Notes:
+ *      (1) The %length of the line is 1 greater than the distance
  *          used in locatePtRadially().  Example: a distance of 1
  *          gives rise to a length of 2.
+ * </pre>
  */
 PTA *
 generatePtaLineFromPt(l_int32    x,
@@ -812,14 +908,14 @@ l_int32  x2, y2;  /* the point at the other end of the line */
 
 
 /*!
- *  locatePtRadially()
+ * \brief   locatePtRadially()
  *
- *      Input:  xr, yr  (reference point)
- *              radang (angle in radians, CW from horizontal)
- *              dist (distance of point from reference point along line
- *                    given by the specified angle)
- *              &x, &y (<return> location of point)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    xr, yr  reference point
+ * \param[in]    radang angle in radians, CW from horizontal
+ * \param[in]    dist distance of point from reference point along line
+ *                    given by the specified angle
+ * \param[out]   px, py location of point
+ * \return  0 if OK, 1 on error
  */
 l_int32
 locatePtRadially(l_int32     xr,
@@ -841,56 +937,232 @@ locatePtRadially(l_int32     xr,
 
 
 /*------------------------------------------------------------------*
- *          Pta generation for plotting functions on images         *
+ *            Rendering function plots directly on images           *
  *------------------------------------------------------------------*/
 /*!
- *  generatePlotPtaFromNuma()
+ * \brief   pixRenderPlotFromNuma()
  *
- *      Input:  numa
- *              orient (L_HORIZONTAL_LINE, L_VERTICAL_LINE)
- *              width (width of "line" that is drawn; between 1 and 7)
- *              refpos (reference position: y for horizontal and x for vertical)
- *              max (maximum excursion in pixels from baseline)
- *              drawref (1 to draw the reference line and the normal to it)
- *      Return: ptad, or null on error
+ * \param[in,out]  ppix any type; replaced if not 32 bpp rgb
+ * \param[in]      na to be plotted
+ * \param[in]      plotloc location of plot: L_PLOT_AT_TOP, etc
+ * \param[in]      linewidth width of "line" that is drawn; between 1 and 7
+ * \param[in]      max maximum excursion in pixels from baseline
+ * \param[in]      color plot color: 0xrrggbb00
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
- *      (1) This generates points from a numa representing y(x) or x(y)
- *          with respect to a pix.  For y(x), we draw a horizontal line
- *          at the reference position and a vertical line at the edge; then
- *          we draw the values of the numa, scaled so that the maximum
- *          excursion from the reference position is @max pixels.
- *      (2) The width is chosen in the interval [1 ... 7].
- *      (3) @refpos should be chosen so the plot is entirely within the pix
- *          that it will be painted onto.
- *      (4) This would typically be used to plot, in place, a function
- *          computed along pixels rows or columns.
+ * <pre>
+ * Notes:
+ *      (1) Simplified interface for plotting row or column aligned data
+ *          on a pix.
+ *      (2) This replaces %pix with a 32 bpp rgb version if it is not
+ *          already 32 bpp.  It then draws the plot on the pix.
+ *      (3) See makePlotPtaFromNumaGen() for more details.
+ * </pre>
+ */
+l_int32
+pixRenderPlotFromNuma(PIX     **ppix,
+                      NUMA     *na,
+                      l_int32   plotloc,
+                      l_int32   linewidth,
+                      l_int32   max,
+                      l_uint32  color)
+{
+l_int32  w, h, size, rval, gval, bval;
+PIX     *pix1;
+PTA     *pta;
+
+    PROCNAME("pixRenderPlotFromNuma");
+
+    if (!ppix)
+        return ERROR_INT("&pix not defined", procName, 1);
+    if (*ppix == NULL)
+        return ERROR_INT("pix not defined", procName, 1);
+
+    pixGetDimensions(*ppix, &w, &h, NULL);
+    size = (plotloc == L_PLOT_AT_TOP || plotloc == L_PLOT_AT_MID_HORIZ ||
+            plotloc == L_PLOT_AT_BOT) ? h : w;
+    pta = makePlotPtaFromNuma(na, size, plotloc, linewidth, max);
+    if (!pta)
+        return ERROR_INT("pta not made", procName, 1);
+
+    if (pixGetDepth(*ppix) != 32) {
+        pix1 = pixConvertTo32(*ppix);
+        pixDestroy(ppix);
+        *ppix = pix1;
+    }
+    extractRGBValues(color, &rval, &gval, &bval);
+    pixRenderPtaArb(*ppix, pta, rval, gval, bval);
+    ptaDestroy(&pta);
+    return 0;
+}
+
+
+/*!
+ * \brief   makePlotPtaFromNuma()
+ *
+ * \param[in]    na
+ * \param[in]    size pix height for horizontal plot; width for vertical plot
+ * \param[in]    plotloc location of plot: L_PLOT_AT_TOP, etc
+ * \param[in]    linewidth width of "line" that is drawn; between 1 and 7
+ * \param[in]    max maximum excursion in pixels from baseline
+ * \return  ptad, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This generates points from %numa representing y(x) or x(y)
+ *          with respect to a pix.  A horizontal plot y(x) is drawn for
+ *          a function of column position, and a vertical plot is drawn
+ *          for a function x(y) of row position.  The baseline is located
+ *          so that all plot points will fit in the pix.
+ *      (2) See makePlotPtaFromNumaGen() for more details.
+ * </pre>
  */
 PTA *
-generatePlotPtaFromNuma(NUMA    *na,
-                        l_int32  orient,
-                        l_int32  width,
-                        l_int32  refpos,
-                        l_int32  max,
-                        l_int32  drawref)
+makePlotPtaFromNuma(NUMA    *na,
+                    l_int32  size,
+                    l_int32  plotloc,
+                    l_int32  linewidth,
+                    l_int32  max)
+{
+l_int32  orient, refpos;
+
+    PROCNAME("makePlotPtaFromNuma");
+
+    if (!na)
+        return (PTA *)ERROR_PTR("na not defined", procName, NULL);
+    if (plotloc == L_PLOT_AT_TOP || plotloc == L_PLOT_AT_MID_HORIZ ||
+        plotloc == L_PLOT_AT_BOT) {
+        orient = L_HORIZONTAL_LINE;
+    } else if (plotloc == L_PLOT_AT_LEFT || plotloc == L_PLOT_AT_MID_VERT ||
+               plotloc == L_PLOT_AT_RIGHT) {
+        orient = L_VERTICAL_LINE;
+    } else {
+        return (PTA *)ERROR_PTR("invalid plotloc", procName, NULL);
+    }
+
+    if (plotloc == L_PLOT_AT_LEFT || plotloc == L_PLOT_AT_TOP)
+        refpos = max;
+    else if (plotloc == L_PLOT_AT_MID_VERT || plotloc == L_PLOT_AT_MID_HORIZ)
+        refpos = size / 2;
+    else  /* L_PLOT_AT_RIGHT || L_PLOT_AT_BOT */
+        refpos = size - max - 1;
+
+    return makePlotPtaFromNumaGen(na, orient, linewidth, refpos, max, 1);
+}
+
+
+/*!
+ * \brief   pixRenderPlotFromNumaGen()
+ *
+ * \param[in,out]  ppix any type; replaced if not 32 bpp rgb
+ * \param[in]      na to be plotted
+ * \param[in]      orient L_HORIZONTAL_LINE, L_VERTICAL_LINE
+ * \param[in]      linewidth width of "line" that is drawn; between 1 and 7
+ * \param[in]      refpos reference position: y for horizontal and x for vertical
+ * \param[in]      max maximum excursion in pixels from baseline
+ * \param[in]      drawref 1 to draw the reference line and the normal to it
+ * \param[in]      color plot color: 0xrrggbb00
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) General interface for plotting row or column aligned data
+ *          on a pix.
+ *      (2) This replaces %pix with a 32 bpp rgb version if it is not
+ *          already 32 bpp.  It then draws the plot on the pix.
+ *      (3) See makePlotPtaFromNumaGen() for other input parameters.
+ * </pre>
+ */
+l_int32
+pixRenderPlotFromNumaGen(PIX     **ppix,
+                         NUMA     *na,
+                         l_int32   orient,
+                         l_int32   linewidth,
+                         l_int32   refpos,
+                         l_int32   max,
+                         l_int32   drawref,
+                         l_uint32  color)
+{
+l_int32  rval, gval, bval;
+PIX     *pix1;
+PTA     *pta;
+
+    PROCNAME("pixRenderPlotFromNumaGen");
+
+    if (!ppix)
+        return ERROR_INT("&pix not defined", procName, 1);
+    if (*ppix == NULL)
+        return ERROR_INT("pix not defined", procName, 1);
+
+    pta = makePlotPtaFromNumaGen(na, orient, linewidth, refpos, max, drawref);
+    if (!pta)
+        return ERROR_INT("pta not made", procName, 1);
+
+    if (pixGetDepth(*ppix) != 32) {
+        pix1 = pixConvertTo32(*ppix);
+        pixDestroy(ppix);
+        *ppix = pix1;
+    }
+    extractRGBValues(color, &rval, &gval, &bval);
+    pixRenderPtaArb(*ppix, pta, rval, gval, bval);
+    ptaDestroy(&pta);
+    return 0;
+}
+
+
+/*!
+ * \brief   makePlotPtaFromNumaGen()
+ *
+ * \param[in]    na
+ * \param[in]    orient L_HORIZONTAL_LINE, L_VERTICAL_LINE
+ * \param[in]    linewidth width of "line" that is drawn; between 1 and 7
+ * \param[in]    refpos reference position: y for horizontal and x for vertical
+ * \param[in]    max maximum excursion in pixels from baseline
+ * \param[in]    drawref 1 to draw the reference line and the normal to it
+ * \return  ptad, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This generates points from %numa representing y(x) or x(y)
+ *          with respect to a pix.  For y(x), we draw a horizontal line
+ *          at the reference position and a vertical line at the edge; then
+ *          we draw the values of %numa, scaled so that the maximum
+ *          excursion from the reference position is %max pixels.
+ *      (2) The start and delx parameters of %numa are used to refer
+ *          its values to the raster lines (L_VERTICAL_LINE) or columns
+ *          (L_HORIZONTAL_LINE).
+ *      (3) The linewidth is chosen in the interval [1 ... 7].
+ *      (4) %refpos should be chosen so the plot is entirely within the pix
+ *          that it will be painted onto.
+ *      (5) This would typically be used to plot, in place, a function
+ *          computed along pixel rows or columns.
+ * </pre>
+ */
+PTA *
+makePlotPtaFromNumaGen(NUMA    *na,
+                       l_int32  orient,
+                       l_int32  linewidth,
+                       l_int32  refpos,
+                       l_int32  max,
+                       l_int32  drawref)
 {
 l_int32    i, n, maxw, maxh;
 l_float32  minval, maxval, absval, val, scale, start, del;
 PTA       *pta1, *pta2, *ptad;
 
-    PROCNAME("generatePlotPtaFromNuma");
+    PROCNAME("makePlotPtaFromNumaGen");
 
     if (!na)
         return (PTA *)ERROR_PTR("na not defined", procName, NULL);
     if (orient != L_HORIZONTAL_LINE && orient != L_VERTICAL_LINE)
         return (PTA *)ERROR_PTR("invalid orient", procName, NULL);
-    if (width < 1) {
-        L_WARNING("width < 1; setting to 1\n", procName);
-        width = 1;
+    if (linewidth < 1) {
+        L_WARNING("linewidth < 1; setting to 1\n", procName);
+        linewidth = 1;
     }
-    if (width > 7) {
-        L_WARNING("width > 7; setting to 7\n", procName);
-        width = 7;
+    if (linewidth > 7) {
+        L_WARNING("linewidth > 7; setting to 7\n", procName);
+        linewidth = 7;
     }
 
     numaGetMin(na, &minval, NULL);
@@ -906,23 +1178,25 @@ PTA       *pta1, *pta2, *ptad;
         numaGetFValue(na, i, &val);
         if (orient == L_HORIZONTAL_LINE) {
             ptaAddPt(pta1, start + i * del, refpos + scale * val);
-            maxw = start + n * del + width;
-            maxh = refpos + max + width;
+            maxw = (del >= 0) ? start + n * del + linewidth
+                              : start + linewidth;
+            maxh = refpos + max + linewidth;
         } else {  /* vertical line */
             ptaAddPt(pta1, refpos + scale * val, start + i * del);
-            maxw = refpos + max + width;
-            maxh = start + n * del + width;
+            maxw = refpos + max + linewidth;
+            maxh = (del >= 0) ? start + n * del + linewidth
+                              : start + linewidth;
         }
     }
 
         /* Optionally, widen the plot */
-    if (width > 1) {
-        if (width % 2 == 0)  /* even width; use side of a square */
-            pta2 = generatePtaFilledSquare(width);
-        else  /* odd width; use radius of a circle */
-            pta2 = generatePtaFilledCircle(width / 2);
-        ptad = ptaReplicatePattern(pta1, NULL, pta2, width / 2, width / 2,
-                                   maxw, maxh);
+    if (linewidth > 1) {
+        if (linewidth % 2 == 0)  /* even linewidth; use side of a square */
+            pta2 = generatePtaFilledSquare(linewidth);
+        else  /* odd linewidth; use radius of a circle */
+            pta2 = generatePtaFilledCircle(linewidth / 2);
+        ptad = ptaReplicatePattern(pta1, NULL, pta2, linewidth / 2,
+                                   linewidth / 2, maxw, maxh);
         ptaDestroy(&pta2);
     } else {
         ptad = ptaClone(pta1);
@@ -957,14 +1231,15 @@ PTA       *pta1, *pta2, *ptad;
  *        Pta generation for arbitrary shapes built with lines      *
  *------------------------------------------------------------------*/
 /*!
- *  pixRenderPta()
+ * \brief   pixRenderPta()
  *
- *      Input:  pix
- *              pta (arbitrary set of points)
- *              op   (one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth, not cmapped
+ * \param[in]    pta  arbitrary set of points
+ * \param[in]    op   one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) L_SET_PIXELS puts all image bits in each pixel to 1
  *          (black for 1 bpp; white for depth > 1)
  *      (2) L_CLEAR_PIXELS puts all image bits in each pixel to 0
@@ -973,6 +1248,7 @@ PTA       *pta1, *pta2, *ptad;
  *      (4) This function clips the rendering to the pix.  It performs
  *          clipping for functions such as pixRenderLine(),
  *          pixRenderBox() and pixRenderBoxa(), that call pixRenderPta().
+ * </pre>
  */
 l_int32
 pixRenderPta(PIX     *pix,
@@ -985,6 +1261,8 @@ l_int32  i, n, x, y, w, h, d, maxval;
 
     if (!pix)
         return ERROR_INT("pix not defined", procName, 1);
+    if (pixGetColormap(pix))
+        return ERROR_INT("pix is colormapped", procName, 1);
     if (!pta)
         return ERROR_INT("pta not defined", procName, 1);
     if (op != L_SET_PIXELS && op != L_CLEAR_PIXELS && op != L_FLIP_PIXELS)
@@ -1041,22 +1319,25 @@ l_int32  i, n, x, y, w, h, d, maxval;
 
 
 /*!
- *  pixRenderPtaArb()
+ * \brief   pixRenderPtaArb()
  *
- *      Input:  pix (any depth, cmapped ok)
- *              pta (arbitrary set of points)
- *              rval, gval, bval
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix any depth, cmapped ok
+ * \param[in]    pta arbitrary set of points
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If pix is colormapped, render this color (or the nearest
  *          color if the cmap is full) on each pixel.
- *      (2) If pix is not colormapped, do the best job you can using
+ *      (2) The rgb components have the standard dynamic range [0 ... 255]
+ *      (3) If pix is not colormapped, do the best job you can using
  *          the input colors:
- *          - d = 1: set the pixels
- *          - d = 2, 4, 8: average the input rgb value
- *          - d = 32: use the input rgb value
- *      (3) This function clips the rendering to the pix.
+ *          ~ d = 1: set the pixels
+ *          ~ d = 2, 4, 8: average the input rgb value
+ *          ~ d = 32: use the input rgb value
+ *      (4) This function clips the rendering to the pix.
+ * </pre>
  */
 l_int32
 pixRenderPtaArb(PIX     *pix,
@@ -1120,15 +1401,17 @@ PIXCMAP  *cmap;
 
 
 /*!
- *  pixRenderPtaBlend()
+ * \brief   pixRenderPtaBlend()
  *
- *      Input:  pix (32 bpp rgb)
- *              pta  (arbitrary set of points)
- *              rval, gval, bval
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  32 bpp rgb
+ * \param[in]    pta  arbitrary set of points
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This function clips the rendering to the pix.
+ * </pre>
  */
 l_int32
 pixRenderPtaBlend(PIX     *pix,
@@ -1186,14 +1469,14 @@ l_float32  frval, fgval, fbval;
  *           Rendering of arbitrary shapes built with lines         *
  *------------------------------------------------------------------*/
 /*!
- *  pixRenderLine()
+ * \brief   pixRenderLine()
  *
- *      Input:  pix
- *              x1, y1
- *              x2, y2
- *              width  (thickness of line)
- *              op  (one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth, not cmapped
+ * \param[in]    x1, y1
+ * \param[in]    x2, y2
+ * \param[in]    width  thickness of line
+ * \param[in]    op  one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderLine(PIX     *pix,
@@ -1226,14 +1509,14 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderLineArb()
+ * \brief   pixRenderLineArb()
  *
- *      Input:  pix
- *              x1, y1
- *              x2, y2
- *              width  (thickness of line)
- *              rval, gval, bval
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix   any depth, cmapped ok
+ * \param[in]    x1, y1
+ * \param[in]    x2, y2
+ * \param[in]    width  thickness of line
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderLineArb(PIX     *pix,
@@ -1266,15 +1549,15 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderLineBlend()
+ * \brief   pixRenderLineBlend()
  *
- *      Input:  pix
- *              x1, y1
- *              x2, y2
- *              width  (thickness of line)
- *              rval, gval, bval
- *              fract
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  32 bpp rgb
+ * \param[in]    x1, y1
+ * \param[in]    x2, y2
+ * \param[in]    width  thickness of line
+ * \param[in]    rval, gval, bval
+ * \param[in]    fract
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderLineBlend(PIX       *pix,
@@ -1308,13 +1591,13 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderBox()
+ * \brief   pixRenderBox()
  *
- *      Input:  pix
- *              box
- *              width  (thickness of box lines)
- *              op  (one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth, not cmapped
+ * \param[in]    box
+ * \param[in]    width  thickness of box lines
+ * \param[in]    op  one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderBox(PIX     *pix,
@@ -1346,13 +1629,13 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderBoxArb()
+ * \brief   pixRenderBoxArb()
  *
- *      Input:  pix (any depth, cmapped ok)
- *              box
- *              width  (thickness of box lines)
- *              rval, gval, bval
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix any depth, cmapped ok
+ * \param[in]    box
+ * \param[in]    width  thickness of box lines
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderBoxArb(PIX     *pix,
@@ -1384,15 +1667,15 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderBoxBlend()
+ * \brief   pixRenderBoxBlend()
  *
- *      Input:  pix
- *              box
- *              width  (thickness of box lines)
- *              rval, gval, bval
- *              fract (in [0.0 - 1.0]; complete transparency (no effect)
- *                     if 0.0; no transparency if 1.0)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  32 bpp rgb
+ * \param[in]    box
+ * \param[in]    width  thickness of box lines
+ * \param[in]    rval, gval, bval
+ * \param[in]    fract in [0.0 - 1.0]; complete transparency (no effect
+ *                      if 0.0; no transparency if 1.0)
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderBoxBlend(PIX       *pix,
@@ -1425,13 +1708,13 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderBoxa()
+ * \brief   pixRenderBoxa()
  *
- *      Input:  pix
- *              boxa
- *              width  (thickness of line)
- *              op  (one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth, not cmapped
+ * \param[in]    boxa
+ * \param[in]    width  thickness of line
+ * \param[in]    op  one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderBoxa(PIX     *pix,
@@ -1463,13 +1746,13 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderBoxaArb()
+ * \brief   pixRenderBoxaArb()
  *
- *      Input:  pix
- *              boxa
- *              width  (thickness of line)
- *              rval, gval, bval
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth; colormapped is ok
+ * \param[in]    boxa
+ * \param[in]    width  thickness of line
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderBoxaArb(PIX     *pix,
@@ -1501,16 +1784,16 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderBoxaBlend()
+ * \brief   pixRenderBoxaBlend()
  *
- *      Input:  pix
- *              boxa
- *              width  (thickness of line)
- *              rval, gval, bval
- *              fract (in [0.0 - 1.0]; complete transparency (no effect)
- *                     if 0.0; no transparency if 1.0)
- *              removedups  (1 to remove; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  32 bpp rgb
+ * \param[in]    boxa
+ * \param[in]    width  thickness of line
+ * \param[in]    rval, gval, bval
+ * \param[in]    fract in [0.0 - 1.0]; complete transparency (no effect
+ *                      if 0.0; no transparency if 1.0)
+ * \param[in]    removedups  1 to remove; 0 otherwise
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderBoxaBlend(PIX       *pix,
@@ -1544,16 +1827,16 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderHashBox()
+ * \brief   pixRenderHashBox()
  *
- *      Input:  pix
- *              box
- *              spacing (spacing between lines; must be > 1)
- *              width  (thickness of box and hash lines)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *              op  (one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth, not cmapped
+ * \param[in]    box
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  thickness of box and hash lines
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    op  one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderHashBox(PIX     *pix,
@@ -1594,16 +1877,16 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderHashBoxArb()
+ * \brief   pixRenderHashBoxArb()
  *
- *      Input:  pix
- *              box
- *              spacing (spacing between lines; must be > 1)
- *              width  (thickness of box and hash lines)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *              rval, gval, bval
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth; cmapped ok
+ * \param[in]    box
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  thickness of box and hash lines
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderHashBoxArb(PIX     *pix,
@@ -1644,18 +1927,18 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderHashBoxBlend()
+ * \brief   pixRenderHashBoxBlend()
  *
- *      Input:  pix
- *              box
- *              spacing (spacing between lines; must be > 1)
- *              width  (thickness of box and hash lines)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *              rval, gval, bval
- *              fract (in [0.0 - 1.0]; complete transparency (no effect)
- *                     if 0.0; no transparency if 1.0)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix   32 bpp
+ * \param[in]    box
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  thickness of box and hash lines
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    rval, gval, bval
+ * \param[in]    fract in [0.0 - 1.0]; complete transparency (no effect
+ *                      if 0.0; no transparency if 1.0)
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderHashBoxBlend(PIX       *pix,
@@ -1697,16 +1980,91 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderHashBoxa()
+ * \brief   pixRenderHashMaskArb()
  *
- *      Input:  pix
- *              boxa
- *              spacing (spacing between lines; must be > 1)
- *              width  (thickness of box and hash lines)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *              op  (one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth; cmapped ok
+ * \param[in]    pixm  1 bpp clipping mask for hash marks
+ * \param[in]    x,y   UL corner of %pixm with respect to %pix
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  thickness of box and hash lines
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
+ * <pre>
+ * Notes:
+ *      (1) This is an in-place operation that renders hash lines
+ *          through a mask %pixm onto %pix.  The mask origin is
+ *          translated by (%x,%y) relative to the origin of %pix.
+ * </pre>
+ */
+l_int32
+pixRenderHashMaskArb(PIX     *pix,
+                     PIX     *pixm,
+                     l_int32  x,
+                     l_int32  y,
+                     l_int32  spacing,
+                     l_int32  width,
+                     l_int32  orient,
+                     l_int32  outline,
+                     l_int32  rval,
+                     l_int32  gval,
+                     l_int32  bval)
+{
+l_int32  w, h;
+BOX     *box1, *box2;
+PIX     *pix1;
+PTA     *pta1, *pta2;
+
+    PROCNAME("pixRenderHashMaskArb");
+
+    if (!pix)
+        return ERROR_INT("pix not defined", procName, 1);
+    if (!pixm || pixGetDepth(pixm) != 1)
+        return ERROR_INT("pixm not defined or not 1 bpp", procName, 1);
+    if (spacing <= 1)
+        return ERROR_INT("spacing not > 1", procName, 1);
+    if (width < 1) {
+        L_WARNING("width < 1; setting to 1\n", procName);
+        width = 1;
+    }
+    if (orient != L_HORIZONTAL_LINE && orient != L_POS_SLOPE_LINE &&
+        orient != L_VERTICAL_LINE && orient != L_NEG_SLOPE_LINE)
+        return ERROR_INT("invalid line orientation", procName, 1);
+
+        /* Get the points for masked hash lines */
+    pixGetDimensions(pixm, &w, &h, NULL);
+    box1 = boxCreate(0, 0, w, h);
+    pta1 = generatePtaHashBox(box1, spacing, width, orient, outline);
+    pta2 = ptaCropToMask(pta1, pixm);
+    boxDestroy(&box1);
+    ptaDestroy(&pta1);
+
+        /* Clip out the region and apply the hash lines */
+    box2 = boxCreate(x, y, w, h);
+    pix1 = pixClipRectangle(pix, box2, NULL);
+    pixRenderPtaArb(pix1, pta2, rval, gval, bval);
+    ptaDestroy(&pta2);
+    boxDestroy(&box2);
+
+        /* Rasterop the altered rectangle back in place */
+    pixRasterop(pix, x, y, w, h, PIX_SRC, pix1, 0, 0);
+    pixDestroy(&pix1);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixRenderHashBoxa()
+ *
+ * \param[in]    pix  any depth, not cmapped
+ * \param[in]    boxa
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  thickness of box and hash lines
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    op  one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderHashBoxa(PIX     *pix,
@@ -1747,16 +2105,16 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderHashBoxaArb()
+ * \brief   pixRenderHashBoxaArb()
  *
- *      Input:  pix
- *              boxa
- *              spacing (spacing between lines; must be > 1)
- *              width  (thickness of box and hash lines)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *              rval, gval, bval
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth; cmapped ok
+ * \param[in]    boxa
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  thickness of box and hash lines
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderHashBoxaArb(PIX     *pix,
@@ -1797,18 +2155,18 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderHashBoxaBlend()
+ * \brief   pixRenderHashBoxaBlend()
  *
- *      Input:  pix
- *              boxa
- *              spacing (spacing between lines; must be > 1)
- *              width  (thickness of box and hash lines)
- *              orient  (orientation of lines: L_HORIZONTAL_LINE, ...)
- *              outline  (0 to skip drawing box outline)
- *              rval, gval, bval
- *              fract (in [0.0 - 1.0]; complete transparency (no effect)
- *                     if 0.0; no transparency if 1.0)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  32 bpp rgb
+ * \param[in]    boxa
+ * \param[in]    spacing spacing between lines; must be > 1
+ * \param[in]    width  thickness of box and hash lines
+ * \param[in]    orient  orientation of lines: L_HORIZONTAL_LINE, ...
+ * \param[in]    outline  0 to skip drawing box outline
+ * \param[in]    rval, gval, bval
+ * \param[in]    fract in [0.0 - 1.0]; complete transparency (no effect
+ *                      if 0.0; no transparency if 1.0)
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderHashBoxaBlend(PIX       *pix,
@@ -1850,16 +2208,19 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderPolyline()
+ * \brief   pixRenderPolyline()
  *
- *      Input:  pix
- *              ptas
- *              width  (thickness of line)
- *              op  (one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS)
- *              closeflag (1 to close the contour; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth, not cmapped
+ * \param[in]    ptas
+ * \param[in]    width  thickness of line
+ * \param[in]    op  one of L_SET_PIXELS, L_CLEAR_PIXELS, L_FLIP_PIXELS
+ * \param[in]    closeflag 1 to close the contour; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Note: this renders a closed contour.
+ * <pre>
+ * Notes:
+ *      This renders a closed contour.
+ * </pre>
  */
 l_int32
 pixRenderPolyline(PIX     *pix,
@@ -1892,16 +2253,19 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderPolylineArb()
+ * \brief   pixRenderPolylineArb()
  *
- *      Input:  pix
- *              ptas
- *              width  (thickness of line)
- *              rval, gval, bval
- *              closeflag (1 to close the contour; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  any depth; cmapped ok
+ * \param[in]    ptas
+ * \param[in]    width  thickness of line
+ * \param[in]    rval, gval, bval
+ * \param[in]    closeflag 1 to close the contour; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Note: this renders a closed contour.
+ * <pre>
+ * Notes:
+ *      This renders a closed contour.
+ * </pre>
  */
 l_int32
 pixRenderPolylineArb(PIX     *pix,
@@ -1934,17 +2298,17 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderPolylineBlend()
+ * \brief   pixRenderPolylineBlend()
  *
- *      Input:  pix
- *              ptas
- *              width  (thickness of line)
- *              rval, gval, bval
- *              fract (in [0.0 - 1.0]; complete transparency (no effect)
- *                     if 0.0; no transparency if 1.0)
- *              closeflag (1 to close the contour; 0 otherwise)
- *              removedups  (1 to remove; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pix  32 bpp rgb
+ * \param[in]    ptas
+ * \param[in]    width  thickness of line
+ * \param[in]    rval, gval, bval
+ * \param[in]    fract in [0.0 - 1.0]; complete transparency (no effect
+ *                      if 0.0; no transparency if 1.0)
+ * \param[in]    closeflag 1 to close the contour; 0 otherwise
+ * \param[in]    removedups  1 to remove; 0 otherwise
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixRenderPolylineBlend(PIX       *pix,
@@ -1979,30 +2343,73 @@ PTA  *pta;
 
 
 /*!
- *  pixRenderRandomCmapPtaa()
+ * \brief   pixRenderGridArb()
  *
- *      Input:  pix (1, 2, 4, 8, 16, 32 bpp)
- *              ptaa
- *              polyflag (1 to interpret each Pta as a polyline; 0 to simply
- *                        render the Pta as a set of pixels)
- *              width  (thickness of line; use only for polyline)
- *              closeflag (1 to close the contour; 0 otherwise;
- *                         use only for polyline mode)
- *      Return: pixd (cmapped, 8 bpp) or null on error
+ * \param[in]    pix    any depth, cmapped ok
+ * \param[in]    nx, ny number of rectangles in each direction
+ * \param[in]    width  thickness of grid lines
+ * \param[in]    rval, gval, bval
+ * \return  0 if OK, 1 on error
+ */
+l_int32
+pixRenderGridArb(PIX     *pix,
+                 l_int32  nx,
+                 l_int32  ny,
+                 l_int32  width,
+                 l_uint8  rval,
+                 l_uint8  gval,
+                 l_uint8  bval)
+{
+l_int32  w, h;
+PTA     *pta;
+
+    PROCNAME("pixRenderGridArb");
+
+    if (!pix)
+        return ERROR_INT("pix not defined", procName, 1);
+    if (nx < 1 || ny < 1)
+        return ERROR_INT("nx, ny must be > 0", procName, 1);
+    if (width < 1) {
+        L_WARNING("width < 1; setting to 1\n", procName);
+        width = 1;
+    }
+
+    pixGetDimensions(pix, &w, &h, NULL);
+    if ((pta = generatePtaGrid(w, h, nx, ny, width)) == NULL)
+        return ERROR_INT("pta not made", procName, 1);
+    pixRenderPtaArb(pix, pta, rval, gval, bval);
+    ptaDestroy(&pta);
+    return 0;
+}
+
+
+/*!
+ * \brief   pixRenderRandomCmapPtaa()
  *
- *  Notes:
+ * \param[in]    pix 1, 2, 4, 8, 16, 32 bpp
+ * \param[in]    ptaa
+ * \param[in]    polyflag 1 to interpret each Pta as a polyline; 0 to simply
+ *                        render the Pta as a set of pixels
+ * \param[in]    width  thickness of line; use only for polyline
+ * \param[in]    closeflag 1 to close the contour; 0 otherwise;
+ *                         use only for polyline mode
+ * \return  pixd cmapped, 8 bpp or NULL on error
+ *
+ * <pre>
+ * Notes:
  *      (1) This is a debugging routine, that displays a set of
  *          pixels, selected by the set of Ptas in a Ptaa,
  *          in a random color in a pix.
- *      (2) If @polyflag == 1, each Pta is considered to be a polyline,
- *          and is rendered using @width and @closeflag.  Each polyline
+ *      (2) If %polyflag == 1, each Pta is considered to be a polyline,
+ *          and is rendered using %width and %closeflag.  Each polyline
  *          is rendered in a random color.
- *      (3) If @polyflag == 0, all points in each Pta are rendered in a
- *          random color.  The @width and @closeflag parameters are ignored.
+ *      (3) If %polyflag == 0, all points in each Pta are rendered in a
+ *          random color.  The %width and %closeflag parameters are ignored.
  *      (4) The output pix is 8 bpp and colormapped.  Up to 254
  *          different, randomly selected colors, can be used.
  *      (5) The rendered pixels replace the input pixels.  They will
  *          be clipped silently to the input pix.
+ * </pre>
  */
 PIX  *
 pixRenderRandomCmapPtaa(PIX     *pix,
@@ -2022,7 +2429,7 @@ PIX      *pixd;
         return (PIX *)ERROR_PTR("pix not defined", procName, NULL);
     if (!ptaa)
         return (PIX *)ERROR_PTR("ptaa not defined", procName, NULL);
-    if (width < 1) {
+    if (polyflag != 0 && width < 1) {
         L_WARNING("width < 1; setting to 1\n", procName);
         width = 1;
     }
@@ -2056,20 +2463,22 @@ PIX      *pixd;
  *                Rendering and filling of polygons                 *
  *------------------------------------------------------------------*/
 /*!
- *  pixRenderPolygon()
+ * \brief   pixRenderPolygon()
  *
- *      Input:  ptas (of vertices, none repeated)
- *              width (of polygon outline)
- *              &xmin (<optional return> min x value of input pts)
- *              &ymin (<optional return> min y value of input pts)
- *      Return: pix (1 bpp, with outline generated), or null on error
+ * \param[in]    ptas of vertices, none repeated
+ * \param[in]    width of polygon outline
+ * \param[out]   pxmin [optional] min x value of input pts
+ * \param[out]   pymin [optional] min y value of input pts
+ * \return  pix 1 bpp, with outline generated, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The pix is the minimum size required to contain the origin
  *          and the polygon.  For example, the max x value of the input
  *          points is w - 1, where w is the pix width.
  *      (2) The rendered line is 4-connected, so that an interior or
  *          exterior 8-c.c. flood fill operation works properly.
+ * </pre>
  */
 PIX *
 pixRenderPolygon(PTA      *ptas,
@@ -2109,20 +2518,22 @@ PTA       *pta1, *pta2;
 
 
 /*!
- *  pixFillPolygon()
+ * \brief   pixFillPolygon()
  *
- *      Input:  pixs (1 bpp, with 4-connected polygon outline)
- *              pta (vertices of the polygon)
- *              xmin, ymin (min values of vertices of polygon)
- *      Return: pixd (with outline filled), or null on error
+ * \param[in]    pixs 1 bpp, with 4-connected polygon outline
+ * \param[in]    pta vertices of the polygon
+ * \param[in]    xmin, ymin min values of vertices of polygon
+ * \return  pixd with outline filled, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This fills the interior of the polygon, returning a
  *          new pix.  It works for both convex and non-convex polygons.
  *      (2) To generate a filled polygon from a pta:
  *            PIX *pixt = pixRenderPolygon(pta, 1, &xmin, &ymin);
  *            PIX *pixd = pixFillPolygon(pixt, pta, xmin, ymin);
  *            pixDestroy(&pixt);
+ * </pre>
  */
 PIX *
 pixFillPolygon(PIX     *pixs,
@@ -2142,8 +2553,8 @@ PIX      *pixi, *pixd;
         return (PIX *)ERROR_PTR("pta not defined", procName, NULL);
 
     pixGetDimensions(pixs, &w, &h, NULL);
-    xstart = (l_int32 *)CALLOC(w / 2, sizeof(l_int32));
-    xend = (l_int32 *)CALLOC(w / 2, sizeof(l_int32));
+    xstart = (l_int32 *)LEPT_CALLOC(w / 2, sizeof(l_int32));
+    xend = (l_int32 *)LEPT_CALLOC(w / 2, sizeof(l_int32));
 
         /* Find a raster with 2 or more black runs.  The first background
          * pixel after the end of the first run is likely to be inside
@@ -2161,8 +2572,8 @@ PIX      *pixi, *pixd;
     }
     if (!found) {
         L_WARNING("nothing found to fill\n", procName);
-        FREE(xstart);
-        FREE(xend);
+        LEPT_FREE(xstart);
+        LEPT_FREE(xend);
         return 0;
     }
 
@@ -2178,8 +2589,8 @@ PIX      *pixi, *pixd;
     pixOr(pixd, pixd, pixs);
 
     pixDestroy(&pixi);
-    FREE(xstart);
-    FREE(xend);
+    LEPT_FREE(xstart);
+    LEPT_FREE(xend);
     return pixd;
 }
 
@@ -2188,18 +2599,20 @@ PIX      *pixi, *pixd;
  *             Contour rendering on grayscale images                *
  *------------------------------------------------------------------*/
 /*!
- *  pixRenderContours()
+ * \brief   pixRenderContours()
  *
- *      Input:  pixs (8 or 16 bpp; no colormap)
- *              startval (value of lowest contour; must be in [0 ... maxval])
- *              incr  (increment to next contour; must be > 0)
- *              outdepth (either 1 or depth of pixs)
- *      Return: pixd, or null on error
+ * \param[in]    pixs 8 or 16 bpp; no colormap
+ * \param[in]    startval value of lowest contour; must be in [0 ... maxval]
+ * \param[in]    incr  increment to next contour; must be > 0
+ * \param[in]    outdepth either 1 or depth of pixs
+ * \return  pixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The output can be either 1 bpp, showing just the contour
  *          lines, or a copy of the input pixs with the contour lines
  *          superposed.
+ * </pre>
  */
 PIX *
 pixRenderContours(PIX     *pixs,
@@ -2313,17 +2726,19 @@ PIX       *pixd;
 
 
 /*!
- *  fpixAutoRenderContours()
+ * \brief   fpixAutoRenderContours()
  *
- *      Input:  fpix
- *              ncontours (> 1, < 500, typ. about 50)
- *      Return: pixd (8 bpp), or null on error
+ * \param[in]    fpix
+ * \param[in]    ncontours > 1, < 500, typ. about 50
+ * \return  pixd 8 bpp, or NULL on error
  *
- *  Notes:
- *      (1) The increment is set to get approximately @ncontours.
+ * <pre>
+ * Notes:
+ *      (1) The increment is set to get approximately %ncontours.
  *      (2) The proximity to the target value for contour display
  *          is set to 0.15.
  *      (3) Negative values are rendered in red; positive values as black.
+ * </pre>
  */
 PIX *
 fpixAutoRenderContours(FPIX    *fpix,
@@ -2348,18 +2763,20 @@ l_float32  minval, maxval, incr;
 
 
 /*!
- *  fpixRenderContours()
+ * \brief   fpixRenderContours()
  *
- *      Input:  fpixs
- *              incr  (increment between contours; must be > 0.0)
- *              proxim (required proximity to target value; default 0.15)
- *      Return: pixd (8 bpp), or null on error
+ * \param[in]    fpixs
+ * \param[in]    incr  increment between contours; must be > 0.0
+ * \param[in]    proxim required proximity to target value; default 0.15
+ * \return  pixd 8 bpp, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Values are displayed when val/incr is within +-proxim
  *          to an integer.  The default value is 0.15; smaller values
  *          result in thinner contour lines.
  *      (2) Negative values are rendered in red; positive values as black.
+ * </pre>
  */
 PIX *
 fpixRenderContours(FPIX      *fpixs,
@@ -2415,4 +2832,50 @@ PIXCMAP    *cmap;
     }
 
     return pixd;
+}
+
+
+/*------------------------------------------------------------------*
+ *             Boundary pt generation on 1 bpp images               *
+ *------------------------------------------------------------------*/
+/*!
+ * \brief   pixGeneratePtaBoundary()
+ *
+ * \param[in]    pixs 1 bpp
+ * \param[in]    width of boundary line
+ * \return  pta, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) Similar to ptaGetBoundaryPixels(), except here:
+ *          * we only get pixels in the foreground
+ *          * we can have a "line" width greater than 1 pixel.
+ *      (2) Once generated, this can be applied to a random 1 bpp image
+ *          to add a color boundary as follows:
+ *             Pta *pta = pixGeneratePtaBoundary(pixs, width);
+ *             Pix *pix1 = pixConvert1To8Cmap(pixs);
+ *             pixRenderPtaArb(pix1, pta, rval, gval, bval);
+ * </pre>
+ */
+PTA  *
+pixGeneratePtaBoundary(PIX     *pixs,
+                       l_int32  width)
+{
+PIX  *pix1;
+PTA  *pta;
+
+    PROCNAME("pixGeneratePtaBoundary");
+
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return (PTA *)ERROR_PTR("pixs undefined or not 1 bpp", procName, NULL);
+    if (width < 1) {
+        L_WARNING("width < 1; setting to 1\n", procName);
+        width = 1;
+    }
+
+    pix1 = pixErodeBrick(NULL, pixs, 2 * width + 1, 2 * width + 1);
+    pixXor(pix1, pix1, pixs);
+    pta = ptaGetPixelsFromPix(pix1, NULL);
+    pixDestroy(&pix1);
+    return pta;
 }

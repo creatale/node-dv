@@ -945,7 +945,7 @@ NAN_METHOD(Image::Thin)
         if (pix->d != 1) {
             pix = pixConvertTo1(pix, 128);
         }
-        Pix *pixd = pixThin(pix, typeInt, connectivity, maxIters);
+        Pix *pixd = pixThinConnected(pix, typeInt, connectivity, maxIters);
         if (pix != obj->pix_) {
             pixDestroy(&pix);
         }

@@ -24,18 +24,20 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  libversions.c
+/*!
+ * \file libversions.c
+ * <pre>
  *
  *       Image library version number
  *           char      *getImagelibVersions()
+ * </pre>
  */
-
-#include "allheaders.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif  /* HAVE_CONFIG_H */
+
+#include "allheaders.h"
 
 #if HAVE_LIBGIF
 #include "gif_lib.h"
@@ -68,109 +70,134 @@
 #include "webp/encode.h"
 #endif
 
-#define stringJoinInPlace(s1, s2) \
-    { tempStrP = stringJoin((s1),(s2)); FREE(s1); (s1) = tempStrP; }
+#if HAVE_LIBJP2K
+#ifdef LIBJP2K_HEADER
+#include LIBJP2K_HEADER
+#else
+#include <openjpeg.h>
+#endif
+#endif
 
 
 /*---------------------------------------------------------------------*
  *                    Image Library Version number                     *
  *---------------------------------------------------------------------*/
 /*!
- *  getImagelibVersions()
+ * \brief   getImagelibVersions()
  *
- *      Return: string of version numbers (e.g.,
+ *      Return: string of version numbers; e.g.,
  *               libgif 5.0.3
- *               libjpeg 8b
+ *               libjpeg 8b (libjpeg-turbo 1.3.0)
  *               libpng 1.4.3
  *               libtiff 3.9.5
  *               zlib 1.2.5
- *               webp 0.3.0
+ *               libwebp 0.3.0
+ *               libopenjp2 2.1.0
  *
  *  Notes:
- *      (1) The caller has responsibility to free the memory.
+ *      (1) The caller must free the memory.
  */
 char *
 getImagelibVersions()
 {
 char     buf[128];
 l_int32  first = TRUE;
-
-#if HAVE_LIBJPEG
-    struct jpeg_compress_struct cinfo;
-    struct jpeg_error_mgr err;
-    char buffer[JMSG_LENGTH_MAX];
-#endif
-    char *tempStrP;
-    char *versionNumP;
-    char *nextTokenP;
-    char *versionStrP = stringNew("");
+char    *versionNumP;
+char    *nextTokenP;
+char    *versionStrP = NULL;
 
 #if HAVE_LIBGIF
     first = FALSE;
-    stringJoinInPlace(versionStrP, "libgif ");
+    stringJoinIP(&versionStrP, "libgif ");
   #ifdef GIFLIB_MAJOR
     snprintf(buf, sizeof(buf), "%d.%d.%d", GIFLIB_MAJOR, GIFLIB_MINOR,
              GIFLIB_RELEASE);
   #else
     stringCopy(buf, "4.1.6(?)", sizeof(buf));
   #endif
-    stringJoinInPlace(versionStrP, buf);
-#endif
+    stringJoinIP(&versionStrP, buf);
+#endif  /* HAVE_LIBGIF */
 
 #if HAVE_LIBJPEG
+    {
+    struct jpeg_compress_struct  cinfo;
+    struct jpeg_error_mgr        err;
+    char                         buffer[JMSG_LENGTH_MAX];
     cinfo.err = jpeg_std_error(&err);
     err.msg_code = JMSG_VERSION;
     (*err.format_message) ((j_common_ptr ) &cinfo, buffer);
 
-    if (!first) stringJoinInPlace(versionStrP, " : ");
+    if (!first) stringJoinIP(&versionStrP, " : ");
     first = FALSE;
-    stringJoinInPlace(versionStrP, "libjpeg ");
+    stringJoinIP(&versionStrP, "libjpeg ");
     versionNumP = strtokSafe(buffer, " ", &nextTokenP);
-    stringJoinInPlace(versionStrP, versionNumP);
-    FREE(versionNumP);
-#endif
+    stringJoinIP(&versionStrP, versionNumP);
+    LEPT_FREE(versionNumP);
+
+  #if defined(LIBJPEG_TURBO_VERSION)
+        /* To stringify the result of expansion of a macro argument,
+         * you must use two levels of macros.  See:
+         *   https://gcc.gnu.org/onlinedocs/cpp/Stringification.html  */
+  #define l_xstr(s) l_str(s)
+  #define l_str(s) #s
+    snprintf(buf, sizeof(buf), " (libjpeg-turbo %s)",
+             l_xstr(LIBJPEG_TURBO_VERSION));
+    stringJoinIP(&versionStrP, buf);
+  #endif  /* LIBJPEG_TURBO_VERSION */
+    }
+#endif  /* HAVE_LIBJPEG */
 
 #if HAVE_LIBPNG
-    if (!first) stringJoinInPlace(versionStrP, " : ");
+    if (!first) stringJoinIP(&versionStrP, " : ");
     first = FALSE;
-    stringJoinInPlace(versionStrP, "libpng ");
-    stringJoinInPlace(versionStrP, png_get_libpng_ver(NULL));
-#endif
+    stringJoinIP(&versionStrP, "libpng ");
+    stringJoinIP(&versionStrP, png_get_libpng_ver(NULL));
+#endif  /* HAVE_LIBPNG */
 
 #if HAVE_LIBTIFF
-    if (!first) stringJoinInPlace(versionStrP, " : ");
+    if (!first) stringJoinIP(&versionStrP, " : ");
     first = FALSE;
-    stringJoinInPlace(versionStrP, "libtiff ");
+    stringJoinIP(&versionStrP, "libtiff ");
     versionNumP = strtokSafe((char *)TIFFGetVersion(), " \n", &nextTokenP);
-    FREE(versionNumP);
+    LEPT_FREE(versionNumP);
     versionNumP = strtokSafe(NULL, " \n", &nextTokenP);
-    FREE(versionNumP);
+    LEPT_FREE(versionNumP);
     versionNumP = strtokSafe(NULL, " \n", &nextTokenP);
-    stringJoinInPlace(versionStrP, versionNumP);
-    FREE(versionNumP);
-#endif
+    stringJoinIP(&versionStrP, versionNumP);
+    LEPT_FREE(versionNumP);
+#endif  /* HAVE_LIBTIFF */
 
 #if HAVE_LIBZ
-    if (!first) stringJoinInPlace(versionStrP, " : ");
+    if (!first) stringJoinIP(&versionStrP, " : ");
     first = FALSE;
-    stringJoinInPlace(versionStrP, "zlib ");
-    stringJoinInPlace(versionStrP, zlibVersion());
-#endif
+    stringJoinIP(&versionStrP, "zlib ");
+    stringJoinIP(&versionStrP, zlibVersion());
+#endif  /* HAVE_LIBZ */
 
 #if HAVE_LIBWEBP
     {
     l_int32 val;
     char buf[32];
-    if (!first) stringJoinInPlace(versionStrP, " : ");
+    if (!first) stringJoinIP(&versionStrP, " : ");
     first = FALSE;
-    stringJoinInPlace(versionStrP, "webp ");
+    stringJoinIP(&versionStrP, "libwebp ");
     val = WebPGetEncoderVersion();
     snprintf(buf, sizeof(buf), "%d.%d.%d", val >> 16, (val >> 8) & 0xff,
              val & 0xff);
-    stringJoinInPlace(versionStrP, buf);
+    stringJoinIP(&versionStrP, buf);
     }
-#endif
+#endif  /* HAVE_LIBWEBP */
 
-    stringJoinInPlace(versionStrP, "\n");
+#if HAVE_LIBJP2K
+    {
+    const char *version;
+    if (!first) stringJoinIP(&versionStrP, " : ");
+    first = FALSE;
+    stringJoinIP(&versionStrP, "libopenjp2 ");
+    version = opj_version();
+    stringJoinIP(&versionStrP, version);
+    }
+#endif  /* HAVE_LIBJP2K */
+
     return versionStrP;
 }

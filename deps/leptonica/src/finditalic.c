@@ -75,20 +75,21 @@ static const char *str_ital3 = " x"
                                "x ";
 
 /*!
- *  pixItalicWords()
+ * \brief   pixItalicWords()
  *
- *      Input:  pixs (1 bpp)
- *              boxaw (<optional> word bounding boxes; can be NULL)
- *              pixw (<optional> word box mask; can be NULL)
- *              &boxa (<return> boxa of italic words)
- *              debugflag (1 for debug output; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs       1 bpp
+ * \param[in]    boxaw      [optional] word bounding boxes; can be NULL
+ * \param[in]    pixw       [optional] word box mask; can be NULL
+ * \param[out]   pboxa      boxa of italic words
+ * \param[in]    debugflag  1 for debug output; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) You can input the bounding boxes for the words in one of
- *          two forms: as bounding boxes (@boxaw) or as a word mask with
- *          the word bounding boxes filled (@pixw).  For example,
- *          to compute @pixw, you can use pixWordMaskByDilation().
+ *          two forms: as bounding boxes (%boxaw) or as a word mask with
+ *          the word bounding boxes filled (%pixw).  For example,
+ *          to compute %pixw, you can use pixWordMaskByDilation().
  *      (2) Alternatively, you can set both of these inputs to NULL,
  *          in which case the word mask is generated here.  This is
  *          done by dilating and closing the input image to connect
@@ -103,6 +104,7 @@ static const char *str_ital3 = " x"
  *          will not trigger on the slanted lines in the 'W'.
  *      (4) Note that sel_ital2 is shorter than sel_ital1.  It is
  *          more appropriate for a typical font scanned at 200 ppi.
+ * </pre>
  */
 l_int32
 pixItalicWords(PIX     *pixs,
@@ -139,13 +141,14 @@ SEL     *sel_ital1, *sel_ital2, *sel_ital3;
     pixOpen(pixsd, pixsd, sel_ital3);
 
         /* Make the word mask.  Use input boxes or mask if given. */
+    size = 0;  /* init */
     if (boxaw) {
         pixm = pixCreateTemplate(pixs);
         pixMaskBoxa(pixm, pixm, boxaw, L_SET_PIXELS);
     } else if (pixw) {
         pixm = pixClone(pixw);
     } else {
-        pixWordMaskByDilation(pixs, 20, NULL, &size);
+        pixWordMaskByDilation(pixs, NULL, &size, NULL);
         L_INFO("dilation size = %d\n", procName, size);
         snprintf(opstring, sizeof(opstring), "d1.5 + c%d.1", size);
         pixm = pixMorphSequence(pixs, opstring, 0);
@@ -159,6 +162,7 @@ SEL     *sel_ital1, *sel_ital2, *sel_ital3;
 
     if (debugflag) {
             /* Save results at at 2x reduction */
+        lept_mkdir("lept/ital");
         l_int32  res, upper;
         BOXA  *boxat;
         GPLOT *gplot;
@@ -167,7 +171,7 @@ SEL     *sel_ital1, *sel_ital2, *sel_ital3;
         PIX   *pix1, *pix2, *pix3;
         pad = pixaCreate(0);
         boxat = pixConnComp(pixm, NULL, 8);
-        boxaWrite("/tmp/ital.ba", boxat);
+        boxaWriteDebug("/tmp/lept/ital/ital.ba", boxat);
         pixSaveTiledOutline(pixs, pad, 0.5, 1, 20, 2, 32);  /* orig */
         pixSaveTiledOutline(pixsd, pad, 0.5, 1, 20, 2, 0);  /* seed */
         pix1 = pixConvertTo32(pixm);
@@ -189,7 +193,7 @@ SEL     *sel_ital1, *sel_ital2, *sel_ital3;
         pixDestroy(&pix2);
         pixDestroy(&pix3);
         pix2 = pixaDisplay(pad, 0, 0);
-        pixWrite("/tmp/ital.png", pix2, IFF_PNG);
+        pixWriteDebug("/tmp/lept/ital/ital.png", pix2, IFF_PNG);
         pixDestroy(&pix2);
 
             /* Assuming the image represents 6 inches of actual page width,
@@ -198,8 +202,10 @@ SEL     *sel_ital1, *sel_ital2, *sel_ital3;
              * and the images have been saved at half this resolution.   */
         res = pixGetWidth(pixs) / 12;
         L_INFO("resolution = %d\n", procName, res);
+        l_pdfSetDateAndVersion(0);
         pixaConvertToPdf(pad, res, 1.0, L_FLATE_ENCODE, 75, "Italic Finder",
-                         "/tmp/ital.pdf");
+                         "/tmp/lept/ital/ital.pdf");
+        l_pdfSetDateAndVersion(1);
         pixaDestroy(&pad);
         boxaDestroy(&boxat);
 
@@ -212,7 +218,7 @@ SEL     *sel_ital1, *sel_ital2, *sel_ital3;
         upper = L_MAX(30, 3 * size);
         na = pixRunHistogramMorph(pix1, L_RUN_OFF, L_HORIZ, upper);
         pixDestroy(&pix1);
-        gplot = gplotCreate("/tmp/runhisto", GPLOT_PNG,
+        gplot = gplotCreate("/tmp/lept/ital/runhisto", GPLOT_PNG,
                 "Histogram of horizontal runs of white pixels, vs length",
                 "run length", "number of runs");
         gplotAddPlot(gplot, NULL, na, GPLOT_LINES, "plot1");

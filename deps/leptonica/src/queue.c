@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *   queue.c
+/*!
+ * \file  queue.c
+ * <pre>
  *
  *      Create/Destroy L_Queue
  *          L_QUEUE        *lqueueCreate()
@@ -58,6 +59,7 @@
  *    [A circular queue would allow us to skip the shifting and
  *    to resize only when the buffer is full.  For most applications,
  *    the extra work we do for a linear queue is not significant.]
+ * </pre>
  */
 
 #include <string.h>
@@ -74,13 +76,15 @@ static l_int32 lqueueExtendArray(L_QUEUE *lq);
  *                         L_Queue create/destroy                           *
  *--------------------------------------------------------------------------*/
 /*!
- *  lqueueCreate()
+ * \brief   lqueueCreate()
  *
- *      Input:  size of ptr array to be alloc'd (0 for default)
- *      Return: lqueue, or null on error
+ * \param[in]    nalloc     size of ptr array to be alloc'd; 0 for default
+ * \return  lqueue, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Allocates a ptr array of given size, and initializes counters.
+ * </pre>
  */
 L_QUEUE *
 lqueueCreate(l_int32  nalloc)
@@ -92,10 +96,11 @@ L_QUEUE  *lq;
     if (nalloc < MIN_BUFFER_SIZE)
         nalloc = INITIAL_BUFFER_ARRAYSIZE;
 
-    if ((lq = (L_QUEUE *)CALLOC(1, sizeof(L_QUEUE))) == NULL)
-        return (L_QUEUE *)ERROR_PTR("lq not made", procName, NULL);
-    if ((lq->array = (void **)CALLOC(nalloc, sizeof(void *))) == NULL)
+    lq = (L_QUEUE *)LEPT_CALLOC(1, sizeof(L_QUEUE));
+    if ((lq->array = (void **)LEPT_CALLOC(nalloc, sizeof(void *))) == NULL) {
+        lqueueDestroy(&lq, 0);
         return (L_QUEUE *)ERROR_PTR("ptr array not made", procName, NULL);
+    }
     lq->nalloc = nalloc;
     lq->nhead = lq->nelem = 0;
     return lq;
@@ -103,13 +108,14 @@ L_QUEUE  *lq;
 
 
 /*!
- *  lqueueDestroy()
+ * \brief   lqueueDestroy()
  *
- *      Input:  &lqueue  (<to be nulled>)
- *              freeflag (TRUE to free each remaining struct in the array)
- *      Return: void
+ * \param[in,out]   plq to be nulled
+ * \param[in]    freeflag TRUE to free each remaining struct in the array
+ * \return  void
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If freeflag is TRUE, frees each struct in the array.
  *      (2) If freeflag is FALSE but there are elements on the array,
  *          gives a warning and destroys the array.  This will
@@ -119,6 +125,7 @@ L_QUEUE  *lq;
  *          auxiliary stack, if it is used.
  *      (3) To destroy the L_Queue, we destroy the ptr array, then
  *          the lqueue, and then null the contents of the input ptr.
+ * </pre>
  */
 void
 lqueueDestroy(L_QUEUE  **plq,
@@ -139,17 +146,17 @@ L_QUEUE  *lq;
     if (freeflag) {
         while(lq->nelem > 0) {
             item = lqueueRemove(lq);
-            FREE(item);
+            LEPT_FREE(item);
         }
     } else if (lq->nelem > 0) {
         L_WARNING("memory leak of %d items in lqueue!\n", procName, lq->nelem);
     }
 
     if (lq->array)
-        FREE(lq->array);
+        LEPT_FREE(lq->array);
     if (lq->stack)
         lstackDestroy(&lq->stack, freeflag);
-    FREE(lq);
+    LEPT_FREE(lq);
     *plq = NULL;
 
     return;
@@ -160,19 +167,21 @@ L_QUEUE  *lq;
  *                                  Accessors                               *
  *--------------------------------------------------------------------------*/
 /*!
- *  lqueueAdd()
+ * \brief   lqueueAdd()
  *
- *      Input:  lqueue
- *              item to be added to the tail of the queue
- *      Return: 0 if OK, 1 on error
+ * \param[in]    lq lqueue
+ * \param[in]    item to be added to the tail of the queue
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The algorithm is as follows.  If the queue is populated
  *          to the end of the allocated array, shift all ptrs toward
  *          the beginning of the array, so that the head of the queue
  *          is at the beginning of the array.  Then, if the array is
  *          more than 0.75 full, realloc with double the array size.
  *          Finally, add the item to the tail of the queue.
+ * </pre>
  */
 l_int32
 lqueueAdd(L_QUEUE  *lq,
@@ -205,10 +214,10 @@ lqueueAdd(L_QUEUE  *lq,
 
 
 /*!
- *  lqueueExtendArray()
+ * \brief   lqueueExtendArray()
  *
- *      Input:  lqueue
- *      Return: 0 if OK, 1 on error
+ * \param[in]    lq lqueue
+ * \return  0 if OK, 1 on error
  */
 static l_int32
 lqueueExtendArray(L_QUEUE  *lq)
@@ -229,15 +238,17 @@ lqueueExtendArray(L_QUEUE  *lq)
 
 
 /*!
- *  lqueueRemove()
+ * \brief   lqueueRemove()
  *
- *      Input:  lqueue
- *      Return: ptr to item popped from the head of the queue,
- *              or null if the queue is empty or on error
+ * \param[in]    lq lqueue
+ * \return  ptr to item popped from the head of the queue,
+ *              or NULL if the queue is empty or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If this is the last item on the queue, so that the queue
  *          becomes empty, nhead is reset to the beginning of the array.
+ * </pre>
  */
 void *
 lqueueRemove(L_QUEUE  *lq)
@@ -263,10 +274,10 @@ void  *item;
 
 
 /*!
- *  lqueueGetCount()
+ * \brief   lqueueGetCount()
  *
- *      Input:  lqueue
- *      Return: count, or 0 on error
+ * \param[in]    lq lqueue
+ * \return  count, or 0 on error
  */
 l_int32
 lqueueGetCount(L_QUEUE  *lq)
@@ -284,11 +295,11 @@ lqueueGetCount(L_QUEUE  *lq)
  *                            Debug output                             *
  *---------------------------------------------------------------------*/
 /*!
- *  lqueuePrint()
+ * \brief   lqueuePrint()
  *
- *      Input:  stream
- *              lqueue
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fp file stream
+ * \param[in]    lq lqueue
+ * \return  0 if OK; 1 on error
  */
 l_int32
 lqueuePrint(FILE     *fp,

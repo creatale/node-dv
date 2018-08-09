@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  bardecode.c
+/*!
+ * \file bardecode.c
+ * <pre>
  *
  *      Dispatcher
  *          char            *barcodeDispatchDecoder()
@@ -55,6 +56,7 @@
  *
  *      Decode EAN 13
  *          static char     *barcodeDecodeEan13()
+ * </pre>
  */
 
 #include <string.h>
@@ -83,12 +85,12 @@ static char *barcodeDecodeEan13(char *barstr, l_int32 first, l_int32 debugflag);
  *                           Decoding dispatcher                          *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDispatchDecoder()
+ * \brief   barcodeDispatchDecoder()
  *
- *      Input:  barstr (string of integers in set {1,2,3,4} of bar widths)
- *              format (L_BF_ANY, L_BF_CODEI2OF5, L_BF_CODE93, ...)
- *              debugflag (use 1 to generate debug output)
- *      Return: data (string of decoded barcode data), or null on error
+ * \param[in]    barstr string of integers in set {1,2,3,4} of bar widths
+ * \param[in]    format L_BF_ANY, L_BF_CODEI2OF5, L_BF_CODE93, ...
+ * \param[in]    debugflag use 1 to generate debug output
+ * \return  data string of decoded barcode data, or NULL on error
  */
 char *
 barcodeDispatchDecoder(char    *barstr,
@@ -132,10 +134,10 @@ char  *data = NULL;
  *                      Barcode format determination                      *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeFindFormat()
+ * \brief   barcodeFindFormat()
  *
- *      Input:  barstr (of barcode widths, in set {1,2,3,4})
- *      Return: format (for barcode), or L_BF_UNKNOWN if not recognized
+ * \param[in]    barstr of barcode widths, in set {1,2,3,4}
+ * \return  format for barcode, or L_BF_UNKNOWN if not recognized
  */
 static l_int32
 barcodeFindFormat(char    *barstr)
@@ -161,10 +163,10 @@ l_int32  i, format, valid;
 
 
 /*!
- *  barcodeFormatIsSupported()
+ * \brief   barcodeFormatIsSupported()
  *
- *      Input:  format
- *      Return: 1 if format is one of those supported; 0 otherwise
+ * \param[in]    format
+ * \return  1 if format is one of those supported; 0 otherwise
  *
  */
 l_int32
@@ -181,20 +183,22 @@ l_int32  i;
 
 
 /*!
- *  barcodeVerifyFormat()
+ * \brief   barcodeVerifyFormat()
  *
- *      Input:  barstr (of barcode widths, in set {1,2,3,4})
- *              format (L_BF_CODEI2OF5, L_BF_CODE93, ...)
- *              &valid (<return> 0 if not valid, 1 and 2 if valid)
- *              &reverse (<optional return> 1 if reversed; 0 otherwise)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    barstr of barcode widths, in set {1,2,3,4}
+ * \param[in]    format L_BF_CODEI2OF5, L_BF_CODE93, ...
+ * \param[out]   pvalid 0 if not valid, 1 and 2 if valid
+ * \param[out]   preverse [optional] 1 if reversed; 0 otherwise
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If valid == 1, the barcode is of the given format in the
  *          forward order; if valid == 2, it is backwards.
  *      (2) If the barcode needs to be reversed to read it, and &reverse
- *          is provided, a 1 is put into @reverse.
+ *          is provided, a 1 is put into %reverse.
  *      (3) Add to this as more formats are supported.
+ * </pre>
  */
 static l_int32
 barcodeVerifyFormat(char     *barstr,
@@ -226,7 +230,7 @@ l_int32  i, start, len, stop, mid;
             revbarstr = stringReverse(barstr);
             start = !strncmp(revbarstr, Code2of5[C25_START], 3);
             stop = !strncmp(&revbarstr[len - 5], Code2of5[C25_STOP], 5);
-            FREE(revbarstr);
+            LEPT_FREE(revbarstr);
             if (start && stop) {
                 *pvalid = 1;
                 if (preverse) *preverse = 1;
@@ -243,7 +247,7 @@ l_int32  i, start, len, stop, mid;
             revbarstr = stringReverse(barstr);
             start = !strncmp(revbarstr, CodeI2of5[CI25_START], 4);
             stop = !strncmp(&revbarstr[len - 3], CodeI2of5[CI25_STOP], 3);
-            FREE(revbarstr);
+            LEPT_FREE(revbarstr);
             if (start && stop) {
                 *pvalid = 1;
                 if (preverse) *preverse = 1;
@@ -260,7 +264,7 @@ l_int32  i, start, len, stop, mid;
             revbarstr = stringReverse(barstr);
             start = !strncmp(revbarstr, Code93[C93_START], 6);
             stop = !strncmp(&revbarstr[len - 7], Code93[C93_STOP], 6);
-            FREE(revbarstr);
+            LEPT_FREE(revbarstr);
             if (start && stop) {
                 *pvalid = 1;
                 if (preverse) *preverse = 1;
@@ -277,7 +281,7 @@ l_int32  i, start, len, stop, mid;
             revbarstr = stringReverse(barstr);
             start = !strncmp(revbarstr, Code39[C39_START], 9);
             stop = !strncmp(&revbarstr[len - 9], Code39[C39_STOP], 9);
-            FREE(revbarstr);
+            LEPT_FREE(revbarstr);
             if (start && stop) {
                 *pvalid = 1;
                 if (preverse) *preverse = 1;
@@ -300,7 +304,7 @@ l_int32  i, start, len, stop, mid;
                 start += !strncmp(revbarstr, Codabar[i], 7);
             for (i = 16; i <= 19; i++)
                 stop += !strncmp(&revbarstr[len - 7], Codabar[i], 7);
-            FREE(revbarstr);
+            LEPT_FREE(revbarstr);
             if (start && stop) {
                 *pvalid = 1;
                 if (preverse) *preverse = 1;
@@ -330,13 +334,14 @@ l_int32  i, start, len, stop, mid;
  *                             Code 2 of 5                                *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDecode2of5()
+ * \brief   barcodeDecode2of5()
  *
- *      Input:  barstr (of widths, in set {1, 2})
- *              debugflag
- *      Return: data (string of digits), or null if none found or on error
+ * \param[in]    barstr of widths, in set {1, 2}
+ * \param[in]    debugflag
+ * \return  data string of digits, or NULL if none found or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Ref: http://en.wikipedia.org/wiki/Two-out-of-five_code (Note:
  *                 the codes given here are wrong!)
  *               http://morovia.com/education/symbology/code25.asp
@@ -353,6 +358,7 @@ l_int32  i, start, len, stop, mid;
  *          (including start and stop), the trailing space "1" is
  *          implicit -- there is no reason to represent it in the
  *          Code2of5[] array.
+ * </pre>
  */
 static char *
 barcodeDecode2of5(char    *barstr,
@@ -378,13 +384,15 @@ l_int32  valid, reverse, i, j, len, error, ndigits, start, found;
 
         /* Verify size */
     len = strlen(vbarstr);
-    if ((len - 11) % 10 != 0)
+    if ((len - 11) % 10 != 0) {
+        LEPT_FREE(vbarstr);
         return (char *)ERROR_PTR("size not divisible by 10: invalid 2of5 code",
                                  procName, NULL);
+    }
 
     error = FALSE;
     ndigits = (len - 11) / 10;
-    data = (char *)CALLOC(ndigits + 1, sizeof(char));
+    data = (char *)LEPT_CALLOC(ndigits + 1, sizeof(char));
     memset(code, 0, 10);
     for (i = 0; i < ndigits; i++) {
         start = 6 + 10 * i;
@@ -394,20 +402,20 @@ l_int32  valid, reverse, i, j, len, error, ndigits, start, found;
         if (debugflag)
             fprintf(stderr, "code: %s\n", code);
 
-	found = FALSE;
+        found = FALSE;
         for (j = 0; j < 10; j++) {
             if (!strcmp(code, Code2of5[j])) {
                 data[i] = 0x30 + j;
-		found = TRUE;
+                found = TRUE;
                 break;
             }
         }
-	if (!found) error = TRUE;
+        if (!found) error = TRUE;
     }
-    FREE(vbarstr);
+    LEPT_FREE(vbarstr);
 
     if (error) {
-        FREE(data);
+        LEPT_FREE(data);
         return (char *)ERROR_PTR("error in decoding", procName, NULL);
     }
 
@@ -419,16 +427,18 @@ l_int32  valid, reverse, i, j, len, error, ndigits, start, found;
  *                       Interleaved Code 2 of 5                          *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDecodeI2of5()
+ * \brief   barcodeDecodeI2of5()
  *
- *      Input:  barstr (of widths, in set {1, 2})
- *              debugflag
- *      Return: data (string of digits), or null if none found or on error
+ * \param[in]    barstr of widths, in set {1, 2}
+ * \param[in]    debugflag
+ * \return  data string of digits, or NULL if none found or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Ref: http://en.wikipedia.org/wiki/Interleaved_2_of_5
  *      (2) This always encodes an even number of digits.
  *          The start code is 1111; the stop code is 211.
+ * </pre>
  */
 static char *
 barcodeDecodeI2of5(char    *barstr,
@@ -454,13 +464,15 @@ l_int32  valid, reverse, i, j, len, error, npairs, start, found;
 
         /* Verify size */
     len = strlen(vbarstr);
-    if ((len - 7) % 10 != 0)
+    if ((len - 7) % 10 != 0) {
+        LEPT_FREE(vbarstr);
         return (char *)ERROR_PTR("size not divisible by 10: invalid I2of5 code",
                                  procName, NULL);
+    }
 
     error = FALSE;
     npairs = (len - 7) / 10;
-    data = (char *)CALLOC(2 * npairs + 1, sizeof(char));
+    data = (char *)LEPT_CALLOC(2 * npairs + 1, sizeof(char));
     memset(code1, 0, 6);
     memset(code2, 0, 6);
     for (i = 0; i < npairs; i++) {
@@ -473,29 +485,29 @@ l_int32  valid, reverse, i, j, len, error, npairs, start, found;
         if (debugflag)
             fprintf(stderr, "code1: %s, code2: %s\n", code1, code2);
 
-	found = FALSE;
+        found = FALSE;
         for (j = 0; j < 10; j++) {
             if (!strcmp(code1, CodeI2of5[j])) {
                 data[2 * i] = 0x30 + j;
-		found = TRUE;
+                found = TRUE;
                 break;
             }
         }
-	if (!found) error = TRUE;
-	found = FALSE;
+        if (!found) error = TRUE;
+        found = FALSE;
         for (j = 0; j < 10; j++) {
             if (!strcmp(code2, CodeI2of5[j])) {
                 data[2 * i + 1] = 0x30 + j;
-		found = TRUE;
+                found = TRUE;
                 break;
             }
         }
-	if (!found) error = TRUE;
+        if (!found) error = TRUE;
     }
-    FREE(vbarstr);
+    LEPT_FREE(vbarstr);
 
     if (error) {
-        FREE(data);
+        LEPT_FREE(data);
         return (char *)ERROR_PTR("error in decoding", procName, NULL);
     }
 
@@ -507,13 +519,14 @@ l_int32  valid, reverse, i, j, len, error, npairs, start, found;
  *                                 Code 93                                *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDecode93()
+ * \brief   barcodeDecode93()
  *
- *      Input:  barstr (of widths, in set {1, 2, 3, 4})
- *              debugflag
- *      Return: data (string of digits), or null if none found or on error
+ * \param[in]    barstr of widths, in set {1, 2, 3, 4}
+ * \param[in]    debugflag
+ * \return  data string of digits, or NULL if none found or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Ref:  http://en.wikipedia.org/wiki/Code93
  *                http://morovia.com/education/symbology/code93.asp
  *      (2) Each symbol has 3 black and 3 white bars.
@@ -522,6 +535,7 @@ l_int32  valid, reverse, i, j, len, error, npairs, start, found;
  *      (3) The last two codes are check codes.  We are checking them
  *          for correctness, and issuing a warning on failure.  Should
  *          probably not return any data on failure.
+ * </pre>
  */
 static char *
 barcodeDecode93(char    *barstr,
@@ -549,14 +563,16 @@ l_int32     *index;
 
         /* Verify size; skip the first 6 and last 7 bars. */
     len = strlen(vbarstr);
-    if ((len - 13) % 6 != 0)
+    if ((len - 13) % 6 != 0) {
+        LEPT_FREE(vbarstr);
         return (char *)ERROR_PTR("size not divisible by 6: invalid code 93",
                                  procName, NULL);
+    }
 
         /* Decode the symbols */
     nsymb = (len - 13) / 6;
-    data = (char *)CALLOC(nsymb + 1, sizeof(char));
-    index = (l_int32 *)CALLOC(nsymb, sizeof(l_int32));
+    data = (char *)LEPT_CALLOC(nsymb + 1, sizeof(char));
+    index = (l_int32 *)LEPT_CALLOC(nsymb, sizeof(l_int32));
     memset(code, 0, 7);
     error = FALSE;
     for (i = 0; i < nsymb; i++) {
@@ -572,17 +588,17 @@ l_int32     *index;
             if (!strcmp(code, Code93[j])) {
                 data[i] = Code93Val[j];
                 index[i] = j;
-		found = TRUE;
+                found = TRUE;
                 break;
             }
         }
-	if (!found) error = TRUE;
+        if (!found) error = TRUE;
     }
-    FREE(vbarstr);
+    LEPT_FREE(vbarstr);
 
     if (error) {
-        FREE(index);
-        FREE(data);
+        LEPT_FREE(index);
+        LEPT_FREE(data);
         return (char *)ERROR_PTR("error in decoding", procName, NULL);
     }
 
@@ -614,7 +630,7 @@ l_int32     *index;
         /* Remove the two check codes from the output */
     data[nsymb - 2] = '\0';
 
-    FREE(index);
+    LEPT_FREE(index);
     return data;
 }
 
@@ -623,18 +639,20 @@ l_int32     *index;
  *                                 Code 39                                *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDecode39()
+ * \brief   barcodeDecode39()
  *
- *      Input:  barstr (of widths, in set {1, 2})
- *              debugflag
- *      Return: data (string of digits), or null if none found or on error
+ * \param[in]    barstr of widths, in set {1, 2}
+ * \param[in]    debugflag
+ * \return  data string of digits, or NULL if none found or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Ref:  http://en.wikipedia.org/wiki/Code39
  *                http://morovia.com/education/symbology/code39.asp
  *      (2) Each symbol has 5 black and 4 white bars.
  *          The start and stop codes are 121121211 (the asterisk)
  *      (3) This decoder was contributed by Roger Hyde.
+ * </pre>
  */
 static char *
 barcodeDecode39(char    *barstr,
@@ -660,13 +678,15 @@ l_int32   valid, reverse, i, j, len, error, nsymb, start, found;
 
         /* Verify size */
     len = strlen(vbarstr);
-    if ((len + 1) % 10 != 0)
+    if ((len + 1) % 10 != 0) {
+        LEPT_FREE(vbarstr);
         return (char *)ERROR_PTR("size+1 not divisible by 10: invalid code 39",
                                  procName, NULL);
+    }
 
         /* Decode the symbols */
     nsymb = (len - 19) / 10;
-    data = (char *)CALLOC(nsymb + 1, sizeof(char));
+    data = (char *)LEPT_CALLOC(nsymb + 1, sizeof(char));
     memset(code, 0, 10);
     error = FALSE;
     for (i = 0; i < nsymb; i++) {
@@ -687,10 +707,10 @@ l_int32   valid, reverse, i, j, len, error, nsymb, start, found;
         }
         if (!found) error = TRUE;
     }
-    FREE(vbarstr);
+    LEPT_FREE(vbarstr);
 
     if (error) {
-        FREE(data);
+        LEPT_FREE(data);
         return (char *)ERROR_PTR("error in decoding", procName, NULL);
     }
 
@@ -702,18 +722,20 @@ l_int32   valid, reverse, i, j, len, error, nsymb, start, found;
  *                                 Codabar                                *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDecodeCodabar()
+ * \brief   barcodeDecodeCodabar()
  *
- *      Input:  barstr (of widths, in set {1, 2})
- *              debugflag
- *      Return: data (string of digits), or null if none found or on error
+ * \param[in]    barstr of widths, in set {1, 2}
+ * \param[in]    debugflag
+ * \return  data string of digits, or NULL if none found or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Ref:  http://en.wikipedia.org/wiki/Codabar
  *                http://morovia.com/education/symbology/codabar.asp
  *      (2) Each symbol has 4 black and 3 white bars.  They represent the
  *          10 digits, and optionally 6 other characters.  The start and
  *          stop codes can be any of four (typically denoted A,B,C,D).
+ * </pre>
  */
 static char *
 barcodeDecodeCodabar(char    *barstr,
@@ -740,13 +762,15 @@ l_int32   valid, reverse, i, j, len, error, nsymb, start, found;
 
         /* Verify size */
     len = strlen(vbarstr);
-    if ((len + 1) % 8 != 0)
+    if ((len + 1) % 8 != 0) {
+        LEPT_FREE(vbarstr);
         return (char *)ERROR_PTR("size+1 not divisible by 8: invalid codabar",
                                  procName, NULL);
+    }
 
         /* Decode the symbols */
     nsymb = (len - 15) / 8;
-    data = (char *)CALLOC(nsymb + 1, sizeof(char));
+    data = (char *)LEPT_CALLOC(nsymb + 1, sizeof(char));
     memset(code, 0, 8);
     error = FALSE;
     for (i = 0; i < nsymb; i++) {
@@ -767,10 +791,10 @@ l_int32   valid, reverse, i, j, len, error, nsymb, start, found;
         }
         if (!found) error = TRUE;
     }
-    FREE(vbarstr);
+    LEPT_FREE(vbarstr);
 
     if (error) {
-        FREE(data);
+        LEPT_FREE(data);
         return (char *)ERROR_PTR("error in decoding", procName, NULL);
     }
 
@@ -782,13 +806,14 @@ l_int32   valid, reverse, i, j, len, error, nsymb, start, found;
  *                               Code UPC-A                               *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDecodeUpca()
+ * \brief   barcodeDecodeUpca()
  *
- *      Input:  barstr (of widths, in set {1, 2, 3, 4})
- *              debugflag
- *      Return: data (string of digits), or null if none found or on error
+ * \param[in]    barstr of widths, in set {1, 2, 3, 4}
+ * \param[in]    debugflag
+ * \return  data string of digits, or NULL if none found or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Ref:  http://en.wikipedia.org/wiki/UniversalProductCode
  *                http://morovia.com/education/symbology/upc-a.asp
  *      (2) Each symbol has 2 black and 2 white bars, and encodes a digit.
@@ -798,6 +823,7 @@ l_int32   valid, reverse, i, j, len, error, nsymb, start, found;
  *      (3) The last digit is a check digit.  We check for correctness, and
  *          issue a warning on failure.  Should probably not return any
  *          data on failure.
+ * </pre>
  */
 static char *
 barcodeDecodeUpca(char    *barstr,
@@ -840,7 +866,7 @@ l_int32   valid, i, j, len, error, start, found, sum, checkdigit;
         vbarstr = stringNew(barstr);
 
         /* Decode the 12 symbols */
-    data = (char *)CALLOC(13, sizeof(char));
+    data = (char *)LEPT_CALLOC(13, sizeof(char));
     memset(code, 0, 5);
     error = FALSE;
     for (i = 0; i < 12; i++) {
@@ -858,16 +884,16 @@ l_int32   valid, i, j, len, error, start, found, sum, checkdigit;
         for (j = 0; j < 10; j++) {
             if (!strcmp(code, Upca[j])) {
                 data[i] = 0x30 + j;
-		found = TRUE;
+                found = TRUE;
                 break;
             }
         }
-	if (!found) error = TRUE;
+        if (!found) error = TRUE;
     }
-    FREE(vbarstr);
+    LEPT_FREE(vbarstr);
 
     if (error) {
-        FREE(data);
+        LEPT_FREE(data);
         return (char *)ERROR_PTR("error in decoding", procName, NULL);
     }
 
@@ -891,14 +917,15 @@ l_int32   valid, i, j, len, error, start, found, sum, checkdigit;
  *                               Code EAN-13                              *
  *------------------------------------------------------------------------*/
 /*!
- *  barcodeDecodeEan13()
+ * \brief   barcodeDecodeEan13()
  *
- *      Input:  barstr (of widths, in set {1, 2, 3, 4})
- *              first (first digit: 0 - 9)
- *              debugflag
- *      Return: data (string of digits), or null if none found or on error
+ * \param[in]    barstr of widths, in set {1, 2, 3, 4}
+ * \param[in]    first first digit: 0 - 9
+ * \param[in]    debugflag
+ * \return  data string of digits, or NULL if none found or on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Ref:  http://en.wikipedia.org/wiki/UniversalProductCode
  *                http://morovia.com/education/symbology/ean-13.asp
  *      (2) The encoding is essentially the same as UPC-A, except
@@ -912,12 +939,13 @@ l_int32   valid, i, j, len, error, start, found, sum, checkdigit;
  *      (4) For now, we assume the first digit is input to this function.
  *          Eventually, we will read it by pattern matching.
  *
- *    TODO: fix this for multiple tables, depending on the value of @first
+ *    TODO: fix this for multiple tables, depending on the value of %first
+ * </pre>
  */
 static char *
 barcodeDecodeEan13(char    *barstr,
                    l_int32  first,
-		   l_int32  debugflag)
+                   l_int32  debugflag)
 {
 char     *data, *vbarstr;
 char      code[5];
@@ -929,8 +957,8 @@ l_int32   valid, i, j, len, error, start, found, sum, checkdigit;
         return (char *)ERROR_PTR("barstr not defined", procName, NULL);
 
         /* Verify format.  You can't tell the orientation by the start
-	 * and stop codes, but you can by the location of the digits.
-	 * Use the UPCA verifier for EAN 13 -- it is identical. */
+         * and stop codes, but you can by the location of the digits.
+         * Use the UPCA verifier for EAN 13 -- it is identical. */
     barcodeVerifyFormat(barstr, L_BF_UPCA, &valid, NULL);
     if (!valid)
         return (char *)ERROR_PTR("barstr not in EAN 13 format", procName, NULL);
@@ -958,7 +986,7 @@ l_int32   valid, i, j, len, error, start, found, sum, checkdigit;
         vbarstr = stringNew(barstr);
 
         /* Decode the 12 symbols */
-    data = (char *)CALLOC(13, sizeof(char));
+    data = (char *)LEPT_CALLOC(13, sizeof(char));
     memset(code, 0, 5);
     error = FALSE;
     for (i = 0; i < 12; i++) {
@@ -976,16 +1004,16 @@ l_int32   valid, i, j, len, error, start, found, sum, checkdigit;
         for (j = 0; j < 10; j++) {
             if (!strcmp(code, Upca[j])) {
                 data[i] = 0x30 + j;
-		found = TRUE;
+                found = TRUE;
                 break;
             }
         }
-	if (!found) error = TRUE;
+        if (!found) error = TRUE;
     }
-    FREE(vbarstr);
+    LEPT_FREE(vbarstr);
 
     if (error) {
-        FREE(data);
+        LEPT_FREE(data);
         return (char *)ERROR_PTR("error in decoding", procName, NULL);
     }
 

@@ -24,24 +24,28 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  jpegiostub.c
+/*!
+ * \file jpegiostub.c
+ * <pre>
  *
  *     Stubs for jpegio.c functions
+ * </pre>
  */
-
-#include "allheaders.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif  /* HAVE_CONFIG_H */
 
+#include "allheaders.h"
+
 /* --------------------------------------------*/
 #if  !HAVE_LIBJPEG   /* defined in environ.h */
 /* --------------------------------------------*/
 
+/* ----------------------------------------------------------------------*/
+
 PIX * pixReadJpeg(const char *filename, l_int32 cmflag, l_int32 reduction,
-                  l_int32 *pnwarn)
+                  l_int32 *pnwarn, l_int32 hint)
 {
     return (PIX * )ERROR_PTR("function not present", "pixReadJpeg", NULL);
 }
@@ -119,6 +123,14 @@ l_int32 readHeaderMemJpeg(const l_uint8 *cdata, size_t size,
 
 /* ----------------------------------------------------------------------*/
 
+l_int32 readResolutionMemJpeg(const l_uint8 *data, size_t size,
+                              l_int32 *pxres, l_int32 *pyres)
+{
+    return ERROR_INT("function not present", "readResolutionMemJpeg", 1);
+}
+
+/* ----------------------------------------------------------------------*/
+
 l_int32 pixWriteMemJpeg(l_uint8 **pdata, size_t *psize, PIX *pix,
                         l_int32 quality, l_int32 progressive)
 {
@@ -133,22 +145,6 @@ l_int32 pixSetChromaSampling(PIX *pix, l_int32 sampling)
 }
 
 /* ----------------------------------------------------------------------*/
-
-l_int32 extractJpegDataFromFile(const char *filein, l_uint8 **pdata,
-                                size_t *pnbytes, l_int32 *pw, l_int32 *ph,
-                                l_int32 *pbps, l_int32 *pspp)
-{
-    return ERROR_INT("function not present", "extractJpegDataFromFile", 1);
-}
-
-/* ----------------------------------------------------------------------*/
-
-l_int32 extractJpegDataFromArray(const void *data, size_t nbytes,
-                                 l_int32 *pw, l_int32 *ph, l_int32 *pbps,
-                                 l_int32 *pspp)
-{
-    return ERROR_INT("function not present", "extractJpegDataFromArray", 1);
-}
 
 /* --------------------------------------------*/
 #endif  /* !HAVE_LIBJPEG */

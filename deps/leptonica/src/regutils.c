@@ -25,8 +25,9 @@
  *====================================================================*/
 
 
-/*
- *  regutils.c
+/*!
+ * \file regutils.c
+ * <pre>
  *
  *       Regression test utilities
  *           l_int32    regTestSetup()
@@ -38,9 +39,15 @@
  *           l_int32    regTestCheckFile()
  *           l_int32    regTestCompareFiles()
  *           l_int32    regTestWritePixAndCheck()
+ *           l_int32    regTestWriteDataAndCheck()
+ *           char      *regTestGenLocalFilename()
  *
  *       Static function
  *           char      *getRootNameFromArgv0()
+ *
+ *  These functions are for testing and development.  They are not intended
+ *  for use with programs that run in a production environment, such as a
+ *  cloud service with unrestricted access.
  *
  *  See regutils.h for how to use this.  Here is a minimal setup:
  *
@@ -55,6 +62,7 @@
  *      ...
  *      return regTestCleanup(rp);
  *  }
+ * </pre>
  */
 
 #include <string.h>
@@ -65,21 +73,23 @@ extern const char *ImageFileFormatExtensions[];
 
 static char *getRootNameFromArgv0(const char *argv0);
 
+
 /*--------------------------------------------------------------------*
  *                      Regression test utilities                     *
  *--------------------------------------------------------------------*/
 /*!
- *  regTestSetup()
+ * \brief   regTestSetup()
  *
- *      Input:  argc (from invocation; can be either 1 or 2)
- *              argv (to regtest: @argv[1] is one of these:
- *                    "generate", "compare", "display")
- *              &rp (<return> all regression params)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    argc    from invocation; can be either 1 or 2
+ * \param[in]    argv    to regtest: %argv[1] is one of these:
+ *                       "generate", "compare", "display"
+ * \param[out]   prp     all regression params
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
- *      (1) Call this function with the args to the reg test.
- *          There are three cases:
+ * <pre>
+ * Notes:
+ *      (1) Call this function with the args to the reg test.  The first arg
+ *          is the name of the reg test.  There are three cases:
  *          Case 1:
  *              There is either only one arg, or the second arg is "compare".
  *              This is the mode in which you run a regression test
@@ -87,7 +97,7 @@ static char *getRootNameFromArgv0(const char *argv0);
  *              the results to a file.  The output, which includes
  *              logging of all reg test failures plus a SUCCESS or
  *              FAILURE summary for each test, is appended to the file
- *              "/tmp/reg_results.txt.  For this case, as in Case 2,
+ *              "/tmp/lept/reg_results.txt.  For this case, as in Case 2,
  *              the display field in rp is set to FALSE, preventing
  *              image display.
  *          Case 2:
@@ -103,6 +113,7 @@ static char *getRootNameFromArgv0(const char *argv0);
  *              The display field in rp is TRUE, and this is used by
  *              pixDisplayWithTitle().
  *      (2) See regutils.h for examples of usage.
+ * </pre>
  */
 l_int32
 regTestSetup(l_int32        argc,
@@ -117,15 +128,19 @@ L_REGPARAMS  *rp;
 
     if (argc != 1 && argc != 2) {
         snprintf(errormsg, sizeof(errormsg),
-            "Syntax: %s [ [generate] | compare | display ]", argv[0]);
+            "Syntax: %s [ [compare] | generate | display ]", argv[0]);
         return ERROR_INT(errormsg, procName, 1);
     }
 
     if ((testname = getRootNameFromArgv0(argv[0])) == NULL)
         return ERROR_INT("invalid root", procName, 1);
 
-    if ((rp = (L_REGPARAMS *)CALLOC(1, sizeof(L_REGPARAMS))) == NULL)
+    setLeptDebugOK(1);  /* required for testing */
+
+    if ((rp = (L_REGPARAMS *)LEPT_CALLOC(1, sizeof(L_REGPARAMS))) == NULL) {
+        LEPT_FREE(testname);
         return ERROR_INT("rp not made", procName, 1);
+    }
     *prp = rp;
     rp->testname = testname;
     rp->index = -1;  /* increment before each test */
@@ -134,10 +149,13 @@ L_REGPARAMS  *rp;
          * as a failure of the regression test. */
     rp->success = TRUE;
 
+        /* Make sure the lept/regout subdirectory exists */
+    lept_mkdir("lept/regout");
+
         /* Only open a stream to a temp file for the 'compare' case */
     if (argc == 1 || !strcmp(argv[1], "compare")) {
         rp->mode = L_REG_COMPARE;
-        rp->tempfile = genTempFilename("/tmp", "regtest_output.txt", 0, 1);
+        rp->tempfile = stringNew("/tmp/lept/regout/regtest_output.txt");
         rp->fp = fopenWriteStream(rp->tempfile, "wb");
         if (rp->fp == NULL) {
             rp->success = FALSE;
@@ -145,12 +163,12 @@ L_REGPARAMS  *rp;
         }
     } else if (!strcmp(argv[1], "generate")) {
         rp->mode = L_REG_GENERATE;
-        lept_mkdir("golden");
+        lept_mkdir("lept/golden");
     } else if (!strcmp(argv[1], "display")) {
         rp->mode = L_REG_DISPLAY;
         rp->display = TRUE;
     } else {
-        FREE(rp);
+        LEPT_FREE(rp);
         snprintf(errormsg, sizeof(errormsg),
             "Syntax: %s [ [generate] | compare | display ]", argv[0]);
         return ERROR_INT(errormsg, procName, 1);
@@ -158,14 +176,16 @@ L_REGPARAMS  *rp;
 
         /* Print out test name and both the leptonica and
          * image libarary versions */
-    fprintf(stderr, "\n################   %s_reg   ###############\n",
+    fprintf(stderr, "\n////////////////////////////////////////////////\n"
+                    "////////////////   %s_reg   ///////////////\n"
+                    "////////////////////////////////////////////////\n",
             rp->testname);
     vers = getLeptonicaVersion();
-    fprintf(stderr, "%s\n", vers);
-    FREE(vers);
+    fprintf(stderr, "%s : ", vers);
+    LEPT_FREE(vers);
     vers = getImagelibVersions();
     fprintf(stderr, "%s\n", vers);
-    FREE(vers);
+    LEPT_FREE(vers);
 
     rp->tstart = startTimerNested();
     return 0;
@@ -173,14 +193,16 @@ L_REGPARAMS  *rp;
 
 
 /*!
- *  regTestCleanup()
+ * \brief   regTestCleanup()
  *
- *      Input:  rp (regression test parameters)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    rp    regression test parameters
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This copies anything written to the temporary file to the
- *          output file /tmp/reg_results.txt.
+ *          output file /tmp/lept/reg_results.txt.
+ * </pre>
  */
 l_int32
 regTestCleanup(L_REGPARAMS  *rp)
@@ -197,23 +219,23 @@ size_t   nbytes;
         return ERROR_INT("rp not defined", procName, 1);
 
     fprintf(stderr, "Time: %7.3f sec\n", stopTimerNested(rp->tstart));
-    fprintf(stderr, "################################################\n");
 
         /* If generating golden files or running in display mode, release rp */
     if (!rp->fp) {
-        FREE(rp->testname);
-        FREE(rp->tempfile);
-        FREE(rp);
+        LEPT_FREE(rp->testname);
+        LEPT_FREE(rp->tempfile);
+        LEPT_FREE(rp);
         return 0;
     }
 
         /* Compare mode: read back data from temp file */
     fclose(rp->fp);
     text = (char *)l_binaryRead(rp->tempfile, &nbytes);
-    FREE(rp->tempfile);
+    LEPT_FREE(rp->tempfile);
     if (!text) {
         rp->success = FALSE;
-        FREE(rp);
+        LEPT_FREE(rp->testname);
+        LEPT_FREE(rp);
         return ERROR_INT("text not returned", procName, 1);
     }
 
@@ -223,27 +245,27 @@ size_t   nbytes;
     else
         snprintf(result, sizeof(result), "FAILURE: %s_reg\n", rp->testname);
     message = stringJoin(text, result);
-    FREE(text);
-    results_file = genPathname("/tmp", "reg_results.txt");
+    LEPT_FREE(text);
+    results_file = stringNew("/tmp/lept/reg_results.txt");
     fileAppendString(results_file, message);
     retval = (rp->success) ? 0 : 1;
-    FREE(results_file);
-    FREE(message);
+    LEPT_FREE(results_file);
+    LEPT_FREE(message);
 
-    FREE(rp->testname);
-    FREE(rp);
+    LEPT_FREE(rp->testname);
+    LEPT_FREE(rp);
     return retval;
 }
 
 
 /*!
- *  regTestCompareValues()
+ * \brief   regTestCompareValues()
  *
- *      Input:  rp (regtest parameters)
- *              val1 (typ. the golden value)
- *              val2 (typ. the value computed)
- *              delta (allowed max absolute difference)
- *      Return: 0 if OK, 1 on error (a failure in comparison is not an error)
+ * \param[in]    rp      regtest parameters
+ * \param[in]    val1    typ. the golden value
+ * \param[in]    val2    typ. the value computed
+ * \param[in]    delta   allowed max absolute difference
+ * \return  0 if OK, 1 on error a failure in comparison is not an error
  */
 l_int32
 regTestCompareValues(L_REGPARAMS  *rp,
@@ -280,14 +302,14 @@ l_float32  diff;
 
 
 /*!
- *  regTestCompareStrings()
+ * \brief   regTestCompareStrings()
  *
- *      Input:  rp (regtest parameters)
- *              string1 (typ. the expected string)
- *              bytes1 (size of string1)
- *              string2 (typ. the computed string)
- *              bytes2 (size of string2)
- *      Return: 0 if OK, 1 on error (a failure in comparison is not an error)
+ * \param[in]    rp        regtest parameters
+ * \param[in]    string1   typ. the expected string
+ * \param[in]    bytes1    size of string1
+ * \param[in]    string2   typ. the computed string
+ * \param[in]    bytes2    size of string2
+ * \return  0 if OK, 1 on error a failure in comparison is not an error
  */
 l_int32
 regTestCompareStrings(L_REGPARAMS  *rp,
@@ -299,7 +321,7 @@ regTestCompareStrings(L_REGPARAMS  *rp,
 l_int32  i, fail;
 char     buf[256];
 
-    PROCNAME("regTestCompareValues");
+    PROCNAME("regTestCompareStrings");
 
     if (!rp)
         return ERROR_INT("rp not defined", procName, 1);
@@ -319,15 +341,15 @@ char     buf[256];
         /* Output on failure */
     if (fail == TRUE) {
             /* Write the two strings to file */
-        snprintf(buf, sizeof(buf), "/tmp/string1_%d_%lu", rp->index,
+        snprintf(buf, sizeof(buf), "/tmp/lept/regout/string1_%d_%lu", rp->index,
                  (unsigned long)bytes1);
         l_binaryWrite(buf, "w", string1, bytes1);
-        snprintf(buf, sizeof(buf), "/tmp/string2_%d_%lu", rp->index,
+        snprintf(buf, sizeof(buf), "/tmp/lept/regout/string2_%d_%lu", rp->index,
                  (unsigned long)bytes2);
         l_binaryWrite(buf, "w", string2, bytes2);
 
             /* Report comparison failure */
-        snprintf(buf, sizeof(buf), "/tmp/string*_%d_*", rp->index);
+        snprintf(buf, sizeof(buf), "/tmp/lept/regout/string*_%d_*", rp->index);
         if (rp->fp) {
             fprintf(rp->fp,
                     "Failure in %s_reg: string comp for index %d; "
@@ -343,15 +365,17 @@ char     buf[256];
 
 
 /*!
- *  regTestComparePix()
+ * \brief   regTestComparePix()
  *
- *      Input:  rp (regtest parameters)
- *              pix1, pix2 (to be tested for equality)
- *      Return: 0 if OK, 1 on error (a failure in comparison is not an error)
+ * \param[in]    rp            regtest parameters
+ * \param[in]    pix1, pix2    to be tested for equality
+ * \return  0 if OK, 1 on error a failure in comparison is not an error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This function compares two pix for equality.  On failure,
  *          this writes to stderr.
+ * </pre>
  */
 l_int32
 regTestComparePix(L_REGPARAMS  *rp,
@@ -387,29 +411,31 @@ l_int32  same;
 
 
 /*!
- *  regTestCompareSimilarPix()
+ * \brief   regTestCompareSimilarPix()
  *
- *      Input:  rp (regtest parameters)
- *              pix1, pix2 (to be tested for near equality)
- *              mindiff (minimum pixel difference to be counted; > 0)
- *              maxfract (maximum fraction of pixels allowed to have
- *                        diff greater than or equal to mindiff)
- *              printstats (use 1 to print normalized histogram to stderr)
- *      Return: 0 if OK, 1 on error (a failure in similarity comparison
- *              is not an error)
+ * \param[in]    rp           regtest parameters
+ * \param[in]    pix1, pix2   to be tested for near equality
+ * \param[in]    mindiff      minimum pixel difference to be counted; > 0
+ * \param[in]    maxfract     maximum fraction of pixels allowed to have
+ *                            diff greater than or equal to mindiff
+ * \param[in]    printstats   use 1 to print normalized histogram to stderr
+ * \return  0 if OK, 1 on error a failure in similarity comparison
+ *              is not an error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This function compares two pix for near equality.  On failure,
  *          this writes to stderr.
  *      (2) The pix are similar if the fraction of non-conforming pixels
- *          does not exceed @maxfract.  Pixels are non-conforming if
- *          the difference in pixel values equals or exceeds @mindiff.
- *          Typical values might be @mindiff = 15 and @maxfract = 0.01.
+ *          does not exceed %maxfract.  Pixels are non-conforming if
+ *          the difference in pixel values equals or exceeds %mindiff.
+ *          Typical values might be %mindiff = 15 and %maxfract = 0.01.
  *      (3) The input images must have the same size and depth.  The
  *          pixels for comparison are typically subsampled from the images.
- *      (4) Normally, use @printstats = 0.  In debugging mode, to see
- *          the relation between @mindiff and the minimum value of
- *          @maxfract for success, set this to 1.
+ *      (4) Normally, use %printstats = 0.  In debugging mode, to see
+ *          the relation between %mindiff and the minimum value of
+ *          %maxfract for success, set this to 1.
+ * </pre>
  */
 l_int32
 regTestCompareSimilarPix(L_REGPARAMS  *rp,
@@ -453,23 +479,26 @@ l_int32  w, h, factor, similar;
 
 
 /*!
- *  regTestCheckFile()
+ * \brief   regTestCheckFile()
  *
- *      Input:  rp (regtest parameters)
- *              localname (name of output file from reg test)
- *      Return: 0 if OK, 1 on error (a failure in comparison is not an error)
+ * \param[in]    rp         regtest parameters
+ * \param[in]    localname  name of output file from reg test
+ * \return  0 if OK, 1 on error a failure in comparison is not an error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This function does one of three things, depending on the mode:
- *           * "generate": makes a "golden" file as a copy @localname.
- *           * "compare": compares @localname contents with the golden file
- *           * "display": makes the @localname file but does no comparison
+ *           * "generate": makes a "golden" file as a copy %localname.
+ *           * "compare": compares %localname contents with the golden file
+ *           * "display": makes the %localname file but does no comparison
  *      (2) The canonical format of the golden filenames is:
- *            /tmp/golden/<root of main name>_golden.<index>.<ext of localname>
+ *            /tmp/lept/golden/<root of main name>_golden.<index>.
+ *                                                       <ext of localname>
  *          e.g.,
- *             /tmp/golden/maze_golden.0.png
+ *             /tmp/lept/golden/maze_golden.0.png
  *          It is important to add an extension to the local name, because
  *          the extension is added to the name of the golden file.
+ * </pre>
  */
 l_int32
 regTestCheckFile(L_REGPARAMS  *rp,
@@ -500,33 +529,43 @@ PIX     *pix1, *pix2;
 
         /* Generate the golden file name; used in 'generate' and 'compare' */
     splitPathAtExtension(localname, NULL, &ext);
-    snprintf(namebuf, sizeof(namebuf), "/tmp/golden/%s_golden.%d%s",
+    snprintf(namebuf, sizeof(namebuf), "/tmp/lept/golden/%s_golden.%02d%s",
              rp->testname, rp->index, ext);
-    FREE(ext);
+    LEPT_FREE(ext);
 
         /* Generate mode.  No testing. */
     if (rp->mode == L_REG_GENERATE) {
             /* Save the file as a golden file */
-/*        fprintf(stderr, "%d: %s\n", rp->index, namebuf);  */
         ret = fileCopy(localname, namebuf);
-        if (!ret)
-            fprintf(stderr, "Copy: %s to %s\n", localname, namebuf);
+#if 0       /* Enable for details on writing of golden files */
+        if (!ret) {
+            char *local = genPathname(localname, NULL);
+            char *golden = genPathname(namebuf, NULL);
+            L_INFO("Copy: %s to %s\n", procName, local, golden);
+            LEPT_FREE(local);
+            LEPT_FREE(golden);
+        }
+#endif
         return ret;
     }
 
-        /* Compare mode: test and record on failure.  GIF compression
-         * is lossless for images with up to 8 bpp (but not for RGB
-         * because it must generate a 256 color palette).  Although
-         * the read/write cycle for GIF is idempotent in the image
-         * pixels for bpp <= 8, it is not idempotent in the actual
-         * file bytes.  Tests comparing file bytes before and after
+        /* Compare mode: test and record on failure.  This can be used
+         * for all image formats, as well as for all files of serialized
+         * data, such as boxa, pta, etc.  In all cases except for
+         * GIF compressed images, we compare the files to see if they
+         * are identical.  GIF doesn't support RGB images; to write
+         * a 32 bpp RGB image in GIF, we do a lossy quantization to
+         * 256 colors, so the cycle read-RGB/write-GIF is not idempotent.
+         * And although the read/write cycle for GIF images with bpp <= 8
+         * is idempotent in the image pixels, it is not idempotent in the
+         * actual file bytes; tests comparing file bytes before and after
          * a GIF read/write cycle will fail.  So for GIF we uncompress
-         * the two images and compare the actual pixels.  From my tests,
-         * PNG, in addition to being lossless, is idempotent in file
-         * bytes on read/write, so comparing the pixels is not necessary.
-         * (It also increases the regression test time by an an average
-         * of about 8%.)  JPEG is lossy and not idempotent in the image
-         * pixels, so no tests are constructed that would require it. */
+         * the two images and compare the actual pixels.  PNG is both
+         * lossless and idempotent in file bytes on read/write, so it is
+         * not necessary to compare pixels.  (Comparing pixels requires
+         * decompression, and thus would increase the regression test
+         * time.  JPEG is lossy and not idempotent in the image pixels,
+         * so no tests are constructed that would require it. */
     findFileFormat(localname, &format);
     if (format == IFF_GIF) {
         same = 0;
@@ -551,19 +590,22 @@ PIX     *pix1, *pix2;
 
 
 /*!
- *  regTestCompareFiles()
+ * \brief   regTestCompareFiles()
  *
- *      Input:  rp (regtest parameters)
- *              index1 (of one output file from reg test)
- *              index2 (of another output file from reg test)
- *      Return: 0 if OK, 1 on error (a failure in comparison is not an error)
+ * \param[in]    rp        regtest parameters
+ * \param[in]    index1    of one output file from reg test
+ * \param[in]    index2    of another output file from reg test
+ * \return  0 if OK, 1 on error a failure in comparison is not an error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This only does something in "compare" mode.
  *      (2) The canonical format of the golden filenames is:
- *            /tmp/golden/<root of main name>_golden.<index>.<ext of localname>
+ *            /tmp/lept/golden/<root of main name>_golden.<index>.
+ *                                                      <ext of localname>
  *          e.g.,
- *            /tmp/golden/maze_golden.0.png
+ *            /tmp/lept/golden/maze_golden.0.png
+ * </pre>
  */
 l_int32
 regTestCompareFiles(L_REGPARAMS  *rp,
@@ -592,8 +634,8 @@ SARRAY  *sa;
     if (rp->mode != L_REG_COMPARE) return 0;
 
         /* Generate the golden file names */
-    snprintf(namebuf, sizeof(namebuf), "%s_golden.%d.", rp->testname, index1);
-    sa = getSortedPathnamesInDirectory("/tmp/golden", namebuf, 0, 0);
+    snprintf(namebuf, sizeof(namebuf), "%s_golden.%02d", rp->testname, index1);
+    sa = getSortedPathnamesInDirectory("/tmp/lept/golden", namebuf, 0, 0);
     if (sarrayGetCount(sa) != 1) {
         sarrayDestroy(&sa);
         rp->success = FALSE;
@@ -603,12 +645,12 @@ SARRAY  *sa;
     name1 = sarrayGetString(sa, 0, L_COPY);
     sarrayDestroy(&sa);
 
-    snprintf(namebuf, sizeof(namebuf), "%s_golden.%d.", rp->testname, index2);
-    sa = getSortedPathnamesInDirectory("/tmp/golden", namebuf, 0, 0);
+    snprintf(namebuf, sizeof(namebuf), "%s_golden.%02d", rp->testname, index2);
+    sa = getSortedPathnamesInDirectory("/tmp/lept/golden", namebuf, 0, 0);
     if (sarrayGetCount(sa) != 1) {
         sarrayDestroy(&sa);
         rp->success = FALSE;
-        FREE(name1);
+        LEPT_FREE(name1);
         L_ERROR("golden file %s not found\n", procName, namebuf);
         return 1;
     }
@@ -627,37 +669,43 @@ SARRAY  *sa;
         rp->success = FALSE;
     }
 
-    FREE(name1);
-    FREE(name2);
+    LEPT_FREE(name1);
+    LEPT_FREE(name2);
     return 0;
 }
 
 
 /*!
- *  regTestWritePixAndCheck()
+ * \brief   regTestWritePixAndCheck()
  *
- *      Input:  rp (regtest parameters)
- *              pix (to be written)
- *              format (of output pix)
- *      Return: 0 if OK, 1 on error (a failure in comparison is not an error)
+ * \param[in]    rp       regtest parameters
+ * \param[in]    pix      to be written
+ * \param[in]    format   of output pix
+ * \return  0 if OK, 1 on error a failure in comparison is not an error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This function makes it easy to write the pix in a numbered
  *          sequence of files, and either to:
  *             (a) write the golden file ("generate" arg to regression test)
  *             (b) make a local file and "compare" with the golden file
  *             (c) make a local file and "display" the results
- *      (3) The canonical format of the local filename is:
- *            /tmp/<root of main name>.<count>.<format extension string>
+ *      (2) The canonical format of the local filename is:
+ *            /tmp/lept/regout/<root of main name>.<count>.<format extension>
  *          e.g., for scale_reg,
- *            /tmp/scale.0.png
+ *            /tmp/lept/regout/scale.0.png
+ *          The golden file name mirrors this in the usual way.
+ *      (3) The check is done between the written files, which requires
+ *          the files to be identical. The exception is for GIF, which
+ *          only requires that all pixels in the decoded pix are identical.
+ * </pre>
  */
 l_int32
 regTestWritePixAndCheck(L_REGPARAMS  *rp,
                         PIX          *pix,
                         l_int32       format)
 {
-char   namebuf[256];
+char  namebuf[256];
 
     PROCNAME("regTestWritePixAndCheck");
 
@@ -673,8 +721,8 @@ char   namebuf[256];
     }
 
         /* Generate the local file name */
-    snprintf(namebuf, sizeof(namebuf), "/tmp/%s.%d.%s", rp->testname,
-             rp->index + 1, ImageFileFormatExtensions[format]);
+    snprintf(namebuf, sizeof(namebuf), "/tmp/lept/regout/%s.%02d.%s",
+             rp->testname, rp->index + 1, ImageFileFormatExtensions[format]);
 
         /* Write the local file */
     if (pixGetDepth(pix) < 8)
@@ -690,18 +738,118 @@ char   namebuf[256];
 
 
 /*!
- *  getRootNameFromArgv0()
+ * \brief   regTestWriteDataAndCheck()
  *
- *      Input:  argv0
- *      Return: root name (without the '_reg'), or null on error
+ * \param[in]    rp      regtest parameters
+ * \param[in]    data    to be written
+ * \param[in]    size    of data to be written
+ * \param[in]    ext     filename extension (e.g.: "ba", "pta")
+ * \return  0 if OK, 1 on error a failure in comparison is not an error
  *
- *  Notes:
+ * <pre>
+ * Notes:
+ *      (1) This function makes it easy to write data in a numbered
+ *          sequence of files, and either to:
+ *             (a) write the golden file ("generate" arg to regression test)
+ *             (b) make a local file and "compare" with the golden file
+ *             (c) make a local file and "display" the results
+ *      (2) The canonical format of the local filename is:
+ *            /tmp/lept/regout/<root of main name>.<count>.<ext>
+ *          e.g., for the first boxaa in quadtree_reg,
+ *            /tmp/lept/regout/quadtree.0.baa
+ *          The golden file name mirrors this in the usual way.
+ *      (3) The data can be anything.  It is most useful for serialized
+ *          output of data, such as boxa, pta, etc.
+ *      (4) The file extension is arbitrary.  It is included simply
+ *          to make the content type obvious when examining written files.
+ *      (5) The check is done between the written files, which requires
+ *          the files to be identical.
+ * </pre>
+ */
+l_int32
+regTestWriteDataAndCheck(L_REGPARAMS  *rp,
+                         void         *data,
+                         size_t        nbytes,
+                         const char   *ext)
+{
+char  namebuf[256];
+
+    PROCNAME("regTestWriteDataAndCheck");
+
+    if (!rp)
+        return ERROR_INT("rp not defined", procName, 1);
+    if (!data || nbytes == 0) {
+        rp->success = FALSE;
+        return ERROR_INT("data not defined or size == 0", procName, 1);
+    }
+
+        /* Generate the local file name */
+    snprintf(namebuf, sizeof(namebuf), "/tmp/lept/regout/%s.%02d.%s",
+             rp->testname, rp->index + 1, ext);
+
+        /* Write the local file */
+    l_binaryWrite(namebuf, "w", data, nbytes);
+
+        /* Either write the golden file ("generate") or check the
+           local file against an existing golden file ("compare") */
+    regTestCheckFile(rp, namebuf);
+    return 0;
+}
+
+
+/*!
+ * \brief   regTestGenLocalFilename()
+ *
+ * \param[in]       rp      regtest parameters
+ * \param[in]       index   use -1 for current index
+ * \param[in]       format  of image; e.g., IFF_PNG
+ * \return  filename if OK, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This is used to get the name of a file in the regout
+ *          subdirectory, that has been made and is used to test against
+ *          the golden file.  You can either specify a particular index
+ *          value, or with %index == -1, this returns the most recently
+ *          written file.  The latter case lets you read a pix from a
+ *          file that has just been written with regTestWritePixAndCheck(),
+ *          which is useful for testing formatted read/write functions.
+ */
+char *
+regTestGenLocalFilename(L_REGPARAMS  *rp,
+                        l_int32       index,
+                        l_int32       format)
+{
+char     buf[64];
+l_int32  ind;
+
+    PROCNAME("regTestGenLocalFilename");
+
+    if (!rp)
+        return (char *)ERROR_PTR("rp not defined", procName, NULL);
+
+    ind = (index >= 0) ? index : rp->index;
+    snprintf(buf, sizeof(buf), "/tmp/lept/regout/%s.%02d.%s",
+             rp->testname, ind, ImageFileFormatExtensions[format]);
+    return stringNew(buf);
+}
+
+
+/*!
+ * \brief   getRootNameFromArgv0()
+ *
+ * \param[in]    argv0
+ * \return  root name without the '_reg', or NULL on error
+ *
+ * <pre>
+ * Notes:
  *      (1) For example, from psioseg_reg, we want to extract
  *          just 'psioseg' as the root.
  *      (2) In unix with autotools, the executable is not X,
  *          but ./.libs/lt-X.   So in addition to stripping out the
  *          last 4 characters of the tail, we have to check for
  *          the '-' and strip out the "lt-" prefix if we find it.
+ * </pre>
  */
 static char *
 getRootNameFromArgv0(const char  *argv0)
@@ -713,7 +861,7 @@ char    *root;
 
     splitPathAtDirectory(argv0, NULL, &root);
     if ((len = strlen(root)) <= 4) {
-        FREE(root);
+        LEPT_FREE(root);
         return (char *)ERROR_PTR("invalid argv0; too small", procName, NULL);
     }
 
@@ -723,7 +871,7 @@ char    *root;
         l_int32  loc;
         if (stringFindSubstr(root, "-", &loc)) {
             newroot = stringNew(root + loc + 1);  /* strip out "lt-" */
-            FREE(root);
+            LEPT_FREE(root);
             root = newroot;
             len = strlen(root);
         }
@@ -736,4 +884,3 @@ char    *root;
     root[len - 4] = '\0';  /* remove the suffix */
     return root;
 }
-

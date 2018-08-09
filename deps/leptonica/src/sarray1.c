@@ -24,9 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-
-/*
- *   sarray.c
+/*!
+ * \file  sarray1.c
+ * <pre>
  *
  *      Create/Destroy/Copy
  *          SARRAY    *sarrayCreate()
@@ -55,8 +55,8 @@
  *          char      *sarrayToString()
  *          char      *sarrayToStringRange()
  *
- *      Concatenate 2 sarrays
- *          l_int32    sarrayConcatenate()
+ *      Join 2 sarrays
+ *          l_int32    sarrayJoin()
  *          l_int32    sarrayAppendRange()
  *
  *      Pad an sarray to be the same size as another sarray
@@ -73,16 +73,13 @@
  *          SARRAY    *sarraySelectByRange()
  *          l_int32    sarrayParseRange()
  *
- *      Sort
- *          SARRAY    *sarraySort()
- *          SARRAY    *sarraySortByIndex()
- *          l_int32    stringCompareLexical()
- *
  *      Serialize for I/O
  *          SARRAY    *sarrayRead()
  *          SARRAY    *sarrayReadStream()
+ *          SARRAY    *sarrayReadMem()
  *          l_int32    sarrayWrite()
  *          l_int32    sarrayWriteStream()
+ *          l_int32    sarrayWriteMem()
  *          l_int32    sarrayAppend()
  *
  *      Directory filenames
@@ -104,46 +101,51 @@
  *      Comments on usage:
  *
  *          The user is responsible for correctly disposing of strings
- *          that have been extracted from sarrays:
- *            - When you want a string from an Sarray to inspect it, or
- *              plan to make a copy of it later, use sarrayGetString()
- *              with copyflag = 0.  In this case, you must neither free
- *              the string nor put it directly in another array.
- *              We provide the copyflag constant L_NOCOPY, which is 0,
- *              for this purpose:
+ *          that have been extracted from sarrays.  In the following,
+ *          "str_not_owned" means the returned handle does not own the string,
+ *          and "str_owned" means the returned handle owns the string.
+ *            - To extract a string from an Sarray in order to inspect it
+ *              or to make a copy of it later, get a handle to it:
+ *                  copyflag = L_NOCOPY.
+ *              In this case, you must neither free the string nor put it
+ *              directly in another array:
  *                 str-not-owned = sarrayGetString(sa, index, L_NOCOPY);
- *              To extract a copy of a string, use:
+ *            - To extract a copy of a string from an Sarray, use:
  *                 str-owned = sarrayGetString(sa, index, L_COPY);
- *
- *            - When you want to insert a string that is in one
- *              array into another array (always leaving the first
- *              array intact), you have two options:
+ *            ~ To insert a string that is in one array into another
+ *              array (always leaving the first array intact), there are
+ *              two options:
  *                 (1) use copyflag = L_COPY to make an immediate copy,
- *                     which you must then add to the second array
- *                     by insertion; namely,
+ *                     which you then add to the second array by insertion:
  *                       str-owned = sarrayGetString(sa, index, L_COPY);
  *                       sarrayAddString(sa, str-owned, L_INSERT);
  *                 (2) use copyflag = L_NOCOPY to get another handle to
- *                     the string, in which case you must add
- *                     a copy of it to the second string array:
+ *                     the string; you then add a copy of it to the
+ *                     second string array:
  *                       str-not-owned = sarrayGetString(sa, index, L_NOCOPY);
  *                       sarrayAddString(sa, str-not-owned, L_COPY).
+ *              sarrayAddString() transfers ownership to the Sarray, so never
+ *              use L_INSERT if the string is owned by another array.
  *
  *              In all cases, when you use copyflag = L_COPY to extract
  *              a string from an array, you must either free it
  *              or insert it in an array that will be freed later.
+ * </pre>
  */
 
 #include <string.h>
 #ifndef _WIN32
 #include <dirent.h>     /* unix only */
+#include <sys/stat.h>
+#include <limits.h>  /* needed for realpath() */
+#include <stdlib.h>  /* needed for realpath() */
 #endif  /* ! _WIN32 */
 #include "allheaders.h"
 
 static const l_int32  INITIAL_PTR_ARRAYSIZE = 50;     /* n'importe quoi */
 static const l_int32  L_BUF_SIZE = 512;
 
-    /* Static function */
+    /* Static functions */
 static l_int32 sarrayExtendArray(SARRAY *sa);
 
 
@@ -151,11 +153,11 @@ static l_int32 sarrayExtendArray(SARRAY *sa);
  *                   String array create/destroy/copy/extend                *
  *--------------------------------------------------------------------------*/
 /*!
- *  sarrayCreate()
+ * \brief   sarrayCreate()
  *
- *      Input:  size of string ptr array to be alloc'd
- *              (use 0 for default)
- *      Return: sarray, or null on error
+ * \param[in]    n size of string ptr array to be alloc'd;
+ *               use 0 for default
+ * \return  sarray, or NULL on error
  */
 SARRAY *
 sarrayCreate(l_int32  n)
@@ -167,10 +169,11 @@ SARRAY  *sa;
     if (n <= 0)
         n = INITIAL_PTR_ARRAYSIZE;
 
-    if ((sa = (SARRAY *)CALLOC(1, sizeof(SARRAY))) == NULL)
-        return (SARRAY *)ERROR_PTR("sa not made", procName, NULL);
-    if ((sa->array = (char **)CALLOC(n, sizeof(char *))) == NULL)
+    sa = (SARRAY *)LEPT_CALLOC(1, sizeof(SARRAY));
+    if ((sa->array = (char **)LEPT_CALLOC(n, sizeof(char *))) == NULL) {
+        sarrayDestroy(&sa);
         return (SARRAY *)ERROR_PTR("ptr array not made", procName, NULL);
+    }
 
     sa->nalloc = n;
     sa->n = 0;
@@ -180,11 +183,11 @@ SARRAY  *sa;
 
 
 /*!
- *  sarrayCreateInitialized()
+ * \brief   sarrayCreateInitialized()
  *
- *      Input:  n (size of string ptr array to be alloc'd)
- *              initstr (string to be initialized on the full array)
- *      Return: sarray, or null on error
+ * \param[in]    n size of string ptr array to be alloc'd
+ * \param[in]    initstr string to be initialized on the full array
+ * \return  sarray, or NULL on error
  */
 SARRAY *
 sarrayCreateInitialized(l_int32  n,
@@ -208,14 +211,16 @@ SARRAY  *sa;
 
 
 /*!
- *  sarrayCreateWordsFromString()
+ * \brief   sarrayCreateWordsFromString()
  *
- *      Input:  string
- *      Return: sarray, or null on error
+ * \param[in]    string
+ * \return  sarray, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This finds the number of word substrings, creates an sarray
  *          of this size, and puts copies of each substring into the sarray.
+ * </pre>
  */
 SARRAY *
 sarrayCreateWordsFromString(const char  *string)
@@ -253,21 +258,23 @@ SARRAY  *sa;
 
 
 /*!
- *  sarrayCreateLinesFromString()
+ * \brief   sarrayCreateLinesFromString()
  *
- *      Input:  string
- *              blankflag  (0 to exclude blank lines; 1 to include)
- *      Return: sarray, or null on error
+ * \param[in]    string
+ * \param[in]    blankflag  0 to exclude blank lines; 1 to include
+ * \return  sarray, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This finds the number of line substrings, each of which
  *          ends with a newline, and puts a copy of each substring
  *          in a new sarray.
  *      (2) The newline characters are removed from each substring.
+ * </pre>
  */
 SARRAY *
-sarrayCreateLinesFromString(char    *string,
-                            l_int32  blankflag)
+sarrayCreateLinesFromString(const char  *string,
+                            l_int32      blankflag)
 {
 l_int32  i, nsub, size, startptr;
 char    *cstring, *substring;
@@ -278,7 +285,7 @@ SARRAY  *sa;
     if (!string)
         return (SARRAY *)ERROR_PTR("textstr not defined", procName, NULL);
 
-        /* find the number of lines */
+        /* Find the number of lines */
     size = strlen(string);
     nsub = 0;
     for (i = 0; i < size; i++) {
@@ -291,8 +298,10 @@ SARRAY  *sa;
 
     if (blankflag) {  /* keep blank lines as null strings */
             /* Make a copy for munging */
-        if ((cstring = stringNew(string)) == NULL)
+        if ((cstring = stringNew(string)) == NULL) {
+            sarrayDestroy(&sa);
             return (SARRAY *)ERROR_PTR("cstring not made", procName, NULL);
+        }
             /* We'll insert nulls like strtok */
         startptr = 0;
         for (i = 0; i < size; i++) {
@@ -300,22 +309,28 @@ SARRAY  *sa;
                 cstring[i] = '\0';
                 if (i > 0 && cstring[i - 1] == '\r')
                     cstring[i - 1] = '\0';  /* also remove Windows CR */
-                if ((substring = stringNew(cstring + startptr)) == NULL)
+                if ((substring = stringNew(cstring + startptr)) == NULL) {
+                    sarrayDestroy(&sa);
+                    LEPT_FREE(cstring);
                     return (SARRAY *)ERROR_PTR("substring not made",
                                                 procName, NULL);
+                }
                 sarrayAddString(sa, substring, L_INSERT);
 /*                fprintf(stderr, "substring = %s\n", substring); */
                 startptr = i + 1;
             }
         }
         if (startptr < size) {  /* no newline at end of last line */
-            if ((substring = stringNew(cstring + startptr)) == NULL)
+            if ((substring = stringNew(cstring + startptr)) == NULL) {
+                sarrayDestroy(&sa);
+                LEPT_FREE(cstring);
                 return (SARRAY *)ERROR_PTR("substring not made",
-                                            procName, NULL);
+                                           procName, NULL);
+            }
             sarrayAddString(sa, substring, L_INSERT);
 /*            fprintf(stderr, "substring = %s\n", substring); */
         }
-        FREE(cstring);
+        LEPT_FREE(cstring);
     } else {  /* remove blank lines; use strtok */
         sarraySplitString(sa, string, "\r\n");
     }
@@ -325,14 +340,16 @@ SARRAY  *sa;
 
 
 /*!
- *  sarrayDestroy()
+ * \brief   sarrayDestroy()
  *
- *      Input:  &sarray <to be nulled>
- *      Return: void
+ * \param[in,out]   psa to be nulled
+ * \return  void
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Decrements the ref count and, if 0, destroys the sarray.
  *      (2) Always nulls the input ptr.
+ * </pre>
  */
 void
 sarrayDestroy(SARRAY  **psa)
@@ -354,11 +371,11 @@ SARRAY  *sa;
         if (sa->array) {
             for (i = 0; i < sa->n; i++) {
                 if (sa->array[i])
-                    FREE(sa->array[i]);
+                    LEPT_FREE(sa->array[i]);
             }
-            FREE(sa->array);
+            LEPT_FREE(sa->array);
         }
-        FREE(sa);
+        LEPT_FREE(sa);
     }
 
     *psa = NULL;
@@ -367,10 +384,10 @@ SARRAY  *sa;
 
 
 /*!
- *  sarrayCopy()
+ * \brief   sarrayCopy()
  *
- *      Input:  sarray
- *      Return: copy of sarray, or null on error
+ * \param[in]    sa string array
+ * \return  copy of sarray, or NULL on error
  */
 SARRAY *
 sarrayCopy(SARRAY  *sa)
@@ -394,10 +411,10 @@ SARRAY  *csa;
 
 
 /*!
- *  sarrayClone()
+ * \brief   sarrayClone()
  *
- *      Input:  sarray
- *      Return: ptr to same sarray, or null on error
+ * \param[in]    sa string array
+ * \return  ptr to same sarray, or NULL on error
  */
 SARRAY *
 sarrayClone(SARRAY  *sa)
@@ -412,19 +429,18 @@ sarrayClone(SARRAY  *sa)
 
 
 /*!
- *  sarrayAddString()
+ * \brief   sarrayAddString()
  *
- *      Input:  sarray
- *              string  (string to be added)
- *              copyflag (L_INSERT, L_COPY)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    sa string array
+ * \param[in]    string  string to be added
+ * \param[in]    copyflag  L_INSERT, L_NOCOPY or L_COPY
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
- *      (1) Legacy usage decrees that we always use 0 to insert a string
- *          directly and 1 to insert a copy of the string.  The
- *          enums for L_INSERT and L_COPY agree with this convention,
- *          and will not change in the future.
- *      (2) See usage comments at the top of this file.
+ * <pre>
+ * Notes:
+ *      (1) See usage comments at the top of this file.  L_INSERT is
+ *          equivalent to L_NOCOPY.
+ * </pre>
  */
 l_int32
 sarrayAddString(SARRAY  *sa,
@@ -439,17 +455,17 @@ l_int32  n;
         return ERROR_INT("sa not defined", procName, 1);
     if (!string)
         return ERROR_INT("string not defined", procName, 1);
-    if (copyflag != L_INSERT && copyflag != L_COPY)
+    if (copyflag != L_INSERT && copyflag != L_NOCOPY && copyflag != L_COPY)
         return ERROR_INT("invalid copyflag", procName, 1);
 
     n = sarrayGetCount(sa);
     if (n >= sa->nalloc)
         sarrayExtendArray(sa);
 
-    if (copyflag == L_INSERT)
-        sa->array[n] = string;
-    else  /* L_COPY */
+    if (copyflag == L_COPY)
         sa->array[n] = stringNew(string);
+    else  /* L_INSERT or L_NOCOPY */
+        sa->array[n] = string;
     sa->n++;
 
     return 0;
@@ -457,10 +473,10 @@ l_int32  n;
 
 
 /*!
- *  sarrayExtendArray()
+ * \brief   sarrayExtendArray()
  *
- *      Input:  sarray
- *      Return: 0 if OK, 1 on error
+ * \param[in]    sa string array
+ * \return  0 if OK, 1 on error
  */
 static l_int32
 sarrayExtendArray(SARRAY  *sa)
@@ -481,11 +497,11 @@ sarrayExtendArray(SARRAY  *sa)
 
 
 /*!
- *  sarrayRemoveString()
+ * \brief   sarrayRemoveString()
  *
- *      Input:  sarray
- *              index (of string within sarray)
- *      Return: removed string, or null on error
+ * \param[in]    sa string array
+ * \param[in]    index of string within sarray
+ * \return  removed string, or NULL on error
  */
 char *
 sarrayRemoveString(SARRAY  *sa,
@@ -521,20 +537,22 @@ l_int32  i, n, nalloc;
 
 
 /*!
- *  sarrayReplaceString()
+ * \brief   sarrayReplaceString()
  *
- *      Input:  sarray
- *              index (of string within sarray to be replaced)
- *              newstr (string to replace existing one)
- *              copyflag (L_INSERT, L_COPY)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    sa string array
+ * \param[in]    index of string within sarray to be replaced
+ * \param[in]    newstr string to replace existing one
+ * \param[in]    copyflag  L_INSERT, L_COPY
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This destroys an existing string and replaces it with
  *          the new string or a copy of it.
  *      (2) By design, an sarray is always compacted, so there are
  *          never any holes (null ptrs) in the ptr array up to the
  *          current count.
+ * </pre>
  */
 l_int32
 sarrayReplaceString(SARRAY  *sa,
@@ -557,7 +575,7 @@ l_int32  n;
     if (copyflag != L_INSERT && copyflag != L_COPY)
         return ERROR_INT("invalid copyflag", procName, 1);
 
-    FREE(sa->array[index]);
+    LEPT_FREE(sa->array[index]);
     if (copyflag == L_INSERT)
         str = newstr;
     else  /* L_COPY */
@@ -568,10 +586,10 @@ l_int32  n;
 
 
 /*!
- *  sarrayClear()
+ * \brief   sarrayClear()
  *
- *      Input:  sarray
- *      Return: 0 if OK; 1 on error
+ * \param[in]    sa string array
+ * \return  0 if OK; 1 on error
  */
 l_int32
 sarrayClear(SARRAY  *sa)
@@ -583,7 +601,7 @@ l_int32  i;
     if (!sa)
         return ERROR_INT("sa not defined", procName, 1);
     for (i = 0; i < sa->n; i++) {  /* free strings and null ptrs */
-        FREE(sa->array[i]);
+        LEPT_FREE(sa->array[i]);
         sa->array[i] = NULL;
     }
     sa->n = 0;
@@ -595,10 +613,10 @@ l_int32  i;
  *                               Accessors                              *
  *----------------------------------------------------------------------*/
 /*!
- *  sarrayGetCount()
+ * \brief   sarrayGetCount()
  *
- *      Input:  sarray
- *      Return: count, or 0 if no strings or on error
+ * \param[in]    sa string array
+ * \return  count, or 0 if no strings or on error
  */
 l_int32
 sarrayGetCount(SARRAY  *sa)
@@ -612,16 +630,18 @@ sarrayGetCount(SARRAY  *sa)
 
 
 /*!
- *  sarrayGetArray()
+ * \brief   sarrayGetArray()
  *
- *      Input:  sarray
- *              &nalloc  (<optional return> number allocated string ptrs)
- *              &n  (<optional return> number allocated strings)
- *      Return: ptr to string array, or null on error
+ * \param[in]    sa string array
+ * \param[out]   pnalloc  [optional] number allocated string ptrs
+ * \param[out]   pn  [optional] number allocated strings
+ * \return  ptr to string array, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Caution: the returned array is not a copy, so caller
  *          must not destroy it!
+ * </pre>
  */
 char **
 sarrayGetArray(SARRAY   *sa,
@@ -644,24 +664,19 @@ char  **array;
 
 
 /*!
- *  sarrayGetString()
+ * \brief   sarrayGetString()
  *
- *      Input:  sarray
- *              index   (to the index-th string)
- *              copyflag  (L_NOCOPY or L_COPY)
- *      Return: string, or null on error
+ * \param[in]    sa string array
+ * \param[in]    index   to the index-th string
+ * \param[in]    copyflag  L_NOCOPY or L_COPY
+ * \return  string, or NULL on error
  *
- *  Notes:
- *      (1) Legacy usage decrees that we always use 0 to get the
- *          pointer to the string itself, and 1 to get a copy of
- *          the string.
- *      (2) See usage comments at the top of this file.
- *      (3) To get a pointer to the string itself, use for copyflag:
- *             L_NOCOPY or 0 or FALSE
- *          To get a copy of the string, use for copyflag:
- *             L_COPY or 1 or TRUE
- *          The const values of L_NOCOPY and L_COPY are guaranteed not
- *          to change.
+ * <pre>
+ * Notes:
+ *      (1) See usage comments at the top of this file.
+ *      (2) To get a pointer to the string itself, use L_NOCOPY.
+ *          To get a copy of the string, use L_COPY.
+ * </pre>
  */
 char *
 sarrayGetString(SARRAY  *sa,
@@ -685,10 +700,10 @@ sarrayGetString(SARRAY  *sa,
 
 
 /*!
- *  sarrayGetRefCount()
+ * \brief   sarrayGetRefCount()
  *
- *      Input:  sarray
- *      Return: refcount, or UNDEF on error
+ * \param[in]    sa string array
+ * \return  refcount, or UNDEF on error
  */
 l_int32
 sarrayGetRefcount(SARRAY  *sa)
@@ -702,11 +717,11 @@ sarrayGetRefcount(SARRAY  *sa)
 
 
 /*!
- *  sarrayChangeRefCount()
+ * \brief   sarrayChangeRefCount()
  *
- *      Input:  sarray
- *              delta (change to be applied)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    sa string array
+ * \param[in]    delta change to be applied
+ * \return  0 if OK, 1 on error
  */
 l_int32
 sarrayChangeRefcount(SARRAY  *sa,
@@ -725,15 +740,16 @@ sarrayChangeRefcount(SARRAY  *sa,
  *                      Conversion to string                           *
  *----------------------------------------------------------------------*/
 /*!
- *  sarrayToString()
+ * \brief   sarrayToString()
  *
- *      Input:  sarray
- *              addnlflag (flag: 0 adds nothing to each substring
+ * \param[in]    sa string array
+ * \param[in]    addnlflag flag: 0 adds nothing to each substring
  *                               1 adds '\n' to each substring
- *                               2 adds ' ' to each substring)
- *      Return: dest string, or null on error
+ *                               2 adds ' ' to each substring
+ * \return  dest string, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Concatenates all the strings in the sarray, preserving
  *          all white space.
  *      (2) If addnlflag != 0, adds either a '\n' or a ' ' after
@@ -742,6 +758,7 @@ sarrayChangeRefcount(SARRAY  *sa,
  *            for (i = 0; i < n; i++)
  *                     strcat(dest, sarrayGetString(sa, i, L_NOCOPY));
  *          Do you see why?
+ * </pre>
  */
 char *
 sarrayToString(SARRAY  *sa,
@@ -757,24 +774,26 @@ sarrayToString(SARRAY  *sa,
 
 
 /*!
- *  sarrayToStringRange()
+ * \brief   sarrayToStringRange()
  *
- *      Input: sarray
- *             first  (index of first string to use; starts with 0)
- *             nstrings (number of strings to append into the result; use
- *                       0 to append to the end of the sarray)
- *             addnlflag (flag: 0 adds nothing to each substring
+ * \param[in]   sa string array
+ * \param[in]   first  index of first string to use; starts with 0
+ * \param[in]   nstrings number of strings to append into the result; use
+ *                       0 to append to the end of the sarray
+ * \param[in]   addnlflag flag: 0 adds nothing to each substring
  *                              1 adds '\n' to each substring
- *                              2 adds ' ' to each substring)
- *      Return: dest string, or null on error
+ *                              2 adds ' ' to each substring
+ * \return  dest string, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Concatenates the specified strings inthe sarray, preserving
  *          all white space.
  *      (2) If addnlflag != 0, adds either a '\n' or a ' ' after
  *          each substring.
  *      (3) If the sarray is empty, this returns a string with just
- *          the character corresponding to @addnlflag.
+ *          the character corresponding to %addnlflag.
+ * </pre>
  */
 char *
 sarrayToStringRange(SARRAY  *sa,
@@ -821,7 +840,7 @@ l_int32  n, i, last, size, index, len;
         size += strlen(str) + 2;
     }
 
-    if ((dest = (char *)CALLOC(size + 1, sizeof(char))) == NULL)
+    if ((dest = (char *)LEPT_CALLOC(size + 1, sizeof(char))) == NULL)
         return (char *)ERROR_PTR("dest not made", procName, NULL);
 
     index = 0;
@@ -844,26 +863,28 @@ l_int32  n, i, last, size, index, len;
 
 
 /*----------------------------------------------------------------------*
- *                      Concatenate 2 sarrays                           *
+ *                           Join 2 sarrays                             *
  *----------------------------------------------------------------------*/
 /*!
- *  sarrayConcatenate()
+ * \brief   sarrayJoin()
  *
- *      Input:  sa1  (to be added to)
- *              sa2  (append to sa1)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    sa1  to be added to
+ * \param[in]    sa2  append to sa1
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Copies of the strings in sarray2 are added to sarray1.
+ * </pre>
  */
 l_int32
-sarrayConcatenate(SARRAY  *sa1,
-                  SARRAY  *sa2)
+sarrayJoin(SARRAY  *sa1,
+           SARRAY  *sa2)
 {
 char    *str;
 l_int32  n, i;
 
-    PROCNAME("sarrayConcatenate");
+    PROCNAME("sarrayJoin");
 
     if (!sa1)
         return ERROR_INT("sa1 not defined", procName, 1);
@@ -881,18 +902,20 @@ l_int32  n, i;
 
 
 /*!
- *  sarrayAppendRange()
+ * \brief   sarrayAppendRange()
  *
- *      Input:  sa1  (to be added to)
- *              sa2  (append specified range of strings in sa2 to sa1)
- *              start (index of first string of sa2 to append)
- *              end (index of last string of sa2 to append; -1 to end of array)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    sa1  to be added to
+ * \param[in]    sa2  append specified range of strings in sa2 to sa1
+ * \param[in]    start index of first string of sa2 to append
+ * \param[in]    end index of last string of sa2 to append; -1 to end of array
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Copies of the strings in sarray2 are added to sarray1.
  *      (2) The [start ... end] range is truncated if necessary.
  *      (3) Use end == -1 to append to the end of sa2.
+ * </pre>
  */
 l_int32
 sarrayAppendRange(SARRAY  *sa1,
@@ -931,18 +954,20 @@ l_int32  n, i;
  *          Pad an sarray to be the same size as another sarray         *
  *----------------------------------------------------------------------*/
 /*!
- *  sarrayPadToSameSize()
+ * \brief   sarrayPadToSameSize()
  *
- *      Input:  sa1, sa2
- *              padstring
- *      Return: 0 if OK, 1 on error
+ * \param[in]    sa1, sa2
+ * \param[in]    padstring
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If two sarrays have different size, this adds enough
- *          instances of @padstring to the smaller so that they are
+ *          instances of %padstring to the smaller so that they are
  *          the same size.  It is useful when two or more sarrays
  *          are being sequenced in parallel, and it is necessary to
  *          find a valid string at each index.
+ * </pre>
  */
 l_int32
 sarrayPadToSameSize(SARRAY  *sa1,
@@ -974,11 +999,11 @@ l_int32  i, n1, n2;
  *                   Convert word sarray to line sarray                 *
  *----------------------------------------------------------------------*/
 /*!
- *  sarrayConvertWordsToLines()
+ * \brief   sarrayConvertWordsToLines()
  *
- *      Input:  sa  (sa of individual words)
- *              linesize  (max num of chars in each line)
- *      Return: saout (sa of formatted lines), or null on error
+ * \param[in]    sa  sa of individual words
+ * \param[in]    linesize  max num of chars in each line
+ * \return  saout sa of formatted lines, or NULL on error
  *
  *  This is useful for re-typesetting text to a specific maximum
  *  line length.  The individual words in the input sarray
@@ -986,9 +1011,9 @@ l_int32  i, n1, n2;
  *  length is taken to be a paragraph separator.  Each time
  *  such a string is found, the current line is ended and
  *  a new line is also produced that contains just the
- *  string of zero length ("").  When the output sarray
+ *  string of zero length "".  When the output sarray
  *  of lines is eventually converted to a string with newlines
- *  (typically) appended to each line string, the empty
+ *  typically appended to each line string, the empty
  *  strings are just converted to newlines, producing the visible
  *  paragraph separation.
  *
@@ -998,7 +1023,7 @@ l_int32  i, n1, n2;
  *  or following the line with the long word.  Why this choice?
  *  Long "words" found in text documents are typically URLs, and
  *  it's often desirable not to put newlines in the middle of a URL.
- *  The text display program (e.g., text editor) will typically
+ *  The text display program e.g., text editor will typically
  *  wrap the long "word" to fit in the window.
  */
 SARRAY *
@@ -1015,17 +1040,13 @@ SARRAY  *sal, *saout;
     if (!sa)
         return (SARRAY *)ERROR_PTR("sa not defined", procName, NULL);
 
-    if ((saout = sarrayCreate(0)) == NULL)
-        return (SARRAY *)ERROR_PTR("saout not defined", procName, NULL);
-
+    saout = sarrayCreate(0);
     n = sarrayGetCount(sa);
     totlen = 0;
     sal = NULL;
     for (i = 0; i < n; i++) {
-        if (!sal) {
-            if ((sal = sarrayCreate(0)) == NULL)
-                return (SARRAY *)ERROR_PTR("sal not made", procName, NULL);
-        }
+        if (!sal)
+            sal = sarrayCreate(0);
         wd = sarrayGetString(sa, i, L_NOCOPY);
         len = strlen(wd);
         if (len == 0) {  /* end of paragraph: end line & insert blank line */
@@ -1042,8 +1063,7 @@ SARRAY  *sal, *saout;
             strl = sarrayToString(sal, 2);
             sarrayAddString(saout, strl, L_INSERT);
             sarrayDestroy(&sal);
-            if ((sal = sarrayCreate(0)) == NULL)
-                return (SARRAY *)ERROR_PTR("sal not made", procName, NULL);
+            sal = sarrayCreate(0);
             sarrayAddString(sal, wd, L_COPY);
             totlen = len + 1;
         } else {  /* add to current line */
@@ -1058,7 +1078,6 @@ SARRAY  *sal, *saout;
     }
 
     return saout;
-
 }
 
 
@@ -1098,7 +1117,7 @@ char  *cstr, *substr, *saveptr;
         sarrayAddString(sa, substr, L_INSERT);
     while ((substr = strtokSafe(NULL, separators, &saveptr)))
         sarrayAddString(sa, substr, L_INSERT);
-    FREE(cstr);
+    LEPT_FREE(cstr);
 
     return 0;
 }
@@ -1108,17 +1127,19 @@ char  *cstr, *substr, *saveptr;
  *                              Filter sarray                           *
  *----------------------------------------------------------------------*/
 /*!
- *  sarraySelectBySubstring()
+ * \brief   sarraySelectBySubstring()
  *
- *      Input:  sain (input sarray)
- *              substr (<optional> substring for matching; can be NULL)
- *      Return: saout (output sarray, filtered with substring) or null on error
+ * \param[in]    sain input sarray
+ * \param[in]    substr [optional] substring for matching; can be NULL
+ * \return  saout output sarray, filtered with substring or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This selects all strings in sain that have substr as a substring.
  *          Note that we can't use strncmp() because we're looking for
  *          a match to the substring anywhere within each filename.
  *      (2) If substr == NULL, returns a copy of the sarray.
+ * </pre>
  */
 SARRAY *
 sarraySelectBySubstring(SARRAY      *sain,
@@ -1151,18 +1172,20 @@ SARRAY  *saout;
 
 
 /*!
- *  sarraySelectByRange()
+ * \brief   sarraySelectByRange()
  *
- *      Input:  sain (input sarray)
- *              first (index of first string to be selected)
- *              last (index of last string to be selected; use 0 to go to the
- *                    end of the sarray)
- *      Return: saout (output sarray), or null on error
+ * \param[in]    sain input sarray
+ * \param[in]    first index of first string to be selected
+ * \param[in]    last index of last string to be selected; use 0 to go to the
+ *                    end of the sarray
+ * \return  saout output sarray, or NULL on error
  *
- *  Notes:
- *      (1) This makes @saout consisting of copies of all strings in @sain
- *          in the index set [first ... last].  Use @last == 0 to get all
- *          strings from @first to the last string in the sarray.
+ * <pre>
+ * Notes:
+ *      (1) This makes %saout consisting of copies of all strings in %sain
+ *          in the index set [first ... last].  Use %last == 0 to get all
+ *          strings from %first to the last string in the sarray.
+ * </pre>
  */
 SARRAY *
 sarraySelectByRange(SARRAY  *sain,
@@ -1181,7 +1204,7 @@ SARRAY  *saout;
     n = sarrayGetCount(sain);
     if (last <= 0) last = n - 1;
     if (last >= n) {
-        L_WARNING("@last > n - 1; setting to n - 1\n", procName);
+        L_WARNING("last > n - 1; setting to n - 1\n", procName);
         last = n - 1;
     }
     if (first > last)
@@ -1198,19 +1221,20 @@ SARRAY  *saout;
 
 
 /*!
- *  sarrayParseRange()
+ * \brief   sarrayParseRange()
  *
- *      Input:  sa (input sarray)
- *              start (index to start range search)
- *             &actualstart (<return> index of actual start; may be > 'start')
- *             &end (<return> index of end)
- *             &newstart (<return> index of start of next range)
- *              substr (substring for matching at beginning of string)
- *              loc (byte offset within the string for the pattern; use
- *                   -1 if the location does not matter);
- *      Return: 0 if valid range found; 1 otherwise
+ * \param[in]    sa input sarray
+ * \param[in]    start index to start range search
+ * \param[out]  pactualstart index of actual start; may be > 'start'
+ * \param[out]  pend index of end
+ * \param[out]  pnewstart index of start of next range
+ * \param[in]    substr substring for matching at beginning of string
+ * \param[in]    loc byte offset within the string for the pattern; use
+ *                   -1 if the location does not matter;
+ * \return  0 if valid range found; 1 otherwise
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This finds the range of the next set of strings in SA,
  *          beginning the search at 'start', that does NOT have
  *          the substring 'substr' either at the indicated location
@@ -1230,6 +1254,7 @@ SARRAY  *saout;
  *             while (!sarrayParseRange(sa, start, &actstart, &end, &start,
  *                    "--", 0))
  *                 fprintf(stderr, "start = %d, end = %d\n", actstart, end);
+ * </pre>
  */
 l_int32
 sarrayParseRange(SARRAY      *sa,
@@ -1308,150 +1333,13 @@ l_int32  n, i, offset, found;
 
 
 /*----------------------------------------------------------------------*
- *                                   Sort                               *
- *----------------------------------------------------------------------*/
-/*!
- *  sarraySort()
- *
- *      Input:  saout (output sarray; can be NULL or equal to sain)
- *              sain (input sarray)
- *              sortorder (L_SORT_INCREASING or L_SORT_DECREASING)
- *      Return: saout (output sarray, sorted by ascii value), or null on error
- *
- *  Notes:
- *      (1) Set saout = sain for in-place; otherwise, set naout = NULL.
- *      (2) Shell sort, modified from K&R, 2nd edition, p.62.
- *          Slow but simple O(n logn) sort.
- */
-SARRAY *
-sarraySort(SARRAY  *saout,
-           SARRAY  *sain,
-           l_int32  sortorder)
-{
-char   **array;
-char    *tmp;
-l_int32  n, i, j, gap;
-
-    PROCNAME("sarraySort");
-
-    if (!sain)
-        return (SARRAY *)ERROR_PTR("sain not defined", procName, NULL);
-
-        /* Make saout if necessary; otherwise do in-place */
-    if (!saout)
-        saout = sarrayCopy(sain);
-    else if (sain != saout)
-        return (SARRAY *)ERROR_PTR("invalid: not in-place", procName, NULL);
-    array = saout->array;  /* operate directly on the array */
-    n = sarrayGetCount(saout);
-
-        /* Shell sort */
-    for (gap = n/2; gap > 0; gap = gap / 2) {
-        for (i = gap; i < n; i++) {
-            for (j = i - gap; j >= 0; j -= gap) {
-                if ((sortorder == L_SORT_INCREASING &&
-                     stringCompareLexical(array[j], array[j + gap])) ||
-                    (sortorder == L_SORT_DECREASING &&
-                     stringCompareLexical(array[j + gap], array[j])))
-                {
-                    tmp = array[j];
-                    array[j] = array[j + gap];
-                    array[j + gap] = tmp;
-                }
-            }
-        }
-    }
-
-    return saout;
-}
-
-
-/*!
- *  sarraySortByIndex()
- *
- *      Input:  sain
- *              naindex (na that maps from the new sarray to the input sarray)
- *      Return: saout (sorted), or null on error
- */
-SARRAY *
-sarraySortByIndex(SARRAY  *sain,
-                  NUMA    *naindex)
-{
-char    *str;
-l_int32  i, n, index;
-SARRAY  *saout;
-
-    PROCNAME("sarraySortByIndex");
-
-    if (!sain)
-        return (SARRAY *)ERROR_PTR("sain not defined", procName, NULL);
-    if (!naindex)
-        return (SARRAY *)ERROR_PTR("naindex not defined", procName, NULL);
-
-    n = sarrayGetCount(sain);
-    saout = sarrayCreate(n);
-    for (i = 0; i < n; i++) {
-        numaGetIValue(naindex, i, &index);
-        str = sarrayGetString(sain, index, L_COPY);
-        sarrayAddString(saout, str, L_INSERT);
-    }
-
-    return saout;
-}
-
-
-/*!
- *  stringCompareLexical()
- *
- *      Input:  str1
- *              str2
- *      Return: 1 if str1 > str2 (lexically); 0 otherwise
- *
- *  Notes:
- *      (1) If the lexical values are identical, return a 0, to
- *          indicate that no swapping is required to sort the strings.
- */
-l_int32
-stringCompareLexical(const char *str1,
-                     const char *str2)
-{
-l_int32  i, len1, len2, len;
-
-    PROCNAME("sarrayCompareLexical");
-
-    if (!str1)
-        return ERROR_INT("str1 not defined", procName, 1);
-    if (!str2)
-        return ERROR_INT("str2 not defined", procName, 1);
-
-    len1 = strlen(str1);
-    len2 = strlen(str2);
-    len = L_MIN(len1, len2);
-
-    for (i = 0; i < len; i++) {
-        if (str1[i] == str2[i])
-            continue;
-        if (str1[i] > str2[i])
-            return 1;
-        else
-            return 0;
-    }
-
-    if (len1 > len2)
-        return 1;
-    else
-        return 0;
-}
-
-
-/*----------------------------------------------------------------------*
  *                           Serialize for I/O                          *
  *----------------------------------------------------------------------*/
 /*!
- *  sarrayRead()
+ * \brief   sarrayRead()
  *
- *      Input:  filename
- *      Return: sarray, or null on error
+ * \param[in]    filename
+ * \return  sarray, or NULL on error
  */
 SARRAY *
 sarrayRead(const char  *filename)
@@ -1466,34 +1354,35 @@ SARRAY  *sa;
 
     if ((fp = fopenReadStream(filename)) == NULL)
         return (SARRAY *)ERROR_PTR("stream not opened", procName, NULL);
-
-    if ((sa = sarrayReadStream(fp)) == NULL) {
-        fclose(fp);
-        return (SARRAY *)ERROR_PTR("sa not read", procName, NULL);
-    }
-
+    sa = sarrayReadStream(fp);
     fclose(fp);
+    if (!sa)
+        return (SARRAY *)ERROR_PTR("sa not read", procName, NULL);
     return sa;
 }
 
 
 /*!
- *  sarrayReadStream()
+ * \brief   sarrayReadStream()
  *
- *      Input:  stream
- *      Return: sarray, or null on error
+ * \param[in]    fp file stream
+ * \return  sarray, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) We store the size of each string along with the string.
+ *          The limit on the number of strings is 2^24.
+ *          The limit on the size of any string is 2^30 bytes.
  *      (2) This allows a string to have embedded newlines.  By reading
  *          the entire string, as determined by its size, we are
  *          not affected by any number of embedded newlines.
+ * </pre>
  */
 SARRAY *
 sarrayReadStream(FILE  *fp)
 {
 char    *stringbuf;
-l_int32  i, n, size, index, bufsize, version, ignore;
+l_int32  i, n, size, index, bufsize, version, ignore, success;
 SARRAY  *sa;
 
     PROCNAME("sarrayReadStream");
@@ -1507,26 +1396,34 @@ SARRAY  *sa;
         return (SARRAY *)ERROR_PTR("invalid sarray version", procName, NULL);
     if (fscanf(fp, "Number of strings = %d\n", &n) != 1)
         return (SARRAY *)ERROR_PTR("error on # strings", procName, NULL);
+    if (n > (1 << 24))
+        return (SARRAY *)ERROR_PTR("more than 2^24 strings!", procName, NULL);
 
+    success = TRUE;
     if ((sa = sarrayCreate(n)) == NULL)
         return (SARRAY *)ERROR_PTR("sa not made", procName, NULL);
     bufsize = L_BUF_SIZE + 1;
-    if ((stringbuf = (char *)CALLOC(bufsize, sizeof(char))) == NULL)
-        return (SARRAY *)ERROR_PTR("stringbuf not made", procName, NULL);
+    stringbuf = (char *)LEPT_CALLOC(bufsize, sizeof(char));
 
     for (i = 0; i < n; i++) {
             /* Get the size of the stored string */
-        if (fscanf(fp, "%d[%d]:", &index, &size) != 2)
-            return (SARRAY *)ERROR_PTR("error on string size", procName, NULL);
+        if ((fscanf(fp, "%d[%d]:", &index, &size) != 2) || (size > (1 << 30))) {
+            success = FALSE;
+            L_ERROR("error on string size\n", procName);
+            goto cleanup;
+        }
             /* Expand the string buffer if necessary */
         if (size > bufsize - 5) {
-            FREE(stringbuf);
+            LEPT_FREE(stringbuf);
             bufsize = (l_int32)(1.5 * size);
-            stringbuf = (char *)CALLOC(bufsize, sizeof(char));
+            stringbuf = (char *)LEPT_CALLOC(bufsize, sizeof(char));
         }
             /* Read the stored string, plus leading spaces and trailing \n */
-        if (fread(stringbuf, 1, size + 3, fp) != size + 3)
-            return (SARRAY *)ERROR_PTR("error reading string", procName, NULL);
+        if (fread(stringbuf, 1, size + 3, fp) != size + 3) {
+            success = FALSE;
+            L_ERROR("error reading string\n", procName);
+            goto cleanup;
+        }
             /* Remove the \n that was added by sarrayWriteStream() */
         stringbuf[size + 2] = '\0';
             /* Copy it in, skipping the 2 leading spaces */
@@ -1534,23 +1431,54 @@ SARRAY  *sa;
     }
     ignore = fscanf(fp, "\n");
 
-    FREE(stringbuf);
+cleanup:
+    LEPT_FREE(stringbuf);
+    if (!success) sarrayDestroy(&sa);
     return sa;
 }
 
 
 /*!
- *  sarrayWrite()
+ * \brief   sarrayReadMem()
  *
- *      Input:  filename
- *              sarray
- *      Return: 0 if OK; 1 on error
+ * \param[in]    data  serialization in ascii
+ * \param[in]    size  of data; can use strlen to get it
+ * \return  sarray, or NULL on error
+ */
+SARRAY *
+sarrayReadMem(const l_uint8  *data,
+              size_t          size)
+{
+FILE    *fp;
+SARRAY  *sa;
+
+    PROCNAME("sarrayReadMem");
+
+    if (!data)
+        return (SARRAY *)ERROR_PTR("data not defined", procName, NULL);
+    if ((fp = fopenReadFromMemory(data, size)) == NULL)
+        return (SARRAY *)ERROR_PTR("stream not opened", procName, NULL);
+
+    sa = sarrayReadStream(fp);
+    fclose(fp);
+    if (!sa) L_ERROR("sarray not read\n", procName);
+    return sa;
+}
+
+
+/*!
+ * \brief   sarrayWrite()
+ *
+ * \param[in]    filename
+ * \param[in]    sa string array
+ * \return  0 if OK; 1 on error
  */
 l_int32
 sarrayWrite(const char  *filename,
             SARRAY      *sa)
 {
-FILE  *fp;
+l_int32  ret;
+FILE    *fp;
 
     PROCNAME("sarrayWrite");
 
@@ -1561,25 +1489,26 @@ FILE  *fp;
 
     if ((fp = fopenWriteStream(filename, "w")) == NULL)
         return ERROR_INT("stream not opened", procName, 1);
-
-    if (sarrayWriteStream(fp, sa))
-        return ERROR_INT("sa not written to stream", procName, 1);
-
+    ret = sarrayWriteStream(fp, sa);
     fclose(fp);
+    if (ret)
+        return ERROR_INT("sa not written to stream", procName, 1);
     return 0;
 }
 
 
 /*!
- *  sarrayWriteStream()
+ * \brief   sarrayWriteStream()
  *
- *      Input:  stream
- *              sarray
- *      Returns 0 if OK; 1 on error
+ * \param[in]    fp file stream
+ * \param[in]    sa string array
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This appends a '\n' to each string, which is stripped
  *          off by sarrayReadStream().
+ * </pre>
  */
 l_int32
 sarrayWriteStream(FILE    *fp,
@@ -1608,11 +1537,65 @@ l_int32  i, n, len;
 
 
 /*!
- *  sarrayAppend()
+ * \brief   sarrayWriteMem()
  *
- *      Input:  filename
- *              sarray
- *      Return: 0 if OK; 1 on error
+ * \param[out]   pdata data of serialized sarray; ascii
+ * \param[out]   psize size of returned data
+ * \param[in]    sa
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) Serializes a sarray in memory and puts the result in a buffer.
+ * </pre>
+ */
+l_int32
+sarrayWriteMem(l_uint8  **pdata,
+               size_t    *psize,
+               SARRAY    *sa)
+{
+l_int32  ret;
+FILE    *fp;
+
+    PROCNAME("sarrayWriteMem");
+
+    if (pdata) *pdata = NULL;
+    if (psize) *psize = 0;
+    if (!pdata)
+        return ERROR_INT("&data not defined", procName, 1);
+    if (!psize)
+        return ERROR_INT("&size not defined", procName, 1);
+    if (!sa)
+        return ERROR_INT("sa not defined", procName, 1);
+
+#if HAVE_FMEMOPEN
+    if ((fp = open_memstream((char **)pdata, psize)) == NULL)
+        return ERROR_INT("stream not opened", procName, 1);
+    ret = sarrayWriteStream(fp, sa);
+#else
+    L_INFO("work-around: writing to a temp file\n", procName);
+  #ifdef _WIN32
+    if ((fp = fopenWriteWinTempfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #else
+    if ((fp = tmpfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #endif  /* _WIN32 */
+    ret = sarrayWriteStream(fp, sa);
+    rewind(fp);
+    *pdata = l_binaryReadStream(fp, psize);
+#endif  /* HAVE_FMEMOPEN */
+    fclose(fp);
+    return ret;
+}
+
+
+/*!
+ * \brief   sarrayAppend()
+ *
+ * \param[in]    filename
+ * \param[in]    sa
+ * \return  0 if OK; 1 on error
  */
 l_int32
 sarrayAppend(const char  *filename,
@@ -1629,9 +1612,10 @@ FILE  *fp;
 
     if ((fp = fopenWriteStream(filename, "a")) == NULL)
         return ERROR_INT("stream not opened", procName, 1);
-
-    if (sarrayWriteStream(fp, sa))
+    if (sarrayWriteStream(fp, sa)) {
+        fclose(fp);
         return ERROR_INT("sa not appended to stream", procName, 1);
+    }
 
     fclose(fp);
     return 0;
@@ -1642,17 +1626,18 @@ FILE  *fp;
  *                           Directory filenames                       *
  *---------------------------------------------------------------------*/
 /*!
- *  getNumberedPathnamesInDirectory()
+ * \brief   getNumberedPathnamesInDirectory()
  *
- *      Input:  directory name
- *              substr (<optional> substring filter on filenames; can be NULL)
- *              numpre (number of characters in name before number)
- *              numpost (number of characters in name after the number,
- *                       up to a dot before an extension)
- *              maxnum (only consider page numbers up to this value)
- *      Return: sarray of numbered pathnames, or NULL on error
+ * \param[in]    dirname directory name
+ * \param[in]    substr [optional] substring filter on filenames; can be NULL
+ * \param[in]    numpre number of characters in name before number
+ * \param[in]    numpost number of characters in name after the number,
+ *                       up to a dot before an extension
+ * \param[in]    maxnum only consider page numbers up to this value
+ * \return  sarray of numbered pathnames, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Returns the full pathnames of the numbered filenames in
  *          the directory.  The number in the filename is the index
  *          into the sarray.  For indices for which there are no filenames,
@@ -1660,24 +1645,25 @@ FILE  *fp;
  *          This makes reading numbered files very simple.  For example,
  *          the image whose filename includes number N can be retrieved using
  *               pixReadIndexed(sa, N);
- *      (2) If @substr is not NULL, only filenames that contain
- *          the substring can be included.  If @substr is NULL,
+ *      (2) If %substr is not NULL, only filenames that contain
+ *          the substring can be included.  If %substr is NULL,
  *          all matching filenames are used.
  *      (3) If no numbered files are found, it returns an empty sarray,
  *          with no initialized strings.
  *      (4) It is assumed that the page number is contained within
  *          the basename (the filename without directory or extension).
- *          @numpre is the number of characters in the basename
- *          preceeding the actual page number; @numpost is the number
+ *          %numpre is the number of characters in the basename
+ *          preceding the actual page number; %numpost is the number
  *          following the page number, up to either the end of the
  *          basename or a ".", whichever comes first.
  *      (5) This is useful when all filenames contain numbers that are
  *          not necessarily consecutive.  0-padding is not required.
  *      (6) To use a O(n) matching algorithm, the largest page number
  *          is found and two internal arrays of this size are created.
- *          This maximum is constrained not to exceed @maxsum,
+ *          This maximum is constrained not to exceed %maxsum,
  *          to make sure that an unrealistically large number is not
  *          accidentally used to determine the array sizes.
+ * </pre>
  */
 SARRAY *
 getNumberedPathnamesInDirectory(const char  *dirname,
@@ -1696,8 +1682,10 @@ SARRAY  *sa, *saout;
 
     if ((sa = getSortedPathnamesInDirectory(dirname, substr, 0, 0)) == NULL)
         return (SARRAY *)ERROR_PTR("sa not made", procName, NULL);
-    if ((nfiles = sarrayGetCount(sa)) == 0)
+    if ((nfiles = sarrayGetCount(sa)) == 0) {
+        sarrayDestroy(&sa);
         return sarrayCreate(1);
+    }
 
     saout = convertSortedToNumberedPathnames(sa, numpre, numpost, maxnum);
     sarrayDestroy(&sa);
@@ -1706,22 +1694,24 @@ SARRAY  *sa, *saout;
 
 
 /*!
- *  getSortedPathnamesInDirectory()
+ * \brief   getSortedPathnamesInDirectory()
  *
- *      Input:  directory name
- *              substr (<optional> substring filter on filenames; can be NULL)
- *              first (0-based)
- *              nfiles (use 0 for all to the end)
- *      Return: sarray of sorted pathnames, or NULL on error
+ * \param[in]    dirname directory name
+ * \param[in]    substr [optional] substring filter on filenames; can be NULL
+ * \param[in]    first 0-based
+ * \param[in]    nfiles use 0 for all to the end
+ * \return  sarray of sorted pathnames, or NULL on error
  *
- *  Notes:
- *      (1) Use @substr to filter filenames in the directory.  If
- *          @substr == NULL, this takes all files.
+ * <pre>
+ * Notes:
+ *      (1) Use %substr to filter filenames in the directory.  If
+ *          %substr == NULL, this takes all files.
  *      (2) The files in the directory, after optional filtering by
  *          the substring, are lexically sorted in increasing order.
- *          Use @first and @nfiles to select a contiguous set of files.
+ *          Use %first and %nfiles to select a contiguous set of files.
  *      (3) The full pathnames are returned for the requested sequence.
  *          If no files are found after filtering, returns an empty sarray.
+ * </pre>
  */
 SARRAY *
 getSortedPathnamesInDirectory(const char  *dirname,
@@ -1758,7 +1748,7 @@ SARRAY  *sa, *safiles, *saout;
     saout = sarrayCreate(last - first + 1);
     for (i = first; i <= last; i++) {
         fname = sarrayGetString(safiles, i, L_NOCOPY);
-        fullname = genPathname(dirname, fname);
+        fullname = pathJoin(dirname, fname);
         sarrayAddString(saout, fullname, L_INSERT);
     }
 
@@ -1768,18 +1758,20 @@ SARRAY  *sa, *safiles, *saout;
 
 
 /*!
- *  convertSortedToNumberedPathnames()
+ * \brief   convertSortedToNumberedPathnames()
  *
- *      Input:  sorted pathnames (including zero-padded integers)
- *              numpre (number of characters in name before number)
- *              numpost (number of characters in name after the number,
- *                       up to a dot before an extension)
- *              maxnum (only consider page numbers up to this value)
- *      Return: sarray of numbered pathnames, or NULL on error
+ * \param[in]    sa sorted pathnames including zero-padded integers
+ * \param[in]    numpre number of characters in name before number
+ * \param[in]    numpost number of characters in name after the number,
+ *                       up to a dot before an extension
+ * \param[in]    maxnum only consider page numbers up to this value
+ * \return  sarray of numbered pathnames, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Typically, numpre = numpost = 0; e.g., when the filename
  *          just has a number followed by an optional extension.
+ * </pre>
  */
 SARRAY *
 convertSortedToNumberedPathnames(SARRAY   *sa,
@@ -1800,7 +1792,7 @@ SARRAY  *saout;
 
         /* Find the last file in the sorted array that has a number
          * that (a) matches the count pattern and (b) does not
-         * exceed @maxnum.  @maxnum sets an upper limit on the size
+         * exceed %maxnum.  %maxnum sets an upper limit on the size
          * of the sarray.  */
     num = 0;
     for (i = nfiles - 1; i >= 0; i--) {
@@ -1833,12 +1825,13 @@ SARRAY  *saout;
 
 
 /*!
- *  getFilenamesInDirectory()
+ * \brief   getFilenamesInDirectory()
  *
- *      Input:  directory name
- *      Return: sarray of file names, or NULL on error
+ * \param[in]    dirname directory name
+ * \return  sarray of file names, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The versions compiled under unix and cygwin use the POSIX C
  *          library commands for handling directories.  For windows,
  *          there is a separate implementation.
@@ -1850,12 +1843,13 @@ SARRAY  *saout;
  *          characters preceding the terminating null character.  Use
  *          of other fields will harm the portability of your programs."
  *      (4) As a consequence of (3), we note several things:
- *           - MINGW doesn't have a d_type member.
- *           - Older versions of gcc (e.g., 2.95.3) return DT_UNKNOWN
+ *           ~ MINGW doesn't have a d_type member.
+ *           ~ Older versions of gcc (e.g., 2.95.3) return DT_UNKNOWN
  *             for d_type from all files.
  *          On these systems, this function will return directories
  *          (except for '.' and '..', which are eliminated using
  *          the d_name field).
+ * </pre>
  */
 
 #ifndef _WIN32
@@ -1863,40 +1857,53 @@ SARRAY  *saout;
 SARRAY *
 getFilenamesInDirectory(const char  *dirname)
 {
-char           *name;
-l_int32         len;
+char            dir[PATH_MAX + 1];
+char           *realdir, *stat_path, *ignore;
+size_t          size;
 SARRAY         *safiles;
 DIR            *pdir;
 struct dirent  *pdirentry;
+int             dfd, stat_ret;
+struct stat     st;
 
     PROCNAME("getFilenamesInDirectory");
 
     if (!dirname)
         return (SARRAY *)ERROR_PTR("dirname not defined", procName, NULL);
 
-    if ((pdir = opendir(dirname)) == NULL)
+        /* It's nice to ignore directories.  fstatat() works with relative
+           directory paths, but stat() requires using the absolute path.
+           Also, do not pass NULL as the second parameter to realpath();
+           use a buffer of sufficient size. */
+    ignore = realpath(dirname, dir);  /* see note above */
+    realdir = genPathname(dir, NULL);
+    if ((pdir = opendir(realdir)) == NULL) {
+        LEPT_FREE(realdir);
         return (SARRAY *)ERROR_PTR("pdir not opened", procName, NULL);
-    if ((safiles = sarrayCreate(0)) == NULL)
-        return (SARRAY *)ERROR_PTR("safiles not made", procName, NULL);
-    while ((pdirentry = readdir(pdir)))  {
-
-        /* It's nice to ignore directories.  For this it is necessary to
-         * define _BSD_SOURCE in the CC command, because the DT_DIR
-         * flag is non-standard.  */
-#if !defined(__SOLARIS__)
-        if (pdirentry->d_type == DT_DIR)
+    }
+    safiles = sarrayCreate(0);
+    dfd = dirfd(pdir);
+    while ((pdirentry = readdir(pdir))) {
+#if HAVE_FSTATAT
+        stat_ret = fstatat(dfd, pdirentry->d_name, &st, 0);
+#else
+        size = strlen(realdir) + strlen(pdirentry->d_name) + 2;
+        if (size > PATH_MAX) {
+            L_ERROR("size = %lu too large; skipping\n", procName,
+                    (unsigned long)size);
             continue;
+        }
+        stat_path = (char *)LEPT_CALLOC(size, 1);
+        snprintf(stat_path, size, "%s/%s", realdir, pdirentry->d_name);
+        stat_ret = stat(stat_path, &st);
+        LEPT_FREE(stat_path);
 #endif
-
-            /* Filter out "." and ".." if they're passed through */
-        name = pdirentry->d_name;
-        len = strlen(name);
-        if (len == 1 && name[len - 1] == '.') continue;
-        if (len == 2 && name[len - 1] == '.' && name[len - 2] == '.') continue;
-        sarrayAddString(safiles, name, L_COPY);
+        if (stat_ret == 0 && S_ISDIR(st.st_mode))
+            continue;
+        sarrayAddString(safiles, pdirentry->d_name, L_COPY);
     }
     closedir(pdir);
-
+    LEPT_FREE(realdir);
     return safiles;
 }
 
@@ -1909,7 +1916,7 @@ SARRAY *
 getFilenamesInDirectory(const char  *dirname)
 {
 char             *pszDir;
-char             *tempname;
+char             *realdir;
 HANDLE            hFind = INVALID_HANDLE_VALUE;
 SARRAY           *safiles;
 WIN32_FIND_DATAA  ffd;
@@ -1919,36 +1926,36 @@ WIN32_FIND_DATAA  ffd;
     if (!dirname)
         return (SARRAY *)ERROR_PTR("dirname not defined", procName, NULL);
 
-    tempname = genPathname(dirname, NULL);
-    pszDir = stringJoin(tempname, "\\*");
-    FREE(tempname);
+    realdir = genPathname(dirname, NULL);
+    pszDir = stringJoin(realdir, "\\*");
+    LEPT_FREE(realdir);
 
     if (strlen(pszDir) + 1 > MAX_PATH) {
-        FREE(pszDir);
+        LEPT_FREE(pszDir);
         return (SARRAY *)ERROR_PTR("dirname is too long", procName, NULL);
     }
 
     if ((safiles = sarrayCreate(0)) == NULL) {
-        FREE(pszDir);
+        LEPT_FREE(pszDir);
         return (SARRAY *)ERROR_PTR("safiles not made", procName, NULL);
     }
 
     hFind = FindFirstFileA(pszDir, &ffd);
     if (INVALID_HANDLE_VALUE == hFind) {
         sarrayDestroy(&safiles);
-        FREE(pszDir);
+        LEPT_FREE(pszDir);
         return (SARRAY *)ERROR_PTR("hFind not opened", procName, NULL);
     }
 
     while (FindNextFileA(hFind, &ffd) != 0) {
         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)  /* skip dirs */
             continue;
+        convertSepCharsInPath(ffd.cFileName, UNIX_PATH_SEPCHAR);
         sarrayAddString(safiles, ffd.cFileName, L_COPY);
     }
 
     FindClose(hFind);
-    FREE(pszDir);
+    LEPT_FREE(pszDir);
     return safiles;
 }
-
 #endif  /* _WIN32 */

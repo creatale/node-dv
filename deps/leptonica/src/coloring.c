@@ -24,12 +24,14 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  coloring.c
+/*!
+ * \file coloring.c
+ * <pre>
  *
  *      Coloring "gray" pixels
  *           PIX             *pixColorGrayRegions()
  *           l_int32          pixColorGray()
+ *           PIX             *pixColorGrayMasked()
  *
  *      Adjusting one or more colors to a target color
  *           PIX             *pixSnapColor()
@@ -55,7 +57,7 @@
  *  They fall into the following categories:
  *
  *  (1) Moving either the light or dark pixels toward a
- *      specified color. (pixColorGray)
+ *      specified color. (pixColorGray, pixColorGrayMasked)
  *  (2) Forcing all pixels whose color is within some delta of a
  *      specified color to move to that color. (pixSnapColor)
  *  (3) Doing a piecewise linear color shift specified by a source
@@ -68,8 +70,8 @@
  *  (5) Shifting all colors by a component-dependent fraction of
  *      their distance from 0 (if shifting down) or from 255 (if
  *      shifting up).  This is useful for modifying the color to
- *      compensate for color shifts in acquisition, for example
- *      (enhance.c: pixColorShiftRGB).
+ *      compensate for color shifts in acquisition or printing.
+ *      (enhance.c: pixColorShiftRGB, pixMosaicColorShiftRGB).
  *  (6) Repainting selected pixels. (paintcmap.c: pixSetSelectMaskedCmap)
  *  (7) Blending a fraction of a specific color with the existing RGB
  *      color.  (pix2.c: pixBlendInRect())
@@ -84,6 +86,7 @@
  *      fraction of the distance toward 0 (darkening) or toward 255
  *      (brightening).  (enhance.c: pixModifySaturation,
  *      pixModifyHue, pixModifyBrightness)
+ * </pre>
  */
 
 #include "allheaders.h"
@@ -93,19 +96,20 @@
  *                        Coloring "gray" pixels                       *
  *---------------------------------------------------------------------*/
 /*!
- *  pixColorGrayRegions()
+ * \brief   pixColorGrayRegions()
  *
- *      Input:  pixs (2, 4 or 8 bpp gray, rgb, or colormapped)
- *              boxa (of regions in which to apply color)
- *              type (L_PAINT_LIGHT, L_PAINT_DARK)
- *              thresh (average value below/above which pixel is unchanged)
- *              rval, gval, bval (new color to paint)
- *      Return: pixd, or null on error
+ * \param[in]    pixs 2, 4 or 8 bpp gray, rgb, or colormapped
+ * \param[in]    boxa of regions in which to apply color
+ * \param[in]    type L_PAINT_LIGHT, L_PAINT_DARK
+ * \param[in]    thresh average value below/above which pixel is unchanged
+ * \param[in]    rval, gval, bval new color to paint
+ * \return  pixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This generates a new image, where some of the pixels in each
  *          box in the boxa are colorized.  See pixColorGray() for usage
- *          with @type and @thresh.  Note that @thresh is only used for
+ *          with %type and %thresh.  Note that %thresh is only used for
  *          rgb; it is ignored for colormapped images.
  *      (2) If the input image is colormapped, the new image will be 8 bpp
  *          colormapped if possible; otherwise, it will be converted
@@ -114,8 +118,9 @@
  *      (3) If the input image is not colormapped, it is converted to rgb.
  *          A "gray" value for a pixel is determined by averaging the
  *          components, and the output rgb value is determined from this.
- *      (4) This can be used in conjunction with pixFindColorRegions() to
+ *      (4) This can be used in conjunction with pixHasHighlightRed() to
  *          add highlight color to a grayscale image.
+ * </pre>
  */
 PIX *
 pixColorGrayRegions(PIX     *pixs,
@@ -126,29 +131,34 @@ pixColorGrayRegions(PIX     *pixs,
                     l_int32  gval,
                     l_int32  bval)
 {
-l_int32   i, n;
+l_int32   i, n, ncolors, ngray;
 BOX      *box;
 PIX      *pixd;
 PIXCMAP  *cmap;
 
     PROCNAME("pixColorGrayRegions");
 
-    if (!pixs)
-        return (PIX *)ERROR_PTR("pixs not defined", procName, NULL);
+    if (!pixs || pixGetDepth(pixs) == 1)
+        return (PIX *)ERROR_PTR("pixs undefined or not 1 bpp", procName, NULL);
     if (!boxa)
         return (PIX *)ERROR_PTR("boxa not defined", procName, NULL);
     if (type != L_PAINT_LIGHT && type != L_PAINT_DARK)
         return (PIX *)ERROR_PTR("invalid type", procName, NULL);
 
+        /* If cmapped and there is room in an 8 bpp colormap for
+         * expansion, convert pixs to 8 bpp, and colorize. */
     cmap = pixGetColormap(pixs);
-    if (cmap && (pixcmapGetCount(cmap) < 128)) {
-        pixd = pixConvertTo8(pixs, 1);  /* always new image */
-        pixColorGrayRegionsCmap(pixd, boxa, type, rval, gval, bval);
-        return pixd;
+    if (cmap) {
+        ncolors = pixcmapGetCount(cmap);
+        pixcmapCountGrayColors(cmap, &ngray);
+        if (ncolors + ngray < 255) {
+            pixd = pixConvertTo8(pixs, 1);  /* always new image */
+            pixColorGrayRegionsCmap(pixd, boxa, type, rval, gval, bval);
+            return pixd;
+        }
     }
 
-    if (pixGetDepth(pixs) < 8)
-        return (PIX *)ERROR_PTR("depth < 8 bpp", procName, NULL);
+        /* The output will be rgb.  Make sure the thresholds are valid */
     if (type == L_PAINT_LIGHT) {  /* thresh should be low */
         if (thresh >= 255)
             return (PIX *)ERROR_PTR("thresh must be < 255", procName, NULL);
@@ -174,16 +184,17 @@ PIXCMAP  *cmap;
 
 
 /*!
- *  pixColorGray()
+ * \brief   pixColorGray()
  *
- *      Input:  pixs (8 bpp gray, rgb or colormapped image)
- *              box (<optional> region in which to apply color; can be NULL)
- *              type (L_PAINT_LIGHT, L_PAINT_DARK)
- *              thresh (average value below/above which pixel is unchanged)
- *              rval, gval, bval (new color to paint)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pixs 8 bpp gray, rgb or colormapped image
+ * \param[in]    box [optional] region in which to apply color; can be NULL
+ * \param[in]    type L_PAINT_LIGHT, L_PAINT_DARK
+ * \param[in]    thresh average value below/above which pixel is unchanged
+ * \param[in]    rval, gval, bval new color to paint
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is an in-place operation; pixs is modified.
  *          If pixs is colormapped, the operation will add colors to the
  *          colormap.  Otherwise, pixs will be converted to 32 bpp rgb if
@@ -210,6 +221,7 @@ PIXCMAP  *cmap;
  *          In situations where there are a lot of white pixels,
  *          setting thresh < 255 will make the function considerably
  *          more efficient without affecting the final result.
+ * </pre>
  */
 l_int32
 pixColorGray(PIX     *pixs,
@@ -257,6 +269,7 @@ PIXCMAP   *cmap;
             L_WARNING("threshold set very low\n", procName);
     }
 
+        /* In-place conversion to 32 bpp if necessary */
     if (d == 8) {
         pixt = pixConvertTo32(pixs);
         pixTransferAllData(pixs, &pixt, 1, 0);
@@ -307,21 +320,151 @@ PIXCMAP   *cmap;
 }
 
 
+/*!
+ * \brief   pixColorGrayMasked()
+ *
+ * \param[in]    pixs 8 bpp gray, rgb or colormapped image
+ * \param[in]    pixm 1 bpp mask, through which to apply color
+ * \param[in]    type L_PAINT_LIGHT, L_PAINT_DARK
+ * \param[in]    thresh average value below/above which pixel is unchanged
+ * \param[in]    rval, gval, bval new color to paint
+ * \return  pixd colorized, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) This generates a new image, where some of the pixels under
+ *          FG in the mask are colorized.
+ *      (2) See pixColorGray() for usage with %type and %thresh.  Note
+ *          that %thresh is only used for rgb; it is ignored for
+ *          colormapped images.  In most cases, the mask will be over
+ *          the darker parts and %type == L_PAINT_DARK.
+ *      (3) If pixs is colormapped this calls pixColorMaskedCmap(),
+ *          which adds colors to the colormap for pixd; it only adds
+ *          colors corresponding to strictly gray colors in the colormap.
+ *          Otherwise, if pixs is 8 bpp gray, pixd will be 32 bpp rgb.
+ *      (4) If pixs is 32 bpp rgb, for each pixel a "gray" value is
+ *          found by averaging.  This average is then used with the
+ *          input rgb target to generate the output pixel values.
+ *      (5) This can be used in conjunction with pixHasHighlightRed() to
+ *          add highlight color to a grayscale image.
+ * </pre>
+ */
+PIX *
+pixColorGrayMasked(PIX     *pixs,
+                   PIX     *pixm,
+                   l_int32  type,
+                   l_int32  thresh,
+                   l_int32  rval,
+                   l_int32  gval,
+                   l_int32  bval)
+{
+l_int32    i, j, w, h, d, wm, hm, wmin, hmin, wpl, wplm;
+l_int32    nrval, ngval, nbval, aveval;
+l_float32  factor;
+l_uint32   val32;
+l_uint32  *line, *data, *linem, *datam;
+PIX       *pixd;
+PIXCMAP   *cmap;
+
+    PROCNAME("pixColorGrayMasked");
+
+    if (!pixs)
+        return (PIX *)ERROR_PTR("pixs not defined", procName, NULL);
+    if (!pixm || pixGetDepth(pixm) != 1)
+        return (PIX *)ERROR_PTR("pixm undefined or not 1 bpp", procName, NULL);
+    if (type != L_PAINT_LIGHT && type != L_PAINT_DARK)
+        return (PIX *)ERROR_PTR("invalid type", procName, NULL);
+
+    cmap = pixGetColormap(pixs);
+    pixGetDimensions(pixs, &w, &h, &d);
+    if (!cmap && d != 8 && d != 32)
+        return (PIX *)ERROR_PTR("pixs not cmapped, 8 bpp gray or 32 bpp",
+                                procName, NULL);
+    if (cmap) {
+        pixd = pixCopy(NULL, pixs);
+        pixColorGrayMaskedCmap(pixd, pixm, type, rval, gval, bval);
+        return pixd;
+    }
+
+        /* rgb or 8 bpp gray image; check the thresh */
+    if (type == L_PAINT_LIGHT) {  /* thresh should be low */
+        if (thresh >= 255)
+            return (PIX *)ERROR_PTR(
+                "thresh must be < 255; else this is a no-op", procName, NULL);
+        if (thresh > 127)
+            L_WARNING("threshold set very high\n", procName);
+    } else {  /* type == L_PAINT_DARK; thresh should be high */
+        if (thresh <= 0)
+            return (PIX *)ERROR_PTR(
+                "thresh must be > 0; else this is a no-op", procName, NULL);
+        if (thresh < 128)
+            L_WARNING("threshold set very low\n", procName);
+    }
+
+    pixGetDimensions(pixm, &wm, &hm, NULL);
+    if (wm != w)
+        L_WARNING("wm = %d differs from w = %d\n", procName, wm, w);
+    if (hm != h)
+        L_WARNING("hm = %d differs from h = %d\n", procName, hm, h);
+    wmin = L_MIN(w, wm);
+    hmin = L_MIN(h, hm);
+    if (d == 8)
+        pixd = pixConvertTo32(pixs);
+    else
+        pixd = pixCopy(NULL, pixs);
+
+    data = pixGetData(pixd);
+    wpl = pixGetWpl(pixd);
+    datam = pixGetData(pixm);
+    wplm = pixGetWpl(pixm);
+    factor = 1. / 255.;
+    for (i = 0; i < hmin; i++) {
+        line = data + i * wpl;
+        linem = datam + i * wplm;
+        for (j = 0; j < wmin; j++) {
+            if (GET_DATA_BIT(linem, j) == 0)
+                continue;
+            val32 = *(line + j);
+            aveval = ((val32 >> 24) + ((val32 >> 16) & 0xff) +
+                      ((val32 >> 8) & 0xff)) / 3;
+            if (type == L_PAINT_LIGHT) {
+                if (aveval < thresh)  /* skip sufficiently dark pixels */
+                    continue;
+                nrval = (l_int32)(rval * aveval * factor);
+                ngval = (l_int32)(gval * aveval * factor);
+                nbval = (l_int32)(bval * aveval * factor);
+            } else {  /* type == L_PAINT_DARK */
+                if (aveval > thresh)  /* skip sufficiently light pixels */
+                    continue;
+                nrval = rval + (l_int32)((255. - rval) * aveval * factor);
+                ngval = gval + (l_int32)((255. - gval) * aveval * factor);
+                nbval = bval + (l_int32)((255. - bval) * aveval * factor);
+            }
+            composeRGBPixel(nrval, ngval, nbval, &val32);
+            *(line + j) = val32;
+        }
+    }
+
+    return pixd;
+}
+
+
 /*------------------------------------------------------------------*
  *            Adjusting one or more colors to a target color        *
  *------------------------------------------------------------------*/
 /*!
- *  pixSnapColor()
+ * \brief   pixSnapColor()
  *
- *      Input:  pixd (<optional>; either NULL or equal to pixs for in-place)
- *              pixs (colormapped or 8 bpp gray or 32 bpp rgb)
- *              srcval (color center to be selected for change: 0xrrggbb00)
- *              dstval (target color for pixels: 0xrrggbb00)
- *              diff (max absolute difference, applied to all components)
- *      Return: pixd (with all pixels within diff of pixval set to pixval),
+ * \param[in]    pixd [optional]; either NULL or equal to pixs for in-place
+ * \param[in]    pixs colormapped or 8 bpp gray or 32 bpp rgb
+ * \param[in]    srcval color center to be selected for change: 0xrrggbb00
+ * \param[in]    dstval target color for pixels: 0xrrggbb00
+ * \param[in]    diff max absolute difference, applied to all components
+ * \return  pixd with all pixels within diff of pixval set to pixval,
  *                    or pixd on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) For inplace operation, call it this way:
  *           pixSnapColor(pixs, pixs, ... )
  *      (2) For generating a new pixd:
@@ -329,6 +472,7 @@ PIXCMAP   *cmap;
  *      (3) If pixs has a colormap, it is handled by pixSnapColorCmap().
  *      (4) All pixels within 'diff' of 'srcval', componentwise,
  *          will be changed to 'dstval'.
+ * </pre>
  */
 PIX *
 pixSnapColor(PIX      *pixd,
@@ -396,17 +540,18 @@ l_uint32  *line, *data;
 
 
 /*!
- *  pixSnapColorCmap()
+ * \brief   pixSnapColorCmap()
  *
- *      Input:  pixd (<optional>; either NULL or equal to pixs for in-place)
- *              pixs (colormapped)
- *              srcval (color center to be selected for change: 0xrrggbb00)
- *              dstval (target color for pixels: 0xrrggbb00)
- *              diff (max absolute difference, applied to all components)
- *      Return: pixd (with all pixels within diff of srcval set to dstval),
+ * \param[in]    pixd [optional]; either NULL or equal to pixs for in-place
+ * \param[in]    pixs colormapped
+ * \param[in]    srcval color center to be selected for change: 0xrrggbb00
+ * \param[in]    dstval target color for pixels: 0xrrggbb00
+ * \param[in]    diff max absolute difference, applied to all components
+ * \return  pixd with all pixels within diff of srcval set to dstval,
  *                    or pixd on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) For inplace operation, call it this way:
  *           pixSnapCcmap(pixs, pixs, ... )
  *      (2) For generating a new pixd:
@@ -414,6 +559,7 @@ l_uint32  *line, *data;
  *      (3) pixs must have a colormap.
  *      (4) All colors within 'diff' of 'srcval', componentwise,
  *          will be changed to 'dstval'.
+ * </pre>
  */
 PIX *
 pixSnapColorCmap(PIX      *pixd,
@@ -475,7 +621,7 @@ PIXCMAP   *cmap;
          * set the tab value to 1.  Then generate a 1 bpp mask with
          * fg pixels for every pixel in pixd that is close enough
          * to srcval (i.e., has value 1 in tab). */
-    if ((tab = (l_int32 *)CALLOC(256, sizeof(l_int32))) == NULL)
+    if ((tab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32))) == NULL)
         return (PIX *)ERROR_PTR("tab not made", procName, pixd);
     for (i = 0; i < ncolors; i++) {
         pixcmapGetColor(cmap, i, &rval, &gval, &bval);
@@ -485,7 +631,7 @@ PIXCMAP   *cmap;
             tab[i] = 1;
     }
     pixm = pixMakeMaskFromLUT(pixd, tab);
-    FREE(tab);
+    LEPT_FREE(tab);
 
         /* Use the binary mask to set all selected pixels to
          * the dest color index. */
@@ -503,20 +649,21 @@ PIXCMAP   *cmap;
  *     Piecewise linear color mapping based on a source/target pair    *
  *---------------------------------------------------------------------*/
 /*!
- *  pixLinearMapToTargetColor()
+ * \brief   pixLinearMapToTargetColor()
  *
- *      Input:  pixd (<optional>; either NULL or equal to pixs for in-place)
- *              pixs (32 bpp rgb)
- *              srcval (source color: 0xrrggbb00)
- *              dstval (target color: 0xrrggbb00)
- *      Return: pixd (with all pixels mapped based on the srcval/destval
- *                    mapping), or pixd on error
+ * \param[in]    pixd [optional]; either NULL or equal to pixs for in-place
+ * \param[in]    pixs 32 bpp rgb
+ * \param[in]    srcval source color: 0xrrggbb00
+ * \param[in]    dstval target color: 0xrrggbb00
+ * \return  pixd with all pixels mapped based on the srcval/destval
+ *                    mapping, or pixd on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) For each component (r, b, g) separately, this does a piecewise
  *          linear mapping of the colors in pixs to colors in pixd.
- *          If rs and rd are the red src and dest components in @srcval and
- *          @dstval, then the range [0 ... rs] in pixs is mapped to
+ *          If rs and rd are the red src and dest components in %srcval and
+ *          %dstval, then the range [0 ... rs] in pixs is mapped to
  *          [0 ... rd] in pixd.  Likewise, the range [rs ... 255] in pixs
  *          is mapped to [rd ... 255] in pixd.  And similarly for green
  *          and blue.
@@ -528,6 +675,7 @@ PIXCMAP   *cmap;
  *            pixLinearMapToTargetColor(pixs, pixs, ... )
  *      (4) For generating a new pixd:
  *            pixd = pixLinearMapToTargetColor(NULL, pixs, ...)
+ * </pre>
  */
 PIX *
 pixLinearMapToTargetColor(PIX      *pixd,
@@ -559,9 +707,11 @@ l_uint32  *line, *data;
     rsval = L_MIN(254, L_MAX(1, rsval));
     gsval = L_MIN(254, L_MAX(1, gsval));
     bsval = L_MIN(254, L_MAX(1, bsval));
-    rtab = (l_int32 *)CALLOC(256, sizeof(l_int32));
-    gtab = (l_int32 *)CALLOC(256, sizeof(l_int32));
-    btab = (l_int32 *)CALLOC(256, sizeof(l_int32));
+    rtab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32));
+    gtab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32));
+    btab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32));
+    if (!rtab || !gtab || !btab)
+        return (PIX *)ERROR_PTR("calloc fail for tab", procName, pixd);
     for (i = 0; i < 256; i++) {
         if (i <= rsval)
             rtab[i] = (i * rdval) / rsval;
@@ -589,26 +739,27 @@ l_uint32  *line, *data;
         }
     }
 
-    FREE(rtab);
-    FREE(gtab);
-    FREE(btab);
+    LEPT_FREE(rtab);
+    LEPT_FREE(gtab);
+    LEPT_FREE(btab);
     return pixd;
 }
 
 
 /*!
- *  pixelLinearMapToTargetColor()
+ * \brief   pixelLinearMapToTargetColor()
  *
- *      Input:  scolor (rgb source color: 0xrrggbb00)
- *              srcmap (source mapping color: 0xrrggbb00)
- *              dstmap (target mapping color: 0xrrggbb00)
- *              &pdcolor (<return> rgb dest color: 0xrrggbb00)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    scolor rgb source color: 0xrrggbb00
+ * \param[in]    srcmap source mapping color: 0xrrggbb00
+ * \param[in]    dstmap target mapping color: 0xrrggbb00
+ * \param[out]   pdcolor rgb dest color: 0xrrggbb00
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This does this does a piecewise linear mapping of each
- *          component of @scolor to @dcolor, based on the relation
- *          between the components of @srcmap and @dstmap.  It is the
+ *          component of %scolor to %dcolor, based on the relation
+ *          between the components of %srcmap and %dstmap.  It is the
  *          same transformation, performed on a single color, as mapped
  *          on every pixel in a pix by pixLinearMapToTargetColor().
  *      (2) For each component, if the sval is larger than the smap,
@@ -617,10 +768,11 @@ l_uint32  *line, *data;
  *          This is because you can visualize the transformation as
  *          a linear stretching where smap moves to dmap, and everything
  *          else follows linearly with 0 and 255 fixed.
- *      (3) The mapping will in general change the hue of @scolor.
- *          However, if the @srcmap and @dstmap targets are related by
+ *      (3) The mapping will in general change the hue of %scolor.
+ *          However, if the %srcmap and %dstmap targets are related by
  *          a transformation given by pixelFractionalShift(), the hue
  *          will be invariant.
+ * </pre>
  */
 l_int32
 pixelLinearMapToTargetColor(l_uint32   scolor,
@@ -666,20 +818,21 @@ l_int32    srmap, sgmap, sbmap, drmap, dgmap, dbmap;
  *          Fractional shift of RGB towards black or white          *
  *------------------------------------------------------------------*/
 /*!
- *  pixShiftByComponent()
+ * \brief   pixShiftByComponent()
  *
- *      Input:  pixd (<optional>; either NULL or equal to pixs for in-place)
- *              pixs (32 bpp rgb)
- *              srcval (source color: 0xrrggbb00)
- *              dstval (target color: 0xrrggbb00)
- *      Return: pixd (with all pixels mapped based on the srcval/destval
- *                    mapping), or pixd on error
+ * \param[in]    pixd [optional]; either NULL or equal to pixs for in-place
+ * \param[in]    pixs 32 bpp rgb
+ * \param[in]    srcval source color: 0xrrggbb00
+ * \param[in]    dstval target color: 0xrrggbb00
+ * \return  pixd with all pixels mapped based on the srcval/destval
+ *                    mapping, or pixd on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) For each component (r, b, g) separately, this does a linear
  *          mapping of the colors in pixs to colors in pixd.
- *          Let rs and rd be the red src and dest components in @srcval and
- *          @dstval, and rval is the red component of the src pixel.
+ *          Let rs and rd be the red src and dest components in %srcval and
+ *          %dstval, and rval is the red component of the src pixel.
  *          Then for all pixels in pixs, the mapping for the red
  *          component from pixs to pixd is:
  *             if (rd <= rs)   (shift toward black)
@@ -704,6 +857,7 @@ l_int32    srmap, sgmap, sbmap, drmap, dgmap, dbmap;
  *          and picking a target background color for dstval.
  *          A dark foreground can be colored by using srcval = 0x0
  *          and choosing a target foreground color for dstval.
+ * </pre>
  */
 PIX *
 pixShiftByComponent(PIX      *pixd,
@@ -739,9 +893,13 @@ PIXCMAP   *cmap;
 
     extractRGBValues(srcval, &rsval, &gsval, &bsval);
     extractRGBValues(dstval, &rdval, &gdval, &bdval);
-    rtab = (l_int32 *)CALLOC(256, sizeof(l_int32));
-    gtab = (l_int32 *)CALLOC(256, sizeof(l_int32));
-    btab = (l_int32 *)CALLOC(256, sizeof(l_int32));
+    rtab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32));
+    gtab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32));
+    btab = (l_int32 *)LEPT_CALLOC(256, sizeof(l_int32));
+    if (!rtab || !gtab || !btab) {
+        L_ERROR("calloc fail for tab\n", procName);
+        goto cleanup;
+    }
     for (i = 0; i < 256; i++) {
         if (rdval == rsval)
             rtab[i] = i;
@@ -775,29 +933,32 @@ PIXCMAP   *cmap;
         }
     }
 
-    FREE(rtab);
-    FREE(gtab);
-    FREE(btab);
+cleanup:
+    LEPT_FREE(rtab);
+    LEPT_FREE(gtab);
+    LEPT_FREE(btab);
     return pixd;
 }
 
 
 /*!
- *  pixelShiftByComponent()
+ * \brief   pixelShiftByComponent()
  *
- *      Input:  rval, gval, bval
- *              srcval (source color: 0xrrggbb00)
- *              dstval (target color: 0xrrggbb00)
- *              &ppixel (<return> rgb value)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    rval, gval, bval
+ * \param[in]    srcval source color: 0xrrggbb00
+ * \param[in]    dstval target color: 0xrrggbb00
+ * \param[out]   ppixel rgb value
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is a linear transformation that gives the same result
  *          on a single pixel as pixShiftByComponent() gives
  *          on a pix.  Each component is handled separately.  If
  *          the dest component is larger than the src, then the
  *          component is pushed toward 255 by the same fraction as
  *          the src --> dest shift.
+ * </pre>
  */
 l_int32
 pixelShiftByComponent(l_int32    rval,
@@ -840,21 +1001,23 @@ l_int32  rsval, rdval, gsval, gdval, bsval, bdval, rs, gs, bs;
 
 
 /*!
- *  pixelFractionalShift()
+ * \brief   pixelFractionalShift()
  *
- *      Input:  rval, gval, bval
- *              fraction (negative toward black; positive toward white)
- *              &ppixel (<return> rgb value)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    rval, gval, bval
+ * \param[in]    fraction negative toward black; positive toward white
+ * \param[out]   ppixel rgb value
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This transformation leaves the hue invariant, while changing
  *          the saturation and intensity.  It can be used for that
  *          purpose in pixLinearMapToTargetColor().
- *      (2) @fraction is in the range [-1 .... +1].  If @fraction < 0,
+ *      (2) %fraction is in the range [-1 .... +1].  If %fraction < 0,
  *          saturation is increased and brightness is reduced.  The
- *          opposite results if @fraction > 0.  If @fraction == -1,
- *          the resulting pixel is black; @fraction == 1 results in white.
+ *          opposite results if %fraction > 0.  If %fraction == -1,
+ *          the resulting pixel is black; %fraction == 1 results in white.
+ * </pre>
  */
 l_int32
 pixelFractionalShift(l_int32    rval,

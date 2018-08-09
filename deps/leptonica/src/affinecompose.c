@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  affinecompose.c
+/*!
+ * \file affinecompose.c
+ * <pre>
  *
  *      Composable coordinate transforms
  *           l_float32   *createMatrix2dTranslate()
@@ -51,6 +52,7 @@
  *           l_int32      l_productMat2()
  *           l_int32      l_productMat3()
  *           l_int32      l_productMat4()
+ * </pre>
  */
 
 #include <math.h>
@@ -61,17 +63,18 @@
  *                Composable coordinate transforms             *
  *-------------------------------------------------------------*/
 /*!
- *  createMatrix2dTranslate()
+ * \brief   createMatrix2dTranslate()
  *
- *      Input:  transx  (x component of translation wrt. the origin)
- *              transy  (y component of translation wrt. the origin)
- *      Return: 3x3 transform matrix, or null on error
+ * \param[in]    transx  x component of translation wrt. the origin
+ * \param[in]    transy  y component of translation wrt. the origin
+ * \return  3x3 transform matrix, or NULL on error
  *
- *  Notes;
+ * <pre>
+ * Notes:
  *      (1) The translation is equivalent to:
  *             v' = Av
  *          where v and v' are 1x3 column vectors in the form
- *             v = [x, y, 1]^    (^ denotes transpose)
+ *             v = [x, y, 1]^    ^ denotes transpose
  *          and the affine tranlation matrix is
  *             A = [ 1   0   tx
  *                   0   1   ty
@@ -81,6 +84,7 @@
  *          In a clipping operation, the origin moves and the points
  *          are fixed, and you use (-tx, -ty) where (tx, ty) is the
  *          translation vector of the origin.
+ * </pre>
  */
 l_float32 *
 createMatrix2dTranslate(l_float32  transx,
@@ -90,9 +94,8 @@ l_float32  *mat;
 
     PROCNAME("createMatrix2dTranslate");
 
-    if ((mat = (l_float32 *)CALLOC(9, sizeof(l_float32))) == NULL)
+    if ((mat = (l_float32 *)LEPT_CALLOC(9, sizeof(l_float32))) == NULL)
         return (l_float32 *)ERROR_PTR("mat not made", procName, NULL);
-
     mat[0] = mat[4] = mat[8] = 1;
     mat[2] = transx;
     mat[5] = transy;
@@ -101,18 +104,19 @@ l_float32  *mat;
 
 
 /*!
- *  createMatrix2dScale()
+ * \brief   createMatrix2dScale()
  *
- *      Input:  scalex  (horizontal scale factor)
- *              scaley  (vertical scale factor)
- *      Return: 3x3 transform matrix, or null on error
+ * \param[in]    scalex  horizontal scale factor
+ * \param[in]    scaley  vertical scale factor
+ * \return  3x3 transform matrix, or NULL on error
  *
- *  Notes;
+ * <pre>
+ * Notes:
  *      (1) The scaling is equivalent to:
  *             v' = Av
- *          where v and v' are 1x3 column vectors in the form
- *             v = [x, y, 1]^    (^ denotes transpose)
- *          and the affine scaling matrix is
+ *         where v and v' are 1x3 column vectors in the form
+ *              v = [x, y, 1]^    ^ denotes transpose
+ *         and the affine scaling matrix is
  *             A = [ sx  0    0
  *                   0   sy   0
  *                   0   0    1  ]
@@ -120,6 +124,7 @@ l_float32  *mat;
  *      (2) We consider scaling as with respect to a fixed origin.
  *          In other words, the origin is the only point that doesn't
  *          move in the scaling transform.
+ * </pre>
  */
 l_float32 *
 createMatrix2dScale(l_float32  scalex,
@@ -129,9 +134,8 @@ l_float32  *mat;
 
     PROCNAME("createMatrix2dScale");
 
-    if ((mat = (l_float32 *)CALLOC(9, sizeof(l_float32))) == NULL)
+    if ((mat = (l_float32 *)LEPT_CALLOC(9, sizeof(l_float32))) == NULL)
         return (l_float32 *)ERROR_PTR("mat not made", procName, NULL);
-
     mat[0] = scalex;
     mat[4] = scaley;
     mat[8] = 1;
@@ -140,23 +144,24 @@ l_float32  *mat;
 
 
 /*!
- *  createMatrix2dRotate()
+ * \brief   createMatrix2dRotate()
  *
- *      Input:  xc, yc  (location of center of rotation)
- *              angle  (rotation in radians; clockwise is positive)
- *      Return: 3x3 transform matrix, or null on error
+ * \param[in]    xc, yc  location of center of rotation
+ * \param[in]    angle  rotation in radians; clockwise is positive
+ * \return  3x3 transform matrix, or NULL on error
  *
- *  Notes;
+ * <pre>
+ * Notes:
  *      (1) The rotation is equivalent to:
  *             v' = Av
  *          where v and v' are 1x3 column vectors in the form
- *             v = [x, y, 1]^    (^ denotes transpose)
+ *             v = [x, y, 1]^    ^ denotes transpose
  *          and the affine rotation matrix is
- *             A = [ cosa   -sina    xc*(1-cosa) + yc*sina
- *                   sina    cosa    yc*(1-cosa) - xc*sina
+ *             A = [ cosa   -sina    xc*1-cosa + yc*sina
+ *                   sina    cosa    yc*1-cosa - xc*sina
  *                     0       0                 1         ]
  *
- *          If the rotation is about the origin, (xc, yc) = (0, 0) and
+ *          If the rotation is about the origin, xc, yc) = (0, 0 and
  *          this simplifies to
  *             A = [ cosa   -sina    0
  *                   sina    cosa    0
@@ -164,13 +169,14 @@ l_float32  *mat;
  *
  *          These relations follow from the following equations, which
  *          you can convince yourself are correct as follows.  Draw a
- *          circle centered on (xc,yc) and passing through (x,y), with
+ *          circle centered on xc,yc) and passing through (x,y), with
  *          (x',y') on the arc at an angle 'a' clockwise from (x,y).
- *          [ Hint: cos(a + b) = cosa * cosb - sina * sinb
- *                  sin(a + b) = sina * cosb + cosa * sinb ]
+ *           [ Hint: cosa + b = cosa * cosb - sina * sinb
+ *                   sina + b = sina * cosb + cosa * sinb ]
  *
- *            x' - xc =  (x - xc) * cosa - (y - yc) * sina
- *            y' - yc =  (x - xc) * sina + (y - yc) * cosa
+ *            x' - xc =  x - xc) * cosa - (y - yc * sina
+ *            y' - yc =  x - xc) * sina + (y - yc * cosa
+ * </pre>
  */
 l_float32 *
 createMatrix2dRotate(l_float32  xc,
@@ -182,9 +188,8 @@ l_float32  *mat;
 
     PROCNAME("createMatrix2dRotate");
 
-    if ((mat = (l_float32 *)CALLOC(9, sizeof(l_float32))) == NULL)
+    if ((mat = (l_float32 *)LEPT_CALLOC(9, sizeof(l_float32))) == NULL)
         return (l_float32 *)ERROR_PTR("mat not made", procName, NULL);
-
     sina = sin(angle);
     cosa = cos(angle);
     mat[0] = mat[4] = cosa;
@@ -202,15 +207,17 @@ l_float32  *mat;
  *            Special coordinate transforms on pta             *
  *-------------------------------------------------------------*/
 /*!
- *  ptaTranslate()
+ * \brief   ptaTranslate()
  *
- *      Input:  ptas (for initial points)
- *              transx  (x component of translation wrt. the origin)
- *              transy  (y component of translation wrt. the origin)
- *      Return: ptad  (translated points), or null on error
+ * \param[in]    ptas for initial points
+ * \param[in]    transx  x component of translation wrt. the origin
+ * \param[in]    transy  y component of translation wrt. the origin
+ * \return  ptad  translated points, or NULL on error
  *
- *  Notes;
+ * <pre>
+ * Notes:
  *      (1) See createMatrix2dTranslate() for details of transform.
+ * </pre>
  */
 PTA *
 ptaTranslate(PTA       *ptas,
@@ -239,15 +246,17 @@ PTA       *ptad;
 
 
 /*!
- *  ptaScale()
+ * \brief   ptaScale()
  *
- *      Input:  ptas (for initial points)
- *              scalex  (horizontal scale factor)
- *              scaley  (vertical scale factor)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    ptas for initial points
+ * \param[in]    scalex  horizontal scale factor
+ * \param[in]    scaley  vertical scale factor
+ * \return  0 if OK; 1 on error
  *
- *  Notes;
+ * <pre>
+ * Notes:
  *      (1) See createMatrix2dScale() for details of transform.
+ * </pre>
  */
 PTA *
 ptaScale(PTA       *ptas,
@@ -276,16 +285,29 @@ PTA       *ptad;
 
 
 /*!
- *  ptaRotate()
+ * \brief   ptaRotate()
  *
- *      Input:  ptas (for initial points)
- *              (xc, yc)  (location of center of rotation)
- *              angle  (rotation in radians; clockwise is positive)
- *              (&ptad)  (<return> new locations)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    ptas for initial points
+ * \param[in]    xc, yc  location of center of rotation
+ * \param[in]    angle  rotation in radians; clockwise is positive
+ * \return  0 if OK; 1 on error
  *
- *  Notes;
+ * <pre>
+ * Notes;
  *      (1) See createMatrix2dScale() for details of transform.
+ *      (2) This transform can be thought of as composed of the
+ *          sum of two parts:
+ *           a) an (x,y)-dependent rotation about the origin:
+ *              xr = x * cosa - y * sina
+ *              yr = x * sina + y * cosa
+ *           b) an (x,y)-independent translation that depends on the
+ *              rotation center and the angle:
+ *              xt = xc - xc * cosa + yc * sina
+ *              yt = yc - xc * sina - yc * cosa
+ *          The translation part (xt,yt) is equal to the difference
+ *          between the center (xc,yc) and the location of the
+ *          center after it is rotated about the origin.
+ * </pre>
  */
 PTA *
 ptaRotate(PTA       *ptas,
@@ -322,14 +344,14 @@ PTA       *ptad;
  *            Special coordinate transforms on boxa            *
  *-------------------------------------------------------------*/
 /*!
- *  boxaTranslate()
+ * \brief   boxaTranslate()
  *
- *      Input:  boxas
- *              transx  (x component of translation wrt. the origin)
- *              transy  (y component of translation wrt. the origin)
- *      Return: boxad  (translated boxas), or null on error
+ * \param[in]    boxas
+ * \param[in]    transx  x component of translation wrt. the origin
+ * \param[in]    transy  y component of translation wrt. the origin
+ * \return  boxad  translated boxas, or NULL on error
  *
- *  Notes;
+ * Notes:
  *      (1) See createMatrix2dTranslate() for details of transform.
  */
 BOXA *
@@ -355,14 +377,14 @@ BOXA  *boxad;
 
 
 /*!
- *  boxaScale()
+ * \brief   boxaScale()
  *
- *      Input:  boxas
- *              scalex  (horizontal scale factor)
- *              scaley  (vertical scale factor)
- *      Return: boxad  (scaled boxas), or null on error
+ * \param[in]    boxas
+ * \param[in]    scalex  horizontal scale factor
+ * \param[in]    scaley  vertical scale factor
+ * \return  boxad  scaled boxas, or NULL on error
  *
- *  Notes;
+ * Notes:
  *      (1) See createMatrix2dScale() for details of transform.
  */
 BOXA *
@@ -388,14 +410,14 @@ BOXA  *boxad;
 
 
 /*!
- *  boxaRotate()
+ * \brief   boxaRotate()
  *
- *      Input:  boxas
- *              (xc, yc)  (location of center of rotation)
- *              angle  (rotation in radians; clockwise is positive)
- *      Return: boxad  (scaled boxas), or null on error
+ * \param[in]    boxas
+ * \param[in]    xc, yc  location of center of rotation
+ * \param[in]    angle  rotation in radians; clockwise is positive
+ * \return  boxad  scaled boxas, or NULL on error
  *
- *  Notes;
+ * Notes:
  *      (1) See createMatrix2dRotate() for details of transform.
  */
 BOXA *
@@ -425,11 +447,11 @@ BOXA  *boxad;
  *            General affine coordinate transform              *
  *-------------------------------------------------------------*/
 /*!
- *  ptaAffineTransform()
+ * \brief   ptaAffineTransform()
  *
- *      Input:  ptas (for initial points)
- *              mat  (3x3 transform matrix; canonical form)
- *      Return: ptad  (transformed points), or null on error
+ * \param[in]    ptas for initial points
+ * \param[in]    mat  3x3 transform matrix; canonical form
+ * \return  ptad  transformed points, or NULL on error
  */
 PTA *
 ptaAffineTransform(PTA        *ptas,
@@ -461,11 +483,11 @@ PTA       *ptad;
 
 
 /*!
- *  boxaAffineTransform()
+ * \brief   boxaAffineTransform()
  *
- *      Input:  boxas
- *              mat  (3x3 transform matrix; canonical form)
- *      Return: boxad  (transformed boxas), or null on error
+ * \param[in]    boxas
+ * \param[in]    mat  3x3 transform matrix; canonical form
+ * \return  boxad  transformed boxas, or NULL on error
  */
 BOXA *
 boxaAffineTransform(BOXA       *boxas,
@@ -494,13 +516,13 @@ BOXA  *boxad;
  *                      Matrix operations                      *
  *-------------------------------------------------------------*/
 /*!
- *  l_productMatVec()
+ * \brief   l_productMatVec()
  *
- *      Input:  mat  (square matrix, as a 1-dimensional @size^2 array)
- *              vecs (input column vector of length @size)
- *              vecd (result column vector)
- *              size (matrix is @size x @size; vectors are length @size)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    mat  square matrix, as a 1-dimensional %size^2 array
+ * \param[in]    vecs input column vector of length %size
+ * \param[in]    vecd result column vector
+ * \param[in]    size matrix is %size x %size; vectors are length %size
+ * \return  0 if OK, 1 on error
  */
 l_int32
 l_productMatVec(l_float32  *mat,
@@ -530,13 +552,13 @@ l_int32  i, j;
 
 
 /*!
- *  l_productMat2()
+ * \brief   l_productMat2()
  *
- *      Input:  mat1  (square matrix, as a 1-dimensional size^2 array)
- *              mat2  (square matrix, as a 1-dimensional size^2 array)
- *              matd  (square matrix; product stored here)
- *              size (of matrices)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    mat1  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    mat2  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    matd  square matrix; product stored here
+ * \param[in]    size of matrices
+ * \return  0 if OK, 1 on error
  */
 l_int32
 l_productMat2(l_float32  *mat1,
@@ -568,14 +590,14 @@ l_int32  i, j, k, index;
 
 
 /*!
- *  l_productMat3()
+ * \brief   l_productMat3()
  *
- *      Input:  mat1  (square matrix, as a 1-dimensional size^2 array)
- *              mat2  (square matrix, as a 1-dimensional size^2 array)
- *              mat3  (square matrix, as a 1-dimensional size^2 array)
- *              matd  (square matrix; product stored here)
- *              size  (of matrices)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    mat1  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    mat2  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    mat3  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    matd  square matrix; product stored here
+ * \param[in]    size  of matrices
+ * \return  0 if OK, 1 on error
  */
 l_int32
 l_productMat3(l_float32  *mat1,
@@ -597,25 +619,26 @@ l_float32  *matt;
     if (!matd)
         return ERROR_INT("result matrix not defined", procName, 1);
 
-    if ((matt = (l_float32 *)CALLOC(size * size, sizeof(l_float32))) == NULL)
+    if ((matt = (l_float32 *)LEPT_CALLOC(size * size, sizeof(l_float32)))
+        == NULL)
         return ERROR_INT("matt not made", procName, 1);
     l_productMat2(mat1, mat2, matt, size);
     l_productMat2(matt, mat3, matd, size);
-    FREE(matt);
+    LEPT_FREE(matt);
     return 0;
 }
 
 
 /*!
- *  l_productMat4()
+ * \brief   l_productMat4()
  *
- *      Input:  mat1  (square matrix, as a 1-dimensional size^2 array)
- *              mat2  (square matrix, as a 1-dimensional size^2 array)
- *              mat3  (square matrix, as a 1-dimensional size^2 array)
- *              mat4  (square matrix, as a 1-dimensional size^2 array)
- *              matd  (square matrix; product stored here)
- *              size  (of matrices)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    mat1  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    mat2  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    mat3  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    mat4  square matrix, as a 1-dimensional size^2 array
+ * \param[in]    matd  square matrix; product stored here
+ * \param[in]    size  of matrices
+ * \return  0 if OK, 1 on error
  */
 l_int32
 l_productMat4(l_float32  *mat1,
@@ -638,10 +661,11 @@ l_float32  *matt;
     if (!matd)
         return ERROR_INT("result matrix not defined", procName, 1);
 
-    if ((matt = (l_float32 *)CALLOC(size * size, sizeof(l_float32))) == NULL)
+    if ((matt = (l_float32 *)LEPT_CALLOC(size * size, sizeof(l_float32)))
+         == NULL)
         return ERROR_INT("matt not made", procName, 1);
     l_productMat3(mat1, mat2, mat3, matt, size);
     l_productMat2(matt, mat4, matd, size);
-    FREE(matt);
+    LEPT_FREE(matt);
     return 0;
 }

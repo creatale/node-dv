@@ -24,52 +24,61 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  seedfill.c
+/*!
+ * \file seedfill.c
+ * <pre>
  *
  *      Binary seedfill (source: Luc Vincent)
- *               PIX      *pixSeedfillBinary()
- *               PIX      *pixSeedfillBinaryRestricted()
+ *               PIX         *pixSeedfillBinary()
+ *               PIX         *pixSeedfillBinaryRestricted()
+ *               static void  seedfillBinaryLow()
  *
  *      Applications of binary seedfill to find and fill holes,
  *      remove c.c. touching the border and fill bg from border:
- *               PIX      *pixHolesByFilling()
- *               PIX      *pixFillClosedBorders()
- *               PIX      *pixExtractBorderConnComps()
- *               PIX      *pixRemoveBorderConnComps()
- *               PIX      *pixFillBgFromBorder()
+ *               PIX         *pixHolesByFilling()
+ *               PIX         *pixFillClosedBorders()
+ *               PIX         *pixExtractBorderConnComps()
+ *               PIX         *pixRemoveBorderConnComps()
+ *               PIX         *pixFillBgFromBorder()
  *
  *      Hole-filling of components to bounding rectangle
- *               PIX      *pixFillHolesToBoundingRect()
+ *               PIX         *pixFillHolesToBoundingRect()
  *
  *      Gray seedfill (source: Luc Vincent:fast-hybrid-grayscale-reconstruction)
- *               l_int32   pixSeedfillGray()
- *               l_int32   pixSeedfillGrayInv()
+ *               l_int32      pixSeedfillGray()
+ *               l_int32      pixSeedfillGrayInv()
+ *               static void  seedfillGrayLow()
+ *               static void  seedfillGrayInvLow()
+
  *
  *      Gray seedfill (source: Luc Vincent: sequential-reconstruction algorithm)
- *               l_int32   pixSeedfillGraySimple()
- *               l_int32   pixSeedfillGrayInvSimple()
+ *               l_int32      pixSeedfillGraySimple()
+ *               l_int32      pixSeedfillGrayInvSimple()
+ *               static void  seedfillGrayLowSimple()
+ *               static void  seedfillGrayInvLowSimple()
  *
  *      Gray seedfill variations
- *               PIX      *pixSeedfillGrayBasin()
+ *               PIX         *pixSeedfillGrayBasin()
  *
  *      Distance function (source: Luc Vincent)
- *               PIX      *pixDistanceFunction()
+ *               PIX         *pixDistanceFunction()
+ *               static void  distanceFunctionLow()
  *
  *      Seed spread (based on distance function)
- *               PIX      *pixSeedspread()
+ *               PIX         *pixSeedspread()
+ *               static void  seedspreadLow()
  *
  *      Local extrema:
- *               l_int32   pixLocalExtrema()
- *        static l_int32   pixQualifyLocalMinima()
- *               l_int32   pixSelectedLocalExtrema()
- *               PIX      *pixFindEqualValues()
+ *               l_int32      pixLocalExtrema()
+ *            static l_int32  pixQualifyLocalMinima()
+ *               l_int32      pixSelectedLocalExtrema()
+ *               PIX         *pixFindEqualValues()
  *
  *      Selection of minima in mask of connected components
- *               PTA      *pixSelectMinInConnComp()
+ *               PTA         *pixSelectMinInConnComp()
  *
  *      Removal of seeded connected components from a mask
- *               PIX      *pixRemoveSeededComponents()
+ *               PIX         *pixRemoveSeededComponents()
  *
  *
  *           ITERATIVE RASTER-ORDER SEEDFILL
@@ -152,9 +161,41 @@
  *              pixels don't propagate beyond the right edge of the
  *              actual image.  (This is easily accomplished by
  *              setting the out-of-bound pixels in m to OFF.)
+ * </pre>
  */
 
+#include <math.h>
 #include "allheaders.h"
+
+struct L_Pixel
+{
+    l_int32    x;
+    l_int32    y;
+};
+typedef struct L_Pixel  L_PIXEL;
+
+static void seedfillBinaryLow(l_uint32 *datas, l_int32 hs, l_int32 wpls,
+                              l_uint32 *datam, l_int32 hm, l_int32 wplm,
+                              l_int32 connectivity);
+static void seedfillGrayLow(l_uint32 *datas, l_int32 w, l_int32 h,
+                            l_int32 wpls, l_uint32 *datam, l_int32 wplm,
+                            l_int32 connectivity);
+static void seedfillGrayInvLow(l_uint32 *datas, l_int32 w, l_int32 h,
+                               l_int32 wpls, l_uint32 *datam, l_int32 wplm,
+                               l_int32 connectivity);
+static void seedfillGrayLowSimple(l_uint32 *datas, l_int32 w, l_int32 h,
+                                  l_int32 wpls, l_uint32 *datam, l_int32 wplm,
+                                  l_int32 connectivity);
+static void seedfillGrayInvLowSimple(l_uint32 *datas, l_int32 w, l_int32 h,
+                                     l_int32 wpls, l_uint32 *datam,
+                                     l_int32 wplm, l_int32 connectivity);
+static void distanceFunctionLow(l_uint32 *datad, l_int32 w, l_int32 h,
+                                l_int32 d, l_int32 wpld, l_int32 connectivity);
+static void seedspreadLow(l_uint32 *datad, l_int32 w, l_int32 h, l_int32 wpld,
+                          l_uint32 *datat, l_int32 wplt, l_int32 connectivity);
+
+
+static l_int32 pixQualifyLocalMinima(PIX *pixs, PIX *pixm, l_int32 maxval);
 
 #ifndef  NO_CONSOLE_IO
 #define   DEBUG_PRINT_ITERS    0
@@ -163,24 +204,22 @@
   /* Two-way (UL --> LR, LR --> UL) sweep iterations; typically need only 4 */
 static const l_int32  MAX_ITERS = 40;
 
-    /* Static function */
-static l_int32 pixQualifyLocalMinima(PIX *pixs, PIX *pixm, l_int32 maxval);
-
 
 /*-----------------------------------------------------------------------*
  *              Vincent's Iterative Binary Seedfill method               *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixSeedfillBinary()
+ * \brief   pixSeedfillBinary()
  *
- *      Input:  pixd  (<optional>; this can be null, equal to pixs,
- *                     or different from pixs; 1 bpp)
- *              pixs  (1 bpp seed)
- *              pixm  (1 bpp filling mask)
- *              connectivity  (4 or 8)
- *      Return: pixd always
+ * \param[in]    pixd  [optional]; this can be null, equal to pixs,
+ *                     or different from pixs; 1 bpp
+ * \param[in]    pixs  1 bpp seed
+ * \param[in]    pixm  1 bpp filling mask
+ * \param[in]    connectivity  4 or 8
+ * \return  pixd always
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is for binary seedfill (aka "binary reconstruction").
  *      (2) There are 3 cases:
  *            (a) pixd == null (make a new pixd)
@@ -198,6 +237,7 @@ static l_int32 pixQualifyLocalMinima(PIX *pixs, PIX *pixm, l_int32 maxval);
  *          a few pixels in each direction.  If the sizes differ,
  *          the clipping is handled by the low-level function
  *          seedfillBinaryLow().
+ * </pre>
  */
 PIX *
 pixSeedfillBinary(PIX     *pixd,
@@ -254,26 +294,27 @@ PIX       *pixt;
 
 
 /*!
- *  pixSeedfillBinaryRestricted()
+ * \brief   pixSeedfillBinaryRestricted()
  *
- *      Input:  pixd  (<optional>; this can be null, equal to pixs,
- *                     or different from pixs; 1 bpp)
- *              pixs  (1 bpp seed)
- *              pixm  (1 bpp filling mask)
- *              connectivity  (4 or 8)
- *              xmax (max distance in x direction of fill into the mask)
- *              ymax (max distance in y direction of fill into the mask)
- *      Return: pixd always
+ * \param[in]    pixd  [optional]; this can be null, equal to pixs,
+ *                     or different from pixs; 1 bpp
+ * \param[in]    pixs  1 bpp seed
+ * \param[in]    pixm  1 bpp filling mask
+ * \param[in]    connectivity  4 or 8
+ * \param[in]    xmax max distance in x direction of fill into the mask
+ * \param[in]    ymax max distance in y direction of fill into the mask
+ * \return  pixd always
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See usage for pixSeedfillBinary(), which has unrestricted fill.
  *          In pixSeedfillBinary(), the filling distance is unrestricted
  *          and can be larger than pixs, depending on the topology of
  *          th mask.
  *      (2) There are occasions where it is useful not to permit the
  *          fill to go more than a certain distance into the mask.
- *          @xmax specifies the maximum horizontal distance allowed
- *          in the fill; @ymax does likewise in the vertical direction.
+ *          %xmax specifies the maximum horizontal distance allowed
+ *          in the fill; %ymax does likewise in the vertical direction.
  *      (3) Operationally, the max "distance" allowed for the fill
  *          is a linear distance from the original seed, independent
  *          of the actual mask topology.
@@ -283,6 +324,7 @@ PIX       *pixt;
  *          boundaries and working outward where the mask fg allows.
  *          How this might use the constraints of separate xmax and ymax
  *          is not clear.
+ * </pre>
  */
 PIX *
 pixSeedfillBinaryRestricted(PIX     *pixd,
@@ -293,61 +335,271 @@ pixSeedfillBinaryRestricted(PIX     *pixd,
                             l_int32  ymax)
 {
 l_int32  w, h;
-PIX     *pixr, *pixt;
+PIX     *pix1, *pix2;
 
     PROCNAME("pixSeedfillBinaryRestricted");
 
-    if (xmax <= 0 && ymax <= 0)  /* no filling permitted */
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return (PIX *)ERROR_PTR("pixs undefined or not 1 bpp", procName, pixd);
+    if (!pixm || pixGetDepth(pixm) != 1)
+        return (PIX *)ERROR_PTR("pixm undefined or not 1 bpp", procName, pixd);
+    if (connectivity != 4 && connectivity != 8)
+        return (PIX *)ERROR_PTR("connectivity not in {4,8}", procName, pixd);
+    if (xmax == 0 && ymax == 0)  /* no filling permitted */
         return pixClone(pixs);
-    if (xmax < 0 || ymax < 0)
-        return (PIX *)ERROR_PTR("pixt not made", procName, pixd);
+    if (xmax < 0 || ymax < 0) {
+        L_ERROR("xmax and ymax must be non-negative", procName);
+        return pixClone(pixs);
+    }
 
         /* Full fill from the seed into the mask. */
-    if ((pixt = pixSeedfillBinary(NULL, pixs, pixm, connectivity)) == NULL)
-        return (PIX *)ERROR_PTR("pixt not made", procName, pixd);
+    if ((pix1 = pixSeedfillBinary(NULL, pixs, pixm, connectivity)) == NULL)
+        return (PIX *)ERROR_PTR("pix1 not made", procName, pixd);
 
         /* Dilate the seed.  This gives the maximal region where changes
          * are permitted.  Invert to get the region where pixs is
          * not allowed to change.  */
-    pixr = pixDilateCompBrick(NULL, pixs, 2 * xmax + 1, 2 * ymax + 1);
-    pixInvert(pixr, pixr);
+    pix2 = pixDilateCompBrick(NULL, pixs, 2 * xmax + 1, 2 * ymax + 1);
+    pixInvert(pix2, pix2);
 
-        /* Blank the region of pixt specified by the fg of pixr.
-         * This is not the final result, because it may have fg that
-         * is not accessible from the seed in the restricted distance.
-         * There we treat this as a new mask, and eliminate the
-         * bad fg regions by doing a second seedfill from the original seed. */
+        /* Blank the region of pix1 specified by the fg of pix2.
+         * This is not yet the final result, because it may have fg pixels
+         * that are not accessible from the seed in the restricted distance.
+         * For example, such pixels may be connected to the original seed,
+         * but through a path that goes outside the permitted region. */
     pixGetDimensions(pixs, &w, &h, NULL);
-    pixRasterop(pixt, 0, 0, w, h, PIX_DST & PIX_NOT(PIX_SRC), pixr, 0, 0);
+    pixRasterop(pix1, 0, 0, w, h, PIX_DST & PIX_NOT(PIX_SRC), pix2, 0, 0);
 
-        /* Fill again from the seed, into this new mask. */
-    pixd = pixSeedfillBinary(pixd, pixs, pixt, connectivity);
+        /* To get the accessible pixels in the restricted region, do
+         * a second seedfill from the original seed, using pix1 as
+         * a mask.  The result, in pixd, will not have any bad fg
+         * pixels that were in pix1. */
+    pixd = pixSeedfillBinary(pixd, pixs, pix1, connectivity);
 
-    pixDestroy(&pixt);
-    pixDestroy(&pixr);
+    pixDestroy(&pix1);
+    pixDestroy(&pix2);
     return pixd;
 }
 
 
 /*!
- *  pixHolesByFilling()
+ * \brief   seedfillBinaryLow()
  *
- *      Input:  pixs (1 bpp)
- *              connectivity (4 or 8)
- *      Return: pixd  (inverted image of all holes), or null on error
+ *  Notes:
+ *      (1) This is an in-place fill, where the seed image is
+ *          filled, clipping to the filling mask, in one full
+ *          cycle of UL -> LR and LR -> UL raster scans.
+ *      (2) Assume the mask is a filling mask, not a blocking mask.
+ *      (3) Assume that the RHS pad bits of the mask
+ *          are properly set to 0.
+ *      (4) Clip to the smallest dimensions to avoid invalid reads.
+ */
+static void
+seedfillBinaryLow(l_uint32  *datas,
+                  l_int32    hs,
+                  l_int32    wpls,
+                  l_uint32  *datam,
+                  l_int32    hm,
+                  l_int32    wplm,
+                  l_int32    connectivity)
+{
+l_int32    i, j, h, wpl;
+l_uint32   word, mask;
+l_uint32   wordabove, wordleft, wordbelow, wordright;
+l_uint32   wordprev;  /* test against this in previous iteration */
+l_uint32  *lines, *linem;
+
+    PROCNAME("seedfillBinaryLow");
+
+    h = L_MIN(hs, hm);
+    wpl = L_MIN(wpls, wplm);
+
+    switch (connectivity)
+    {
+    case 4:
+            /* UL --> LR scan */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < wpl; j++) {
+                word = *(lines + j);
+                mask = *(linem + j);
+
+                    /* OR from word above and from word to left; mask */
+                if (i > 0) {
+                    wordabove = *(lines - wpls + j);
+                    word |= wordabove;
+                }
+                if (j > 0) {
+                    wordleft = *(lines + j - 1);
+                    word |= wordleft << 31;
+                }
+                word &= mask;
+
+                    /* No need to fill horizontally? */
+                if (!word || !(~word)) {
+                    *(lines + j) = word;
+                    continue;
+                }
+
+                while (1) {
+                    wordprev = word;
+                    word = (word | (word >> 1) | (word << 1)) & mask;
+                    if ((word ^ wordprev) == 0) {
+                        *(lines + j) = word;
+                        break;
+                    }
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = h - 1; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = wpl - 1; j >= 0; j--) {
+                word = *(lines + j);
+                mask = *(linem + j);
+
+                    /* OR from word below and from word to right; mask */
+                if (i < h - 1) {
+                    wordbelow = *(lines + wpls + j);
+                    word |= wordbelow;
+                }
+                if (j < wpl - 1) {
+                    wordright = *(lines + j + 1);
+                    word |= wordright >> 31;
+                }
+                word &= mask;
+
+                    /* No need to fill horizontally? */
+                if (!word || !(~word)) {
+                    *(lines + j) = word;
+                    continue;
+                }
+
+                while (1) {
+                    wordprev = word;
+                    word = (word | (word >> 1) | (word << 1)) & mask;
+                    if ((word ^ wordprev) == 0) {
+                        *(lines + j) = word;
+                        break;
+                    }
+                }
+            }
+        }
+        break;
+
+    case 8:
+            /* UL --> LR scan */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < wpl; j++) {
+                word = *(lines + j);
+                mask = *(linem + j);
+
+                    /* OR from words above and from word to left; mask */
+                if (i > 0) {
+                    wordabove = *(lines - wpls + j);
+                    word |= (wordabove | (wordabove << 1) | (wordabove >> 1));
+                    if (j > 0)
+                        word |= (*(lines - wpls + j - 1)) << 31;
+                    if (j < wpl - 1)
+                        word |= (*(lines - wpls + j + 1)) >> 31;
+                }
+                if (j > 0) {
+                    wordleft = *(lines + j - 1);
+                    word |= wordleft << 31;
+                }
+                word &= mask;
+
+                    /* No need to fill horizontally? */
+                if (!word || !(~word)) {
+                    *(lines + j) = word;
+                    continue;
+                }
+
+                while (1) {
+                    wordprev = word;
+                    word = (word | (word >> 1) | (word << 1)) & mask;
+                    if ((word ^ wordprev) == 0) {
+                        *(lines + j) = word;
+                        break;
+                    }
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = h - 1; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = wpl - 1; j >= 0; j--) {
+                word = *(lines + j);
+                mask = *(linem + j);
+
+                    /* OR from words below and from word to right; mask */
+                if (i < h - 1) {
+                    wordbelow = *(lines + wpls + j);
+                    word |= (wordbelow | (wordbelow << 1) | (wordbelow >> 1));
+                    if (j > 0)
+                        word |= (*(lines + wpls + j - 1)) << 31;
+                    if (j < wpl - 1)
+                        word |= (*(lines + wpls + j + 1)) >> 31;
+                }
+                if (j < wpl - 1) {
+                    wordright = *(lines + j + 1);
+                    word |= wordright >> 31;
+                }
+                word &= mask;
+
+                    /* No need to fill horizontally? */
+                if (!word || !(~word)) {
+                    *(lines + j) = word;
+                    continue;
+                }
+
+                while (1) {
+                    wordprev = word;
+                    word = (word | (word >> 1) | (word << 1)) & mask;
+                    if ((word ^ wordprev) == 0) {
+                        *(lines + j) = word;
+                        break;
+                    }
+                }
+            }
+        }
+        break;
+
+    default:
+        L_ERROR("connectivity must be 4 or 8\n", procName);
+        return;
+    }
+}
+
+
+/*!
+ * \brief   pixHolesByFilling()
+ *
+ * \param[in]    pixs 1 bpp
+ * \param[in]    connectivity 4 or 8
+ * \return  pixd  inverted image of all holes, or NULL on error
  *
  * Action:
- *     (1) Start with 1-pixel black border on otherwise white pixd
- *     (2) Use the inverted pixs as the filling mask to fill in
+ *     1 Start with 1-pixel black border on otherwise white pixd
+ *     2 Use the inverted pixs as the filling mask to fill in
  *         all the pixels from the border to the pixs foreground
- *     (3) OR the result with pixs to have an image with all
+ *     3 OR the result with pixs to have an image with all
  *         ON pixels except for the holes.
- *     (4) Invert the result to get the holes as foreground
+ *     4 Invert the result to get the holes as foreground
  *
+ * <pre>
  * Notes:
  *     (1) To get 4-c.c. holes of the 8-c.c. as foreground, use
  *         4-connected filling; to get 8-c.c. holes of the 4-c.c.
  *         as foreground, use 8-connected filling.
+ * </pre>
  */
 PIX *
 pixHolesByFilling(PIX     *pixs,
@@ -364,28 +616,30 @@ PIX  *pixsi, *pixd;
 
     if ((pixd = pixCreateTemplate(pixs)) == NULL)
         return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
-    if ((pixsi = pixInvert(NULL, pixs)) == NULL)
+    if ((pixsi = pixInvert(NULL, pixs)) == NULL) {
+        pixDestroy(&pixd);
         return (PIX *)ERROR_PTR("pixsi not made", procName, NULL);
+    }
 
     pixSetOrClearBorder(pixd, 1, 1, 1, 1, PIX_SET);
     pixSeedfillBinary(pixd, pixd, pixsi, connectivity);
     pixOr(pixd, pixd, pixs);
     pixInvert(pixd, pixd);
     pixDestroy(&pixsi);
-
     return pixd;
 }
 
 
 /*!
- *  pixFillClosedBorders()
+ * \brief   pixFillClosedBorders()
  *
- *      Input:  pixs (1 bpp)
- *              filling connectivity (4 or 8)
- *      Return: pixd  (all topologically outer closed borders are filled
- *                     as connected comonents), or null on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    connectivity filling connectivity 4 or 8
+ * \return  pixd  all topologically outer closed borders are filled
+ *                     as connected comonents, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Start with 1-pixel black border on otherwise white pixd
  *      (2) Subtract input pixs to remove border pixels that were
  *          also on the closed border
@@ -396,6 +650,7 @@ PIX  *pixsi, *pixd;
  *          the input border
  *      (5) If the borders are 4-c.c., use 8-c.c. filling, and v.v.
  *      (6) Closed borders within c.c. that represent holes, etc., are filled.
+ * </pre>
  */
 PIX *
 pixFillClosedBorders(PIX     *pixs,
@@ -414,8 +669,10 @@ PIX  *pixsi, *pixd;
         return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
     pixSetOrClearBorder(pixd, 1, 1, 1, 1, PIX_SET);
     pixSubtract(pixd, pixd, pixs);
-    if ((pixsi = pixInvert(NULL, pixs)) == NULL)
+    if ((pixsi = pixInvert(NULL, pixs)) == NULL) {
+        pixDestroy(&pixd);
         return (PIX *)ERROR_PTR("pixsi not made", procName, NULL);
+    }
 
     pixSeedfillBinary(pixd, pixd, pixsi, connectivity);
     pixInvert(pixd, pixd);
@@ -426,12 +683,12 @@ PIX  *pixsi, *pixd;
 
 
 /*!
- *  pixExtractBorderConnComps()
+ * \brief   pixExtractBorderConnComps()
  *
- *      Input:  pixs (1 bpp)
- *              filling connectivity (4 or 8)
- *      Return: pixd  (all pixels in the src that are in connected
- *                     components touching the border), or null on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    connectivity filling connectivity 4 or 8
+ * \return  pixd  all pixels in the src that are in connected
+ *                components touching the border, or NULL on error
  */
 PIX *
 pixExtractBorderConnComps(PIX     *pixs,
@@ -460,15 +717,17 @@ PIX  *pixd;
 
 
 /*!
- *  pixRemoveBorderConnComps()
+ * \brief   pixRemoveBorderConnComps()
  *
- *      Input:  pixs (1 bpp)
- *              filling connectivity (4 or 8)
- *      Return: pixd  (all pixels in the src that are not touching the
- *                     border) or null on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    connectivity filling connectivity 4 or 8
+ * \return  pixd  all pixels in the src that are not touching the
+ *                border or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This removes all fg components touching the border.
+ * </pre>
  */
 PIX *
 pixRemoveBorderConnComps(PIX     *pixs,
@@ -494,20 +753,22 @@ PIX  *pixd;
 
 
 /*!
- *  pixFillBgFromBorder()
+ * \brief   pixFillBgFromBorder()
  *
- *      Input:  pixs (1 bpp)
- *              filling connectivity (4 or 8)
- *      Return: pixd (with the background c.c. touching the border
- *                    filled to foreground), or null on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    connectivity filling connectivity 4 or 8
+ * \return  pixd with the background c.c. touching the border
+ *               filled to foreground, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This fills all bg components touching the border to fg.
  *          It is the photometric inverse of pixRemoveBorderConnComps().
  *      (2) Invert the result to get the "holes" left after this fill.
  *          This can be done multiple times, extracting holes within
  *          holes after each pair of fillings.  Specifically, this code
  *          peels away n successive embeddings of components:
+ * \code
  *              pix1 = <initial image>
  *              for (i = 0; i < 2 * n; i++) {
  *                   pix2 = pixFillBgFromBorder(pix1, 8);
@@ -515,7 +776,8 @@ PIX  *pixd;
  *                   pixDestroy(&pix1);
  *                   pix1 = pix2;
  *              }
-
+ * \endcode
+ * </pre>
  */
 PIX *
 pixFillBgFromBorder(PIX     *pixs,
@@ -546,17 +808,18 @@ PIX  *pixd;
  *            Hole-filling of components to bounding rectangle           *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixFillHolesToBoundingRect()
+ * \brief   pixFillHolesToBoundingRect()
  *
- *      Input:  pixs (1 bpp)
- *              minsize (min number of pixels in the hole)
- *              maxhfract (max hole area as fraction of fg pixels in the cc)
- *              minfgfract (min fg area as fraction of bounding rectangle)
- *      Return: pixd (pixs, with some holes possibly filled and some c.c.
- *                    possibly expanded to their bounding rects),
- *                    or null on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    minsize min number of pixels in the hole
+ * \param[in]    maxhfract max hole area as fraction of fg pixels in the cc
+ * \param[in]    minfgfract min fg area as fraction of bounding rectangle
+ * \return  pixd pixs, with some holes possibly filled and some c.c.
+ *                    possibly expanded to their bounding rects,
+ *                    or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This does not fill holes that are smaller in area than 'minsize'.
  *      (2) This does not fill holes with an area larger than
  *          'maxhfract' times the fg area of the c.c.
@@ -564,15 +827,16 @@ PIX  *pixd;
  *          the fg area is less than 'minfgfract' times the area of the
  *          bounding rect.
  *      (4) The decisions are made as follows:
- *           - Decide if we are filling the holes; if so, when using
+ *           ~ Decide if we are filling the holes; if so, when using
  *             the fg area, include the filled holes.
- *           - Decide based on the fg area if we are filling to a bounding rect.
+ *           ~ Decide based on the fg area if we are filling to a bounding rect.
  *             If so, do it.
  *             If not, fill the holes if the condition is satisfied.
  *      (5) The choice of minsize depends on the resolution.
  *      (6) For solidifying image mask regions on printed materials,
  *          which tend to be rectangular, values for maxhfract
  *          and minfgfract around 0.5 are reasonable.
+ * </pre>
  */
 PIX *
 pixFillHolesToBoundingRect(PIX       *pixs,
@@ -622,24 +886,25 @@ PIXA      *pixa;
     }
     boxaDestroy(&boxa);
     pixaDestroy(&pixa);
-    FREE(tab);
+    LEPT_FREE(tab);
 
     return pixd;
 }
 
 
 /*-----------------------------------------------------------------------*
- *             Vincent's hybrid Grayscale Seedfill method             *
+ *               Vincent's hybrid Grayscale Seedfill method              *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixSeedfillGray()
+ * \brief   pixSeedfillGray()
  *
- *      Input:  pixs  (8 bpp seed; filled in place)
- *              pixm  (8 bpp filling mask)
- *              connectivity  (4 or 8)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs  8 bpp seed; filled in place
+ * \param[in]    pixm  8 bpp filling mask
+ * \param[in]    connectivity  4 or 8
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is an in-place filling operation on the seed, pixs,
  *          where the clipping mask is always above or at the level
  *          of the seed as it is filled.
@@ -652,6 +917,7 @@ PIXA      *pixa;
  *            L. Vincent, Morphological grayscale reconstruction in image
  *            analysis: applications and efficient algorithms, IEEE Transactions
  *            on  Image Processing, vol. 2, no. 2, pp. 176-201, 1993.
+ * </pre>
  */
 l_int32
 pixSeedfillGray(PIX     *pixs,
@@ -686,14 +952,15 @@ l_uint32  *datas, *datam;
 
 
 /*!
- *  pixSeedfillGrayInv()
+ * \brief   pixSeedfillGrayInv()
  *
- *      Input:  pixs  (8 bpp seed; filled in place)
- *              pixm  (8 bpp filling mask)
- *              connectivity  (4 or 8)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs  8 bpp seed; filled in place
+ * \param[in]    pixm  8 bpp filling mask
+ * \param[in]    connectivity  4 or 8
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is an in-place filling operation on the seed, pixs,
  *          where the clipping mask is always below or at the level
  *          of the seed as it is filled.  Think of filling up a basin
@@ -709,6 +976,7 @@ l_uint32  *datas, *datam;
  *          where the seed pixel values are generated from the mask,
  *          and where the implementation uses pixSeedfillGray() by
  *          inverting both the seed and mask.
+ * </pre>
  */
 l_int32
 pixSeedfillGrayInv(PIX     *pixs,
@@ -741,18 +1009,948 @@ l_uint32  *datas, *datam;
     return 0;
 }
 
+
+/*!
+ * \brief   seedfillGrayLow()
+ *
+ *  Notes:
+ *      (1) The pixels are numbered as follows:
+ *              1  2  3
+ *              4  x  5
+ *              6  7  8
+ *          This low-level filling operation consists of two scans,
+ *          raster and anti-raster, covering the entire seed image.
+ *          This is followed by a breadth-first propagation operation to
+ *          complete the fill.
+ *          During the anti-raster scan, every pixel p whose current value
+ *          could still be propagated after the anti-raster scan is put into
+ *          the FIFO queue.
+ *          The propagation step is a breadth-first fill to completion.
+ *          Unlike the simple grayscale seedfill pixSeedfillGraySimple(),
+ *          where at least two full raster/anti-raster iterations are required
+ *          for completion and verification, the hybrid method uses only a
+ *          single raster/anti-raster set of scans.
+ *      (2) The filling action can be visualized from the following example.
+ *          Suppose the mask, which clips the fill, is a sombrero-shaped
+ *          surface, where the highest point is 200 and the low pixels
+ *          around the rim are 30.  Beyond the rim, the mask goes up a bit.
+ *          Suppose the seed, which is filled, consists of a single point
+ *          of height 150, located below the max of the mask, with
+ *          the rest 0.  Then in the raster scan, nothing happens until
+ *          the high seed point is encountered, and then this value is
+ *          propagated right and down, until it hits the side of the
+ *          sombrero.   The seed can never exceed the mask, so it fills
+ *          to the rim, going lower along the mask surface.  When it
+ *          passes the rim, the seed continues to fill at the rim
+ *          height to the edge of the seed image.  Then on the
+ *          anti-raster scan, the seed fills flat inside the
+ *          sombrero to the upper and left, and then out from the
+ *          rim as before.  The final result has a seed that is
+ *          flat outside the rim, and inside it fills the sombrero
+ *          but only up to 150.  If the rim height varies, the
+ *          filled seed outside the rim will be at the highest
+ *          point on the rim, which is a saddle point on the rim.
+ *      (3) Reference paper :
+ *            L. Vincent, Morphological grayscale reconstruction in image
+ *            analysis: applications and efficient algorithms, IEEE Transactions
+ *            on  Image Processing, vol. 2, no. 2, pp. 176-201, 1993.
+ */
+static void
+seedfillGrayLow(l_uint32  *datas,
+                l_int32    w,
+                l_int32    h,
+                l_int32    wpls,
+                l_uint32  *datam,
+                l_int32    wplm,
+                l_int32    connectivity)
+{
+l_uint8    val1, val2, val3, val4, val5, val6, val7, val8;
+l_uint8    val, maxval, maskval, boolval;
+l_int32    i, j, imax, jmax, queue_size;
+l_uint32  *lines, *linem;
+L_PIXEL *pixel;
+L_QUEUE  *lq_pixel;
+
+    PROCNAME("seedfillGrayLow");
+
+    if (connectivity != 4 && connectivity != 8) {
+        L_ERROR("connectivity must be 4 or 8\n", procName);
+        return;
+    }
+
+    imax = h - 1;
+    jmax = w - 1;
+
+        /* In the worst case, most of the pixels could be pushed
+         * onto the FIFO queue during anti-raster scan.  However this
+         * will rarely happen, and we initialize the queue ptr size to
+         * the image perimeter. */
+    lq_pixel = lqueueCreate(2 * (w + h));
+
+    switch (connectivity)
+    {
+    case 4:
+            /* UL --> LR scan  (Raster Order)
+             * If I : mask image
+             *    J : marker image
+             * Let p be the currect pixel;
+             * J(p) <- (max{J(p) union J(p) neighbors in raster order})
+             *          intersection I(p) */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i > 0)
+                        maxval = GET_DATA_BYTE(lines - wpls, j);
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+                }
+            }
+        }
+
+            /* LR --> UL scan (anti-raster order)
+             * Let p be the currect pixel;
+             * J(p) <- (max{J(p) union J(p) neighbors in anti-raster order})
+             *          intersection I(p) */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                boolval = FALSE;
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i < imax)
+                        maxval = GET_DATA_BYTE(lines + wpls, j);
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+
+                        /*
+                         * If there exists a point (q) which belongs to J(p)
+                         * neighbors in anti-raster order such that J(q) < J(p)
+                         * and J(q) < I(q) then
+                         * fifo_add(p) */
+                    if (i < imax) {
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        if ((val7 < val) &&
+                            (val7 < GET_DATA_BYTE(linem + wplm, j))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        if (!boolval && (val5 < val) &&
+                            (val5 < GET_DATA_BYTE(linem, j + 1))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (boolval) {
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+        }
+
+            /* Propagation step:
+             *        while fifo_empty = false
+             *          p <- fifo_first()
+             *          for every pixel (q) belong to neighbors of (p)
+             *            if J(q) < J(p) and I(q) != J(q)
+             *              J(q) <- min(J(p), I(q));
+             *              fifo_add(q);
+             *            end
+             *          end
+             *        end */
+        queue_size = lqueueGetCount(lq_pixel);
+        while (queue_size) {
+            pixel = (L_PIXEL *)lqueueRemove(lq_pixel);
+            i = pixel->x;
+            j = pixel->y;
+            LEPT_FREE(pixel);
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+
+            if ((val = GET_DATA_BYTE(lines, j)) > 0) {
+                if (i > 0) {
+                    val2 = GET_DATA_BYTE(lines - wpls, j);
+                    maskval = GET_DATA_BYTE(linem - wplm, j);
+                    if (val > val2 && val2 != maskval) {
+                        SET_DATA_BYTE(lines - wpls, j, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i - 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+
+                }
+                if (j > 0) {
+                    val4 = GET_DATA_BYTE(lines, j - 1);
+                    maskval = GET_DATA_BYTE(linem, j - 1);
+                    if (val > val4 && val4 != maskval) {
+                        SET_DATA_BYTE(lines, j - 1, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j - 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (i < imax) {
+                    val7 = GET_DATA_BYTE(lines + wpls, j);
+                    maskval = GET_DATA_BYTE(linem + wplm, j);
+                    if (val > val7 && val7 != maskval) {
+                        SET_DATA_BYTE(lines + wpls, j, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i + 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (j < jmax) {
+                    val5 = GET_DATA_BYTE(lines, j + 1);
+                    maskval = GET_DATA_BYTE(linem, j + 1);
+                    if (val > val5 && val5 != maskval) {
+                        SET_DATA_BYTE(lines, j + 1, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j + 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+
+            queue_size = lqueueGetCount(lq_pixel);
+        }
+
+        break;
+
+    case 8:
+            /* UL --> LR scan  (Raster Order)
+             * If I : mask image
+             *    J : marker image
+             * Let p be the currect pixel;
+             * J(p) <- (max{J(p) union J(p) neighbors in raster order})
+             *          intersection I(p) */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i > 0) {
+                        if (j > 0)
+                            maxval = GET_DATA_BYTE(lines - wpls, j - 1);
+                        if (j < jmax) {
+                            val3 = GET_DATA_BYTE(lines - wpls, j + 1);
+                            maxval = L_MAX(maxval, val3);
+                        }
+                        val2 = GET_DATA_BYTE(lines - wpls, j);
+                        maxval = L_MAX(maxval, val2);
+                    }
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+                }
+            }
+        }
+
+            /* LR --> UL scan (anti-raster order)
+             * Let p be the currect pixel;
+             * J(p) <- (max{J(p) union J(p) neighbors in anti-raster order})
+             *          intersection I(p) */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                boolval = FALSE;
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i < imax) {
+                        if (j > 0) {
+                            maxval = GET_DATA_BYTE(lines + wpls, j - 1);
+                        }
+                        if (j < jmax) {
+                            val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                            maxval = L_MAX(maxval, val8);
+                        }
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        maxval = L_MAX(maxval, val7);
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+
+                        /* If there exists a point (q) which belongs to J(p)
+                         * neighbors in anti-raster order such that J(q) < J(p)
+                         * and J(q) < I(q) then
+                         * fifo_add(p) */
+                    if (i < imax) {
+                        if (j > 0) {
+                            val6 = GET_DATA_BYTE(lines + wpls, j - 1);
+                            if ((val6 < val) &&
+                                (val6 < GET_DATA_BYTE(linem + wplm, j - 1))) {
+                                boolval = TRUE;
+                            }
+                        }
+                        if (j < jmax) {
+                            val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                            if (!boolval && (val8 < val) &&
+                                (val8 < GET_DATA_BYTE(linem + wplm, j + 1))) {
+                                boolval = TRUE;
+                            }
+                        }
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        if (!boolval && (val7 < val) &&
+                            (val7 < GET_DATA_BYTE(linem + wplm, j))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        if (!boolval && (val5 < val) &&
+                            (val5 < GET_DATA_BYTE(linem, j + 1))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (boolval) {
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+        }
+
+            /* Propagation step:
+             *        while fifo_empty = false
+             *          p <- fifo_first()
+             *          for every pixel (q) belong to neighbors of (p)
+             *            if J(q) < J(p) and I(q) != J(q)
+             *              J(q) <- min(J(p), I(q));
+             *              fifo_add(q);
+             *            end
+             *          end
+             *        end */
+        queue_size = lqueueGetCount(lq_pixel);
+        while (queue_size) {
+            pixel = (L_PIXEL *)lqueueRemove(lq_pixel);
+            i = pixel->x;
+            j = pixel->y;
+            LEPT_FREE(pixel);
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+
+            if ((val = GET_DATA_BYTE(lines, j)) > 0) {
+                if (i > 0) {
+                    if (j > 0) {
+                        val1 = GET_DATA_BYTE(lines - wpls, j - 1);
+                        maskval = GET_DATA_BYTE(linem - wplm, j - 1);
+                        if (val > val1 && val1 != maskval) {
+                            SET_DATA_BYTE(lines - wpls, j - 1,
+                                          L_MIN(val, maskval));
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i - 1;
+                            pixel->y = j - 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    if (j < jmax) {
+                        val3 = GET_DATA_BYTE(lines - wpls, j + 1);
+                        maskval = GET_DATA_BYTE(linem - wplm, j + 1);
+                        if (val > val3 && val3 != maskval) {
+                            SET_DATA_BYTE(lines - wpls, j + 1,
+                                          L_MIN(val, maskval));
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i - 1;
+                            pixel->y = j + 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    val2 = GET_DATA_BYTE(lines - wpls, j);
+                    maskval = GET_DATA_BYTE(linem - wplm, j);
+                    if (val > val2 && val2 != maskval) {
+                        SET_DATA_BYTE(lines - wpls, j, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i - 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+
+                }
+                if (j > 0) {
+                    val4 = GET_DATA_BYTE(lines, j - 1);
+                    maskval = GET_DATA_BYTE(linem, j - 1);
+                    if (val > val4 && val4 != maskval) {
+                        SET_DATA_BYTE(lines, j - 1, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j - 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (i < imax) {
+                    if (j > 0) {
+                        val6 = GET_DATA_BYTE(lines + wpls, j - 1);
+                        maskval = GET_DATA_BYTE(linem + wplm, j - 1);
+                        if (val > val6 && val6 != maskval) {
+                            SET_DATA_BYTE(lines + wpls, j - 1,
+                                          L_MIN(val, maskval));
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i + 1;
+                            pixel->y = j - 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    if (j < jmax) {
+                        val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                        maskval = GET_DATA_BYTE(linem + wplm, j + 1);
+                        if (val > val8 && val8 != maskval) {
+                            SET_DATA_BYTE(lines + wpls, j + 1,
+                                          L_MIN(val, maskval));
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i + 1;
+                            pixel->y = j + 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    val7 = GET_DATA_BYTE(lines + wpls, j);
+                    maskval = GET_DATA_BYTE(linem + wplm, j);
+                    if (val > val7 && val7 != maskval) {
+                        SET_DATA_BYTE(lines + wpls, j, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i + 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (j < jmax) {
+                    val5 = GET_DATA_BYTE(lines, j + 1);
+                    maskval = GET_DATA_BYTE(linem, j + 1);
+                    if (val > val5 && val5 != maskval) {
+                        SET_DATA_BYTE(lines, j + 1, L_MIN(val, maskval));
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j + 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+
+            queue_size = lqueueGetCount(lq_pixel);
+        }
+        break;
+
+    default:
+        L_ERROR("shouldn't get here!\n", procName);
+        break;
+    }
+
+    lqueueDestroy(&lq_pixel, TRUE);
+}
+
+
+/*!
+ * \brief   seedfillGrayInvLow()
+ *
+ *  Notes:
+ *      (1) The pixels are numbered as follows:
+ *              1  2  3
+ *              4  x  5
+ *              6  7  8
+ *          This low-level filling operation consists of two scans,
+ *          raster and anti-raster, covering the entire seed image.
+ *          During the anti-raster scan, every pixel p such that its
+ *          current value could still be propagated during the next
+ *          raster scanning is put into the FIFO-queue.
+ *          Next step is the propagation step where where we update
+ *          and propagate the values using FIFO structure created in
+ *          anti-raster scan.
+ *      (2) The "Inv" signifies the fact that in this case, filling
+ *          of the seed only takes place when the seed value is
+ *          greater than the mask value.  The mask will act to stop
+ *          the fill when it is higher than the seed level.  (This is
+ *          in contrast to conventional grayscale filling where the
+ *          seed always fills below the mask.)
+ *      (3) An example of use is a basin, described by the mask (pixm),
+ *          where within the basin, the seed pix (pixs) gets filled to the
+ *          height of the highest seed pixel that is above its
+ *          corresponding max pixel.  Filling occurs while the
+ *          propagating seed pixels in pixs are larger than the
+ *          corresponding mask values in pixm.
+ *      (4) Reference paper :
+ *            L. Vincent, Morphological grayscale reconstruction in image
+ *            analysis: applications and efficient algorithms, IEEE Transactions
+ *            on  Image Processing, vol. 2, no. 2, pp. 176-201, 1993.
+ */
+static void
+seedfillGrayInvLow(l_uint32  *datas,
+                   l_int32    w,
+                   l_int32    h,
+                   l_int32    wpls,
+                   l_uint32  *datam,
+                   l_int32    wplm,
+                   l_int32    connectivity)
+{
+l_uint8    val1, val2, val3, val4, val5, val6, val7, val8;
+l_uint8    val, maxval, maskval, boolval;
+l_int32    i, j, imax, jmax, queue_size;
+l_uint32  *lines, *linem;
+L_PIXEL *pixel;
+L_QUEUE  *lq_pixel;
+
+    PROCNAME("seedfillGrayInvLow");
+
+    if (connectivity != 4 && connectivity != 8) {
+        L_ERROR("connectivity must be 4 or 8\n", procName);
+        return;
+    }
+
+    imax = h - 1;
+    jmax = w - 1;
+
+        /* In the worst case, most of the pixels could be pushed
+         * onto the FIFO queue during anti-raster scan.  However this
+         * will rarely happen, and we initialize the queue ptr size to
+         * the image perimeter. */
+    lq_pixel = lqueueCreate(2 * (w + h));
+
+    switch (connectivity)
+    {
+    case 4:
+            /* UL --> LR scan  (Raster Order)
+             * If I : mask image
+             *    J : marker image
+             * Let p be the currect pixel;
+             * tmp <- max{J(p) union J(p) neighbors in raster order}
+             * if (tmp > I(p))
+             *   J(p) <- tmp
+             * end */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    maxval = GET_DATA_BYTE(lines, j);
+                    if (i > 0) {
+                        val2 = GET_DATA_BYTE(lines - wpls, j);
+                        maxval = L_MAX(maxval, val2);
+                    }
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                }
+            }
+        }
+
+            /* LR --> UL scan (anti-raster order)
+             * If I : mask image
+             *    J : marker image
+             * Let p be the currect pixel;
+             * tmp <- max{J(p) union J(p) neighbors in anti-raster order}
+             * if (tmp > I(p))
+             *   J(p) <- tmp
+             * end */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                boolval = FALSE;
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    val = maxval = GET_DATA_BYTE(lines, j);
+                    if (i < imax) {
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        maxval = L_MAX(maxval, val7);
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                    val = GET_DATA_BYTE(lines, j);
+
+                        /*
+                         * If there exists a point (q) which belongs to J(p)
+                         * neighbors in anti-raster order such that J(q) < J(p)
+                         * and J(p) > I(q) then
+                         * fifo_add(p) */
+                    if (i < imax) {
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        if ((val7 < val) &&
+                            (val > GET_DATA_BYTE(linem + wplm, j))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        if (!boolval && (val5 < val) &&
+                            (val > GET_DATA_BYTE(linem, j + 1))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (boolval) {
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+        }
+
+            /* Propagation step:
+             *        while fifo_empty = false
+             *          p <- fifo_first()
+             *          for every pixel (q) belong to neighbors of (p)
+             *            if J(q) < J(p) and J(p) > I(q)
+             *              J(q) <- min(J(p), I(q));
+             *              fifo_add(q);
+             *            end
+             *          end
+             *        end */
+        queue_size = lqueueGetCount(lq_pixel);
+        while (queue_size) {
+            pixel = (L_PIXEL *)lqueueRemove(lq_pixel);
+            i = pixel->x;
+            j = pixel->y;
+            LEPT_FREE(pixel);
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+
+            if ((val = GET_DATA_BYTE(lines, j)) > 0) {
+                if (i > 0) {
+                    val2 = GET_DATA_BYTE(lines - wpls, j);
+                    maskval = GET_DATA_BYTE(linem - wplm, j);
+                    if (val > val2 && val > maskval) {
+                        SET_DATA_BYTE(lines - wpls, j, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i - 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+
+                }
+                if (j > 0) {
+                    val4 = GET_DATA_BYTE(lines, j - 1);
+                    maskval = GET_DATA_BYTE(linem, j - 1);
+                    if (val > val4 && val > maskval) {
+                        SET_DATA_BYTE(lines, j - 1, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j - 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (i < imax) {
+                    val7 = GET_DATA_BYTE(lines + wpls, j);
+                    maskval = GET_DATA_BYTE(linem + wplm, j);
+                    if (val > val7 && val > maskval) {
+                        SET_DATA_BYTE(lines + wpls, j, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i + 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (j < jmax) {
+                    val5 = GET_DATA_BYTE(lines, j + 1);
+                    maskval = GET_DATA_BYTE(linem, j + 1);
+                    if (val > val5 && val > maskval) {
+                        SET_DATA_BYTE(lines, j + 1, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j + 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+
+            queue_size = lqueueGetCount(lq_pixel);
+        }
+
+        break;
+
+    case 8:
+            /* UL --> LR scan  (Raster Order)
+             * If I : mask image
+             *    J : marker image
+             * Let p be the currect pixel;
+             * tmp <- max{J(p) union J(p) neighbors in raster order}
+             * if (tmp > I(p))
+             *   J(p) <- tmp
+             * end */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    maxval = GET_DATA_BYTE(lines, j);
+                    if (i > 0) {
+                        if (j > 0) {
+                            val1 = GET_DATA_BYTE(lines - wpls, j - 1);
+                            maxval = L_MAX(maxval, val1);
+                        }
+                        if (j < jmax) {
+                            val3 = GET_DATA_BYTE(lines - wpls, j + 1);
+                            maxval = L_MAX(maxval, val3);
+                        }
+                        val2 = GET_DATA_BYTE(lines - wpls, j);
+                        maxval = L_MAX(maxval, val2);
+                    }
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                }
+            }
+        }
+
+            /* LR --> UL scan (anti-raster order)
+             * If I : mask image
+             *    J : marker image
+             * Let p be the currect pixel;
+             * tmp <- max{J(p) union J(p) neighbors in anti-raster order}
+             * if (tmp > I(p))
+             *   J(p) <- tmp
+             * end */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                boolval = FALSE;
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    maxval = GET_DATA_BYTE(lines, j);
+                    if (i < imax) {
+                        if (j > 0) {
+                            val6 = GET_DATA_BYTE(lines + wpls, j - 1);
+                            maxval = L_MAX(maxval, val6);
+                        }
+                        if (j < jmax) {
+                            val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                            maxval = L_MAX(maxval, val8);
+                        }
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        maxval = L_MAX(maxval, val7);
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                    val = GET_DATA_BYTE(lines, j);
+
+                        /*
+                         * If there exists a point (q) which belongs to J(p)
+                         * neighbors in anti-raster order such that J(q) < J(p)
+                         * and J(p) > I(q) then
+                         * fifo_add(p) */
+                    if (i < imax) {
+                        if (j > 0) {
+                            val6 = GET_DATA_BYTE(lines + wpls, j - 1);
+                            if ((val6 < val) &&
+                                (val > GET_DATA_BYTE(linem + wplm, j - 1))) {
+                                boolval = TRUE;
+                            }
+                        }
+                        if (j < jmax) {
+                            val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                            if (!boolval && (val8 < val) &&
+                                (val > GET_DATA_BYTE(linem + wplm, j + 1))) {
+                                boolval = TRUE;
+                            }
+                        }
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        if (!boolval && (val7 < val) &&
+                            (val > GET_DATA_BYTE(linem + wplm, j))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        if (!boolval && (val5 < val) &&
+                            (val > GET_DATA_BYTE(linem, j + 1))) {
+                            boolval = TRUE;
+                        }
+                    }
+                    if (boolval) {
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+        }
+
+            /* Propagation step:
+             *        while fifo_empty = false
+             *          p <- fifo_first()
+             *          for every pixel (q) belong to neighbors of (p)
+             *            if J(q) < J(p) and J(p) > I(q)
+             *              J(q) <- min(J(p), I(q));
+             *              fifo_add(q);
+             *            end
+             *          end
+             *        end */
+        queue_size = lqueueGetCount(lq_pixel);
+        while (queue_size) {
+            pixel = (L_PIXEL *)lqueueRemove(lq_pixel);
+            i = pixel->x;
+            j = pixel->y;
+            LEPT_FREE(pixel);
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+
+            if ((val = GET_DATA_BYTE(lines, j)) > 0) {
+                if (i > 0) {
+                    if (j > 0) {
+                        val1 = GET_DATA_BYTE(lines - wpls, j - 1);
+                        maskval = GET_DATA_BYTE(linem - wplm, j - 1);
+                        if (val > val1 && val > maskval) {
+                            SET_DATA_BYTE(lines - wpls, j - 1, val);
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i - 1;
+                            pixel->y = j - 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    if (j < jmax) {
+                        val3 = GET_DATA_BYTE(lines - wpls, j + 1);
+                        maskval = GET_DATA_BYTE(linem - wplm, j + 1);
+                        if (val > val3 && val > maskval) {
+                            SET_DATA_BYTE(lines - wpls, j + 1, val);
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i - 1;
+                            pixel->y = j + 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    val2 = GET_DATA_BYTE(lines - wpls, j);
+                    maskval = GET_DATA_BYTE(linem - wplm, j);
+                    if (val > val2 && val > maskval) {
+                        SET_DATA_BYTE(lines - wpls, j, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i - 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+
+                }
+                if (j > 0) {
+                    val4 = GET_DATA_BYTE(lines, j - 1);
+                    maskval = GET_DATA_BYTE(linem, j - 1);
+                    if (val > val4 && val > maskval) {
+                        SET_DATA_BYTE(lines, j - 1, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j - 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (i < imax) {
+                    if (j > 0) {
+                        val6 = GET_DATA_BYTE(lines + wpls, j - 1);
+                        maskval = GET_DATA_BYTE(linem + wplm, j - 1);
+                        if (val > val6 && val > maskval) {
+                            SET_DATA_BYTE(lines + wpls, j - 1, val);
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i + 1;
+                            pixel->y = j - 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    if (j < jmax) {
+                        val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                        maskval = GET_DATA_BYTE(linem + wplm, j + 1);
+                        if (val > val8 && val > maskval) {
+                            SET_DATA_BYTE(lines + wpls, j + 1, val);
+                            pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                            pixel->x = i + 1;
+                            pixel->y = j + 1;
+                            lqueueAdd(lq_pixel, pixel);
+                        }
+                    }
+                    val7 = GET_DATA_BYTE(lines + wpls, j);
+                    maskval = GET_DATA_BYTE(linem + wplm, j);
+                    if (val > val7 && val > maskval) {
+                        SET_DATA_BYTE(lines + wpls, j, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i + 1;
+                        pixel->y = j;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+                if (j < jmax) {
+                    val5 = GET_DATA_BYTE(lines, j + 1);
+                    maskval = GET_DATA_BYTE(linem, j + 1);
+                    if (val > val5 && val > maskval) {
+                        SET_DATA_BYTE(lines, j + 1, val);
+                        pixel = (L_PIXEL *)LEPT_CALLOC(1, sizeof(L_PIXEL));
+                        pixel->x = i;
+                        pixel->y = j + 1;
+                        lqueueAdd(lq_pixel, pixel);
+                    }
+                }
+            }
+
+            queue_size = lqueueGetCount(lq_pixel);
+        }
+        break;
+
+    default:
+        L_ERROR("shouldn't get here!\n", procName);
+        break;
+    }
+
+    lqueueDestroy(&lq_pixel, TRUE);
+}
+
+
 /*-----------------------------------------------------------------------*
  *             Vincent's Iterative Grayscale Seedfill method             *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixSeedfillGraySimple()
+ * \brief   pixSeedfillGraySimple()
  *
- *      Input:  pixs  (8 bpp seed; filled in place)
- *              pixm  (8 bpp filling mask)
- *              connectivity  (4 or 8)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs  8 bpp seed; filled in place
+ * \param[in]    pixm  8 bpp filling mask
+ * \param[in]    connectivity  4 or 8
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is an in-place filling operation on the seed, pixs,
  *          where the clipping mask is always above or at the level
  *          of the seed as it is filled.
@@ -765,6 +1963,7 @@ l_uint32  *datas, *datam;
  *            L. Vincent, Morphological grayscale reconstruction in image
  *            analysis: applications and efficient algorithms, IEEE Transactions
  *            on  Image Processing, vol. 2, no. 2, pp. 176-201, 1993.
+ * </pre>
  */
 l_int32
 pixSeedfillGraySimple(PIX     *pixs,
@@ -815,14 +2014,15 @@ PIX       *pixt;
 
 
 /*!
- *  pixSeedfillGrayInvSimple()
+ * \brief   pixSeedfillGrayInvSimple()
  *
- *      Input:  pixs  (8 bpp seed; filled in place)
- *              pixm  (8 bpp filling mask)
- *              connectivity  (4 or 8)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs  8 bpp seed; filled in place
+ * \param[in]    pixm  8 bpp filling mask
+ * \param[in]    connectivity  4 or 8
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is an in-place filling operation on the seed, pixs,
  *          where the clipping mask is always below or at the level
  *          of the seed as it is filled.  Think of filling up a basin
@@ -834,6 +2034,7 @@ PIX       *pixt;
  *          of its use is the hdome fill, where the seed is an image
  *          where each pixel is a fixed amount smaller than the
  *          corresponding mask pixel.
+ * </pre>
  */
 l_int32
 pixSeedfillGrayInvSimple(PIX     *pixs,
@@ -883,19 +2084,340 @@ PIX       *pixt;
 }
 
 
+/*!
+ * \brief   seedfillGrayLowSimple()
+ *
+ *  Notes:
+ *      (1) The pixels are numbered as follows:
+ *              1  2  3
+ *              4  x  5
+ *              6  7  8
+ *          This low-level filling operation consists of two scans,
+ *          raster and anti-raster, covering the entire seed image.
+ *          The caller typically iterates until the filling is
+ *          complete.
+ *      (2) The filling action can be visualized from the following example.
+ *          Suppose the mask, which clips the fill, is a sombrero-shaped
+ *          surface, where the highest point is 200 and the low pixels
+ *          around the rim are 30.  Beyond the rim, the mask goes up a bit.
+ *          Suppose the seed, which is filled, consists of a single point
+ *          of height 150, located below the max of the mask, with
+ *          the rest 0.  Then in the raster scan, nothing happens until
+ *          the high seed point is encountered, and then this value is
+ *          propagated right and down, until it hits the side of the
+ *          sombrero.   The seed can never exceed the mask, so it fills
+ *          to the rim, going lower along the mask surface.  When it
+ *          passes the rim, the seed continues to fill at the rim
+ *          height to the edge of the seed image.  Then on the
+ *          anti-raster scan, the seed fills flat inside the
+ *          sombrero to the upper and left, and then out from the
+ *          rim as before.  The final result has a seed that is
+ *          flat outside the rim, and inside it fills the sombrero
+ *          but only up to 150.  If the rim height varies, the
+ *          filled seed outside the rim will be at the highest
+ *          point on the rim, which is a saddle point on the rim.
+ */
+static void
+seedfillGrayLowSimple(l_uint32  *datas,
+                      l_int32    w,
+                      l_int32    h,
+                      l_int32    wpls,
+                      l_uint32  *datam,
+                      l_int32    wplm,
+                      l_int32    connectivity)
+{
+l_uint8    val2, val3, val4, val5, val7, val8;
+l_uint8    val, maxval, maskval;
+l_int32    i, j, imax, jmax;
+l_uint32  *lines, *linem;
+
+    PROCNAME("seedfillGrayLowSimple");
+
+    imax = h - 1;
+    jmax = w - 1;
+
+    switch (connectivity)
+    {
+    case 4:
+            /* UL --> LR scan */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i > 0)
+                        maxval = GET_DATA_BYTE(lines - wpls, j);
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i < imax)
+                        maxval = GET_DATA_BYTE(lines + wpls, j);
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+                }
+            }
+        }
+        break;
+
+    case 8:
+            /* UL --> LR scan */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i > 0) {
+                        if (j > 0)
+                            maxval = GET_DATA_BYTE(lines - wpls, j - 1);
+                        if (j < jmax) {
+                            val2 = GET_DATA_BYTE(lines - wpls, j + 1);
+                            maxval = L_MAX(maxval, val2);
+                        }
+                        val3 = GET_DATA_BYTE(lines - wpls, j);
+                        maxval = L_MAX(maxval, val3);
+                    }
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) > 0) {
+                    maxval = 0;
+                    if (i < imax) {
+                        if (j > 0)
+                            maxval = GET_DATA_BYTE(lines + wpls, j - 1);
+                        if (j < jmax) {
+                            val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                            maxval = L_MAX(maxval, val8);
+                        }
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        maxval = L_MAX(maxval, val7);
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    val = GET_DATA_BYTE(lines, j);
+                    maxval = L_MAX(maxval, val);
+                    val = L_MIN(maxval, maskval);
+                    SET_DATA_BYTE(lines, j, val);
+                }
+            }
+        }
+        break;
+
+    default:
+        L_ERROR("connectivity must be 4 or 8\n", procName);
+    }
+}
+
+
+/*!
+ * \brief   seedfillGrayInvLowSimple()
+ *
+ *  Notes:
+ *      (1) The pixels are numbered as follows:
+ *              1  2  3
+ *              4  x  5
+ *              6  7  8
+ *          This low-level filling operation consists of two scans,
+ *          raster and anti-raster, covering the entire seed image.
+ *          The caller typically iterates until the filling is
+ *          complete.
+ *      (2) The "Inv" signifies the fact that in this case, filling
+ *          of the seed only takes place when the seed value is
+ *          greater than the mask value.  The mask will act to stop
+ *          the fill when it is higher than the seed level.  (This is
+ *          in contrast to conventional grayscale filling where the
+ *          seed always fills below the mask.)
+ *      (3) An example of use is a basin, described by the mask (pixm),
+ *          where within the basin, the seed pix (pixs) gets filled to the
+ *          height of the highest seed pixel that is above its
+ *          corresponding max pixel.  Filling occurs while the
+ *          propagating seed pixels in pixs are larger than the
+ *          corresponding mask values in pixm.
+ */
+static void
+seedfillGrayInvLowSimple(l_uint32  *datas,
+                         l_int32    w,
+                         l_int32    h,
+                         l_int32    wpls,
+                         l_uint32  *datam,
+                         l_int32    wplm,
+                         l_int32    connectivity)
+{
+l_uint8    val1, val2, val3, val4, val5, val6, val7, val8;
+l_uint8    maxval, maskval;
+l_int32    i, j, imax, jmax;
+l_uint32  *lines, *linem;
+
+    PROCNAME("seedfillGrayInvLowSimple");
+
+    imax = h - 1;
+    jmax = w - 1;
+
+    switch (connectivity)
+    {
+    case 4:
+            /* UL --> LR scan */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    maxval = GET_DATA_BYTE(lines, j);
+                    if (i > 0) {
+                        val2 = GET_DATA_BYTE(lines - wpls, j);
+                        maxval = L_MAX(maxval, val2);
+                    }
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    maxval = GET_DATA_BYTE(lines, j);
+                    if (i < imax) {
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        maxval = L_MAX(maxval, val7);
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                }
+            }
+        }
+        break;
+
+    case 8:
+            /* UL --> LR scan */
+        for (i = 0; i < h; i++) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = 0; j < w; j++) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    maxval = GET_DATA_BYTE(lines, j);
+                    if (i > 0) {
+                        if (j > 0) {
+                            val1 = GET_DATA_BYTE(lines - wpls, j - 1);
+                            maxval = L_MAX(maxval, val1);
+                        }
+                        if (j < jmax) {
+                            val2 = GET_DATA_BYTE(lines - wpls, j + 1);
+                            maxval = L_MAX(maxval, val2);
+                        }
+                        val3 = GET_DATA_BYTE(lines - wpls, j);
+                        maxval = L_MAX(maxval, val3);
+                    }
+                    if (j > 0) {
+                        val4 = GET_DATA_BYTE(lines, j - 1);
+                        maxval = L_MAX(maxval, val4);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = imax; i >= 0; i--) {
+            lines = datas + i * wpls;
+            linem = datam + i * wplm;
+            for (j = jmax; j >= 0; j--) {
+                if ((maskval = GET_DATA_BYTE(linem, j)) < 255) {
+                    maxval = GET_DATA_BYTE(lines, j);
+                    if (i < imax) {
+                        if (j > 0) {
+                            val6 = GET_DATA_BYTE(lines + wpls, j - 1);
+                            maxval = L_MAX(maxval, val6);
+                        }
+                        if (j < jmax) {
+                            val8 = GET_DATA_BYTE(lines + wpls, j + 1);
+                            maxval = L_MAX(maxval, val8);
+                        }
+                        val7 = GET_DATA_BYTE(lines + wpls, j);
+                        maxval = L_MAX(maxval, val7);
+                    }
+                    if (j < jmax) {
+                        val5 = GET_DATA_BYTE(lines, j + 1);
+                        maxval = L_MAX(maxval, val5);
+                    }
+                    if (maxval > maskval)
+                        SET_DATA_BYTE(lines, j, maxval);
+                }
+            }
+        }
+        break;
+
+    default:
+        L_ERROR("connectivity must be 4 or 8\n", procName);
+    }
+}
+
+
 /*-----------------------------------------------------------------------*
  *                         Gray seedfill variations                      *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixSeedfillGrayBasin()
+ * \brief   pixSeedfillGrayBasin()
  *
- *      Input:  pixb  (binary mask giving seed locations)
- *              pixm  (8 bpp basin-type filling mask)
- *              delta (amount of seed value above mask)
- *              connectivity  (4 or 8)
- *      Return: pixd (filled seed) if OK, null on error
+ * \param[in]    pixb  binary mask giving seed locations
+ * \param[in]    pixm  8 bpp basin-type filling mask
+ * \param[in]    delta amount of seed value above mask
+ * \param[in]    connectivity  4 or 8
+ * \return  pixd filled seed if OK, NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This fills from a seed within basins defined by a filling mask.
  *          The seed value(s) are greater than the corresponding
  *          filling mask value, and the result has the bottoms of
@@ -903,7 +2425,7 @@ PIX       *pixt;
  *      (2) The seed has value 255 except where pixb has fg (1), which
  *          are the seed 'locations'.  At the seed locations, the seed
  *          value is the corresponding value of the mask pixel in pixm
- *          plus @delta.  If @delta == 0, we return a copy of pixm.
+ *          plus %delta.  If %delta == 0, we return a copy of pixm.
  *      (3) The actual filling is done using the standard grayscale filling
  *          operation on the inverse of the mask and using the inverse
  *          of the seed image.  After filling, we return the inverse of
@@ -913,7 +2435,8 @@ PIX       *pixt;
  *          low values; pixb can identify the local minima in pixm (say, at
  *          the bottom of the basins); and delta is the amount that we wish
  *          to raise (lighten) the basins.  We construct the seed
- *          (a.k.a marker) image from pixb, pixm and @delta.
+ *          (a.k.a marker) image from pixb, pixm and %delta.
+ * </pre>
  */
 PIX *
 pixSeedfillGrayBasin(PIX     *pixb,
@@ -964,15 +2487,16 @@ PIX  *pixbi, *pixmi, *pixsd;
  *                   Vincent's Distance Function method                  *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixDistanceFunction()
+ * \brief   pixDistanceFunction()
  *
- *      Input:  pixs  (1 bpp source)
- *              connectivity  (4 or 8)
- *              outdepth (8 or 16 bits for pixd)
- *              boundcond (L_BOUNDARY_BG, L_BOUNDARY_FG)
- *      Return: pixd, or null on error
+ * \param[in]    pixs  1 bpp source
+ * \param[in]    connectivity  4 or 8
+ * \param[in]    outdepth 8 or 16 bits for pixd
+ * \param[in]    boundcond L_BOUNDARY_BG, L_BOUNDARY_FG
+ * \return  pixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This computes the distance of each pixel from the nearest
  *          background pixel.  All bg pixels therefore have a distance of 0,
  *          and the fg pixel distances increase linearly from 1 at the
@@ -1003,6 +2527,7 @@ PIX  *pixbi, *pixmi, *pixsd;
  *          1-boundary pixels, and go all the way to the right
  *          and bottom; then coming back reset left and top.  But we
  *          instead use a method that works for both 4- and 8-connected.
+ * </pre>
  */
 PIX *
 pixDistanceFunction(PIX     *pixs,
@@ -1052,17 +2577,185 @@ PIX       *pixd;
 }
 
 
+/*!
+ * \brief   distanceFunctionLow()
+ */
+static void
+distanceFunctionLow(l_uint32  *datad,
+                    l_int32    w,
+                    l_int32    h,
+                    l_int32    d,
+                    l_int32    wpld,
+                    l_int32    connectivity)
+{
+l_int32    val1, val2, val3, val4, val5, val6, val7, val8, minval, val;
+l_int32    i, j, imax, jmax;
+l_uint32  *lined;
+
+    PROCNAME("distanceFunctionLow");
+
+        /* One raster scan followed by one anti-raster scan.
+         * This does not re-set the 1-boundary of pixels that
+         * were initialized to either 0 or maxval. */
+    imax = h - 1;
+    jmax = w - 1;
+    switch (connectivity)
+    {
+    case 4:
+        if (d == 8) {
+                /* UL --> LR scan */
+            for (i = 1; i < imax; i++) {
+                lined = datad + i * wpld;
+                for (j = 1; j < jmax; j++) {
+                    if ((val = GET_DATA_BYTE(lined, j)) > 0) {
+                        val2 = GET_DATA_BYTE(lined - wpld, j);
+                        val4 = GET_DATA_BYTE(lined, j - 1);
+                        minval = L_MIN(val2, val4);
+                        minval = L_MIN(minval, 254);
+                        SET_DATA_BYTE(lined, j, minval + 1);
+                    }
+                }
+            }
+
+                /* LR --> UL scan */
+            for (i = imax - 1; i > 0; i--) {
+                lined = datad + i * wpld;
+                for (j = jmax - 1; j > 0; j--) {
+                    if ((val = GET_DATA_BYTE(lined, j)) > 0) {
+                        val7 = GET_DATA_BYTE(lined + wpld, j);
+                        val5 = GET_DATA_BYTE(lined, j + 1);
+                        minval = L_MIN(val5, val7);
+                        minval = L_MIN(minval + 1, val);
+                        SET_DATA_BYTE(lined, j, minval);
+                    }
+                }
+            }
+        } else {  /* d == 16 */
+                /* UL --> LR scan */
+            for (i = 1; i < imax; i++) {
+                lined = datad + i * wpld;
+                for (j = 1; j < jmax; j++) {
+                    if ((val = GET_DATA_TWO_BYTES(lined, j)) > 0) {
+                        val2 = GET_DATA_TWO_BYTES(lined - wpld, j);
+                        val4 = GET_DATA_TWO_BYTES(lined, j - 1);
+                        minval = L_MIN(val2, val4);
+                        minval = L_MIN(minval, 0xfffe);
+                        SET_DATA_TWO_BYTES(lined, j, minval + 1);
+                    }
+                }
+            }
+
+                /* LR --> UL scan */
+            for (i = imax - 1; i > 0; i--) {
+                lined = datad + i * wpld;
+                for (j = jmax - 1; j > 0; j--) {
+                    if ((val = GET_DATA_TWO_BYTES(lined, j)) > 0) {
+                        val7 = GET_DATA_TWO_BYTES(lined + wpld, j);
+                        val5 = GET_DATA_TWO_BYTES(lined, j + 1);
+                        minval = L_MIN(val5, val7);
+                        minval = L_MIN(minval + 1, val);
+                        SET_DATA_TWO_BYTES(lined, j, minval);
+                    }
+                }
+            }
+        }
+        break;
+
+    case 8:
+        if (d == 8) {
+                /* UL --> LR scan */
+            for (i = 1; i < imax; i++) {
+                lined = datad + i * wpld;
+                for (j = 1; j < jmax; j++) {
+                    if ((val = GET_DATA_BYTE(lined, j)) > 0) {
+                        val1 = GET_DATA_BYTE(lined - wpld, j - 1);
+                        val2 = GET_DATA_BYTE(lined - wpld, j);
+                        val3 = GET_DATA_BYTE(lined - wpld, j + 1);
+                        val4 = GET_DATA_BYTE(lined, j - 1);
+                        minval = L_MIN(val1, val2);
+                        minval = L_MIN(minval, val3);
+                        minval = L_MIN(minval, val4);
+                        minval = L_MIN(minval, 254);
+                        SET_DATA_BYTE(lined, j, minval + 1);
+                    }
+                }
+            }
+
+                /* LR --> UL scan */
+            for (i = imax - 1; i > 0; i--) {
+                lined = datad + i * wpld;
+                for (j = jmax - 1; j > 0; j--) {
+                    if ((val = GET_DATA_BYTE(lined, j)) > 0) {
+                        val8 = GET_DATA_BYTE(lined + wpld, j + 1);
+                        val7 = GET_DATA_BYTE(lined + wpld, j);
+                        val6 = GET_DATA_BYTE(lined + wpld, j - 1);
+                        val5 = GET_DATA_BYTE(lined, j + 1);
+                        minval = L_MIN(val8, val7);
+                        minval = L_MIN(minval, val6);
+                        minval = L_MIN(minval, val5);
+                        minval = L_MIN(minval + 1, val);
+                        SET_DATA_BYTE(lined, j, minval);
+                    }
+                }
+            }
+        } else {  /* d == 16 */
+                /* UL --> LR scan */
+            for (i = 1; i < imax; i++) {
+                lined = datad + i * wpld;
+                for (j = 1; j < jmax; j++) {
+                    if ((val = GET_DATA_TWO_BYTES(lined, j)) > 0) {
+                        val1 = GET_DATA_TWO_BYTES(lined - wpld, j - 1);
+                        val2 = GET_DATA_TWO_BYTES(lined - wpld, j);
+                        val3 = GET_DATA_TWO_BYTES(lined - wpld, j + 1);
+                        val4 = GET_DATA_TWO_BYTES(lined, j - 1);
+                        minval = L_MIN(val1, val2);
+                        minval = L_MIN(minval, val3);
+                        minval = L_MIN(minval, val4);
+                        minval = L_MIN(minval, 0xfffe);
+                        SET_DATA_TWO_BYTES(lined, j, minval + 1);
+                    }
+                }
+            }
+
+                /* LR --> UL scan */
+            for (i = imax - 1; i > 0; i--) {
+                lined = datad + i * wpld;
+                for (j = jmax - 1; j > 0; j--) {
+                    if ((val = GET_DATA_TWO_BYTES(lined, j)) > 0) {
+                        val8 = GET_DATA_TWO_BYTES(lined + wpld, j + 1);
+                        val7 = GET_DATA_TWO_BYTES(lined + wpld, j);
+                        val6 = GET_DATA_TWO_BYTES(lined + wpld, j - 1);
+                        val5 = GET_DATA_TWO_BYTES(lined, j + 1);
+                        minval = L_MIN(val8, val7);
+                        minval = L_MIN(minval, val6);
+                        minval = L_MIN(minval, val5);
+                        minval = L_MIN(minval + 1, val);
+                        SET_DATA_TWO_BYTES(lined, j, minval);
+                    }
+                }
+            }
+        }
+        break;
+
+    default:
+        L_ERROR("connectivity must be 4 or 8\n", procName);
+        break;
+    }
+}
+
+
 /*-----------------------------------------------------------------------*
  *                Seed spread (based on distance function)               *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixSeedspread()
+ * \brief   pixSeedspread()
  *
- *      Input:  pixs  (8 bpp source)
- *              connectivity  (4 or 8)
- *      Return: pixd, or null on error
+ * \param[in]    pixs  8 bpp source
+ * \param[in]    connectivity  4 or 8
+ * \return  pixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The raster/anti-raster method for implementing this filling
  *          operation was suggested by Ray Smith.
  *      (2) This takes an arbitrary set of nonzero pixels in pixs, which
@@ -1092,6 +2785,7 @@ PIX       *pixd;
  *          This can give rise to strange-looking results, particularly
  *          for 4-connectivity where the L1 distance is computed from
  *          steps in N,S,E and W directions (no diagonals).
+ * </pre>
  */
 PIX *
 pixSeedspread(PIX     *pixs,
@@ -1142,29 +2836,167 @@ PIX       *pixm, *pixt, *pixg, *pixd;
 }
 
 
+/*!
+ * \brief   seedspreadLow()
+ *
+ *    See pixSeedspread() for a brief description of the algorithm here.
+ */
+static void
+seedspreadLow(l_uint32  *datad,
+              l_int32    w,
+              l_int32    h,
+              l_int32    wpld,
+              l_uint32  *datat,
+              l_int32    wplt,
+              l_int32    connectivity)
+{
+l_int32    val1t, val2t, val3t, val4t, val5t, val6t, val7t, val8t;
+l_int32    i, j, imax, jmax, minval, valt, vald;
+l_uint32  *linet, *lined;
+
+    PROCNAME("seedspreadLow");
+
+        /* One raster scan followed by one anti-raster scan.
+         * pixt is initialized to have 0 on pixels where the
+         * input is specified in pixd, and to have 1 on all
+         * other pixels.  We only change pixels in pixt and pixd
+         * that are non-zero in pixt. */
+    imax = h - 1;
+    jmax = w - 1;
+    switch (connectivity)
+    {
+    case 4:
+            /* UL --> LR scan */
+        for (i = 1; i < h; i++) {
+            linet = datat + i * wplt;
+            lined = datad + i * wpld;
+            for (j = 1; j < jmax; j++) {
+                if ((valt = GET_DATA_TWO_BYTES(linet, j)) > 0) {
+                    val2t = GET_DATA_TWO_BYTES(linet - wplt, j);
+                    val4t = GET_DATA_TWO_BYTES(linet, j - 1);
+                    minval = L_MIN(val2t, val4t);
+                    minval = L_MIN(minval, 0xfffe);
+                    SET_DATA_TWO_BYTES(linet, j, minval + 1);
+                    if (val2t < val4t)
+                        vald = GET_DATA_BYTE(lined - wpld, j);
+                    else
+                        vald = GET_DATA_BYTE(lined, j - 1);
+                    SET_DATA_BYTE(lined, j, vald);
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = imax - 1; i > 0; i--) {
+            linet = datat + i * wplt;
+            lined = datad + i * wpld;
+            for (j = jmax - 1; j > 0; j--) {
+                if ((valt = GET_DATA_TWO_BYTES(linet, j)) > 0) {
+                    val7t = GET_DATA_TWO_BYTES(linet + wplt, j);
+                    val5t = GET_DATA_TWO_BYTES(linet, j + 1);
+                    minval = L_MIN(val5t, val7t);
+                    minval = L_MIN(minval + 1, valt);
+                    if (valt > minval) {  /* replace */
+                        SET_DATA_TWO_BYTES(linet, j, minval);
+                        if (val5t < val7t)
+                            vald = GET_DATA_BYTE(lined, j + 1);
+                        else
+                            vald = GET_DATA_BYTE(lined + wplt, j);
+                        SET_DATA_BYTE(lined, j, vald);
+                    }
+                }
+            }
+        }
+        break;
+    case 8:
+            /* UL --> LR scan */
+        for (i = 1; i < h; i++) {
+            linet = datat + i * wplt;
+            lined = datad + i * wpld;
+            for (j = 1; j < jmax; j++) {
+                if ((valt = GET_DATA_TWO_BYTES(linet, j)) > 0) {
+                    val1t = GET_DATA_TWO_BYTES(linet - wplt, j - 1);
+                    val2t = GET_DATA_TWO_BYTES(linet - wplt, j);
+                    val3t = GET_DATA_TWO_BYTES(linet - wplt, j + 1);
+                    val4t = GET_DATA_TWO_BYTES(linet, j - 1);
+                    minval = L_MIN(val1t, val2t);
+                    minval = L_MIN(minval, val3t);
+                    minval = L_MIN(minval, val4t);
+                    minval = L_MIN(minval, 0xfffe);
+                    SET_DATA_TWO_BYTES(linet, j, minval + 1);
+                    if (minval == val1t)
+                        vald = GET_DATA_BYTE(lined - wpld, j - 1);
+                    else if (minval == val2t)
+                        vald = GET_DATA_BYTE(lined - wpld, j);
+                    else if (minval == val3t)
+                        vald = GET_DATA_BYTE(lined - wpld, j + 1);
+                    else  /* minval == val4t */
+                        vald = GET_DATA_BYTE(lined, j - 1);
+                    SET_DATA_BYTE(lined, j, vald);
+                }
+            }
+        }
+
+            /* LR --> UL scan */
+        for (i = imax - 1; i > 0; i--) {
+            linet = datat + i * wplt;
+            lined = datad + i * wpld;
+            for (j = jmax - 1; j > 0; j--) {
+                if ((valt = GET_DATA_TWO_BYTES(linet, j)) > 0) {
+                    val8t = GET_DATA_TWO_BYTES(linet + wplt, j + 1);
+                    val7t = GET_DATA_TWO_BYTES(linet + wplt, j);
+                    val6t = GET_DATA_TWO_BYTES(linet + wplt, j - 1);
+                    val5t = GET_DATA_TWO_BYTES(linet, j + 1);
+                    minval = L_MIN(val8t, val7t);
+                    minval = L_MIN(minval, val6t);
+                    minval = L_MIN(minval, val5t);
+                    minval = L_MIN(minval + 1, valt);
+                    if (valt > minval) {  /* replace */
+                        SET_DATA_TWO_BYTES(linet, j, minval);
+                        if (minval == val5t + 1)
+                            vald = GET_DATA_BYTE(lined, j + 1);
+                        else if (minval == val6t + 1)
+                            vald = GET_DATA_BYTE(lined + wpld, j - 1);
+                        else if (minval == val7t + 1)
+                            vald = GET_DATA_BYTE(lined + wpld, j);
+                        else  /* minval == val8t + 1 */
+                            vald = GET_DATA_BYTE(lined + wpld, j + 1);
+                        SET_DATA_BYTE(lined, j, vald);
+                    }
+                }
+            }
+        }
+        break;
+    default:
+        L_ERROR("connectivity must be 4 or 8\n", procName);
+        break;
+    }
+}
+
 
 /*-----------------------------------------------------------------------*
  *                              Local extrema                            *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixLocalExtrema()
+ * \brief   pixLocalExtrema()
  *
- *      Input:  pixs  (8 bpp)
- *              maxmin (max allowed for the min in a 3x3 neighborhood;
- *                      use 0 for default which is to have no upper bound)
- *              minmax (min allowed for the max in a 3x3 neighborhood;
- *                      use 0 for default which is to have no lower bound)
- *              &ppixmin (<optional return> mask of local minima)
- *              &ppixmax (<optional return> mask of local maxima)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs  8 bpp
+ * \param[in]    maxmin max allowed for the min in a 3x3 neighborhood;
+ *                      use 0 for default which is to have no upper bound
+ * \param[in]    minmax min allowed for the max in a 3x3 neighborhood;
+ *                      use 0 for default which is to have no lower bound
+ * \param[out]   ppixmin [optional] mask of local minima
+ * \param[out]   ppixmax [optional] mask of local maxima
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This gives the actual local minima and maxima.
  *          A local minimum is a pixel whose surrounding pixels all
  *          have values at least as large, and likewise for a local
- *          maximum.  For the local minima, @maxmin is the upper
+ *          maximum.  For the local minima, %maxmin is the upper
  *          bound for the value of pixs.  Likewise, for the local maxima,
- *          @minmax is the lower bound for the value of pixs.
+ *          %minmax is the lower bound for the value of pixs.
  *      (2) The minima are found by starting with the erosion-and-equality
  *          approach of pixSelectedLocalExtrema().  This is followed
  *          by a qualification step, where each c.c. in the resulting
@@ -1180,6 +3012,7 @@ PIX       *pixm, *pixt, *pixg, *pixd;
  *          for the minima there.
  *      (4) The generated masks can be used as markers for
  *          further operations.
+ * </pre>
  */
 l_int32
 pixLocalExtrema(PIX     *pixs,
@@ -1222,15 +3055,16 @@ PIX  *pixmin, *pixmax, *pixt1, *pixt2;
 
 
 /*!
- *  pixQualifyLocalMinima()
+ * \brief   pixQualifyLocalMinima()
  *
- *      Input:  pixs  (8 bpp image from which pixm has been extracted)
- *              pixm  (1 bpp mask of values equal to min in 3x3 neighborhood)
- *              maxval (max allowed for the min in a 3x3 neighborhood;
- *                      use 0 for default which is to have no upper bound)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs  8 bpp image from which pixm has been extracted
+ * \param[in]    pixm  1 bpp mask of values equal to min in 3x3 neighborhood
+ * \param[in]    maxval max allowed for the min in a 3x3 neighborhood;
+ *                      use 0 for default which is to have no upper bound
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This function acts in-place to remove all c.c. in pixm
  *          that are not true local minima in pixs.  As seen in
  *          pixLocalExtrema(), the input pixm are found by selecting those
@@ -1240,8 +3074,9 @@ PIX  *pixmin, *pixmax, *pixt1, *pixt2;
  *          boundary pixels of the c.c. have values that are greater
  *          than the value within the c.c.
  *      (2) The maximum allowed value for each local minimum can be
- *          bounded with @maxval.  Use 0 for default, which is to have
+ *          bounded with %maxval.  Use 0 for default, which is to have
  *          no upper bound (equivalent to maxval == 254).
+ * </pre>
  */
 static l_int32
 pixQualifyLocalMinima(PIX     *pixs,
@@ -1253,7 +3088,7 @@ l_int32    vals, wpls, wplc, ismin;
 l_uint32   val;
 l_uint32  *datas, *datac, *lines, *linec;
 BOXA      *boxa;
-PIX       *pixt1, *pixt2, *pixc;
+PIX       *pix1, *pix2, *pix3;
 PIXA      *pixa;
 
     PROCNAME("pixQualifyLocalMinima");
@@ -1271,19 +3106,19 @@ PIXA      *pixa;
     n = pixaGetCount(pixa);
     for (k = 0; k < n; k++) {
         boxaGetBoxGeometry(boxa, k, &xc, &yc, &wc, &hc);
-        pixt1 = pixaGetPix(pixa, k, L_COPY);
-        pixt2 = pixAddBorder(pixt1, 1, 0);
-        pixc = pixDilateBrick(NULL, pixt2, 3, 3);
-        pixXor(pixc, pixc, pixt2);  /* exterior boundary pixels */
-        datac = pixGetData(pixc);
-        wplc = pixGetWpl(pixc);
-        nextOnPixelInRaster(pixt1, 0, 0, &xon, &yon);
+        pix1 = pixaGetPix(pixa, k, L_COPY);
+        pix2 = pixAddBorder(pix1, 1, 0);
+        pix3 = pixDilateBrick(NULL, pix2, 3, 3);
+        pixXor(pix3, pix3, pix2);  /* exterior boundary pixels */
+        datac = pixGetData(pix3);
+        wplc = pixGetWpl(pix3);
+        nextOnPixelInRaster(pix1, 0, 0, &xon, &yon);
         pixGetPixel(pixs, xc + xon, yc + yon, &val);
         if (val > maxval) {  /* too large; erase */
-            pixRasterop(pixm, xc, yc, wc, hc, PIX_XOR, pixt1, 0, 0);
-            pixDestroy(&pixt1);
-            pixDestroy(&pixt2);
-            pixDestroy(&pixc);
+            pixRasterop(pixm, xc, yc, wc, hc, PIX_XOR, pix1, 0, 0);
+            pixDestroy(&pix1);
+            pixDestroy(&pix2);
+            pixDestroy(&pix3);
             continue;
         }
         ismin = TRUE;
@@ -1307,10 +3142,10 @@ PIXA      *pixa;
                 break;
         }
         if (!ismin)  /* erase it */
-            pixRasterop(pixm, xc, yc, wc, hc, PIX_XOR, pixt1, 0, 0);
-        pixDestroy(&pixt1);
-        pixDestroy(&pixt2);
-        pixDestroy(&pixc);
+            pixRasterop(pixm, xc, yc, wc, hc, PIX_XOR, pix1, 0, 0);
+        pixDestroy(&pix1);
+        pixDestroy(&pix2);
+        pixDestroy(&pix3);
     }
 
     boxaDestroy(&boxa);
@@ -1320,15 +3155,16 @@ PIXA      *pixa;
 
 
 /*!
- *  pixSelectedLocalExtrema()
+ * \brief   pixSelectedLocalExtrema()
  *
- *      Input:  pixs  (8 bpp)
- *              mindist (-1 for keeping all pixels; >= 0 specifies distance)
- *              &ppixmin (<return> mask of local minima)
- *              &ppixmax (<return> mask of local maxima)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs  8 bpp
+ * \param[in]    mindist -1 for keeping all pixels; >= 0 specifies distance
+ * \param[out]   ppixmin mask of local minima
+ * \param[out]   ppixmax mask of local maxima
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This selects those local 3x3 minima that are at least a
  *          specified distance from the nearest local 3x3 maxima, and v.v.
  *          for the selected set of local 3x3 maxima.
@@ -1348,6 +3184,7 @@ PIXA      *pixa;
  *          on each side, such that no local 3x3 maximum pixel is within
  *          that square; and v.v.
  *      (3) The generated masks can be used as markers for further operations.
+ * </pre>
  */
 l_int32
 pixSelectedLocalExtrema(PIX     *pixs,
@@ -1396,16 +3233,18 @@ PIX  *pixmin, *pixmax, *pixt, *pixtmin, *pixtmax;
 
 
 /*!
- *  pixFindEqualValues()
+ * \brief   pixFindEqualValues()
  *
- *      Input:  pixs1 (8 bpp)
- *              pixs2 (8 bpp)
- *      Return: pixd (1 bpp mask), or null on error
+ * \param[in]    pixs1 8 bpp
+ * \param[in]    pixs2 8 bpp
+ * \return  pixd 1 bpp mask, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The two images are aligned at the UL corner, and the returned
  *          image has ON pixels where the pixels in pixs1 and pixs2
  *          have equal values.
+ * </pre>
  */
 PIX *
 pixFindEqualValues(PIX  *pixs1,
@@ -1454,15 +3293,16 @@ PIX       *pixd;
  *             Selection of minima in mask connected components          *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixSelectMinInConnComp()
+ * \brief   pixSelectMinInConnComp()
  *
- *      Input:  pixs (8 bpp)
- *              pixm (1 bpp)
- *              &pta (<return> pta of min pixel locations)
- *              &nav (<optional return> numa of minima values)
- *      Return: 0 if OK, 1 on error.
+ * \param[in]    pixs 8 bpp
+ * \param[in]    pixm 1 bpp
+ * \param[out]   ppta pta of min pixel locations
+ * \param[out]   pnav [optional] numa of minima values
+ * \return  0 if OK, 1 on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) For each 8 connected component in pixm, this finds
  *          a pixel in pixs that has the lowest value, and saves
  *          it in a Pta.  If several pixels in pixs have the same
@@ -1471,6 +3311,7 @@ PIX       *pixd;
  *          connected component have the same value in pixs, so it is
  *          fastest to select one of them using a special seedfill
  *          operation.  Not yet implemented.
+ * </pre>
  */
 l_int32
 pixSelectMinInConnComp(PIX    *pixs,
@@ -1563,25 +3404,27 @@ PTA       *pta;
  *            Removal of seeded connected components from a mask         *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixRemoveSeededComponents()
+ * \brief   pixRemoveSeededComponents()
  *
- *      Input:  pixd  (<optional>; this can be null or equal to pixm; 1 bpp)
- *              pixs  (1 bpp seed)
- *              pixm  (1 bpp filling mask)
- *              connectivity  (4 or 8)
- *              bordersize (amount of border clearing)
- *      Return: pixd, or null on error
+ * \param[in]    pixd  [optional]; this can be null or equal to pixm; 1 bpp
+ * \param[in]    pixs  1 bpp seed
+ * \param[in]    pixm  1 bpp filling mask
+ * \param[in]    connectivity  4 or 8
+ * \param[in]    bordersize amount of border clearing
+ * \return  pixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This removes each component in pixm for which there is
  *          at least one seed in pixs.  If pixd == NULL, this returns
  *          the result in a new pixd.  Otherwise, it is an in-place
  *          operation on pixm.  In no situation is pixs altered,
  *          because we do the filling with a copy of pixs.
  *      (2) If bordersize > 0, it also clears all pixels within a
- *          distance @bordersize of the edge of pixd.  This is here
+ *          distance %bordersize of the edge of pixd.  This is here
  *          because pixLocalExtrema() typically finds local minima
- *          at the border.  Use @bordersize >= 2 to remove these.
+ *          at the border.  Use %bordersize >= 2 to remove these.
+ * </pre>
  */
 PIX *
 pixRemoveSeededComponents(PIX     *pixd,

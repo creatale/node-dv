@@ -24,10 +24,12 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  psio1stub.c
+/*!
+ * \file psio1stub.c
+ * <pre>
  *
  *     Stubs for psio1.c functions
+ * </pre>
  */
 
 #include "allheaders.h"
@@ -78,11 +80,11 @@ l_int32 writeImageCompressedToPSFile(const char *filein, const char *fileout,
 /* ----------------------------------------------------------------------*/
 
 l_int32 convertSegmentedPagesToPS(const char *pagedir, const char *pagestr,
-                                  const char *maskdir, const char *maskstr,
-                                  l_int32 numpre, l_int32 numpost,
-                                  l_int32 maxnum, l_float32 textscale,
-                                  l_float32 imagescale, l_int32 threshold,
-                                  const char *fileout)
+                                  l_int32 page_numpre, const char *maskdir,
+                                  const char *maskstr, l_int32 mask_numpre,
+                                  l_int32 numpost, l_int32 maxnum,
+                                  l_float32 textscale, l_float32 imagescale,
+                                  l_int32 threshold, const char *fileout)
 {
     return ERROR_INT("function not present", "convertSegmentedPagesToPS", 1);
 }

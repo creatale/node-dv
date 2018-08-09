@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  pix5.c
+/*!
+ * \file pix5.c
+ * <pre>
  *
  *    This file has these operations:
  *
@@ -60,6 +61,12 @@
  *           PIX        *pixCropToSize()
  *           PIX        *pixResizeToMatch()
  *
+ *    Make a frame mask
+ *           PIX        *pixMakeFrameMask()
+ *
+ *    Fraction of Fg pixels under a mask
+ *           l_int32     pixFractionFgInMask()
+ *
  *    Clip to foreground
  *           PIX        *pixClipToForeground()
  *           l_int32     pixTestClipToForeground()
@@ -83,6 +90,7 @@
  *    Rank row and column transforms
  *           PIX        *pixRankRowTransform()
  *           PIX        *pixRankColumnTransform()
+ * </pre>
  */
 
 #include <string.h>
@@ -108,12 +116,12 @@ static const l_uint32 rmask32[] = {0x0,
  *                 Measurement of properties                   *
  *-------------------------------------------------------------*/
 /*!
- *  pixaFindDimensions()
+ * \brief   pixaFindDimensions()
  *
- *      Input:  pixa
- *              &naw (<optional return> numa of pix widths)
- *              &nah (<optional return> numa of pix heights)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixa
+ * \param[out]   pnaw [optional] numa of pix widths
+ * \param[out]   pnah [optional] numa of pix heights
+ * \return  0 if OK, 1 on error
  */
 l_int32
 pixaFindDimensions(PIXA   *pixa,
@@ -125,10 +133,12 @@ PIX     *pixt;
 
     PROCNAME("pixaFindDimensions");
 
+    if (pnaw) *pnaw = NULL;
+    if (pnah) *pnah = NULL;
+    if (!pnaw && !pnah)
+        return ERROR_INT("no output requested", procName, 1);
     if (!pixa)
         return ERROR_INT("pixa not defined", procName, 1);
-    if (!pnaw && !pnah)
-        return 0;
 
     n = pixaGetCount(pixa);
     if (pnaw) *pnaw = numaCreate(n);
@@ -147,19 +157,21 @@ PIX     *pixt;
 
 
 /*!
- *  pixFindAreaPerimRatio()
+ * \brief   pixFindAreaPerimRatio()
  *
- *      Input:  pixs (1 bpp)
- *              tab (<optional> pixel sum table, can be NULL)
- *              &fract (<return> area/perimeter ratio)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    tab [optional] pixel sum table, can be NULL
+ * \param[out]   pfract area/perimeter ratio
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The area is the number of fg pixels that are not on the
  *          boundary (i.e., are not 8-connected to a bg pixel), and the
  *          perimeter is the number of fg boundary pixels.  Returns
  *          0.0 if there are no fg pixels.
  *      (2) This function is retained because clients are using it.
+ * </pre>
  */
 l_int32
 pixFindAreaPerimRatio(PIX        *pixs,
@@ -187,7 +199,7 @@ PIX      *pixt;
     pixCountPixels(pixt, &nfg, tab8);
     if (nfg == 0) {
         pixDestroy(&pixt);
-        if (!tab) FREE(tab8);
+        if (!tab) LEPT_FREE(tab8);
         return 0;
     }
     pixXor(pixt, pixt, pixs);
@@ -195,20 +207,22 @@ PIX      *pixt;
     *pfract = (l_float32)nfg / (l_float32)nbound;
     pixDestroy(&pixt);
 
-    if (!tab) FREE(tab8);
+    if (!tab) LEPT_FREE(tab8);
     return 0;
 }
 
 
 /*!
- *  pixaFindPerimToAreaRatio()
+ * \brief   pixaFindPerimToAreaRatio()
  *
- *      Input:  pixa (of 1 bpp pix)
- *      Return: na (of perimeter/arear ratio for each pix), or null on error
+ * \param[in]    pixa of 1 bpp pix
+ * \return  na of perimeter/arear ratio for each pix, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is typically used for a pixa consisting of
  *          1 bpp connected components.
+ * </pre>
  */
 NUMA *
 pixaFindPerimToAreaRatio(PIXA  *pixa)
@@ -233,20 +247,21 @@ PIX       *pixt;
         numaAddNumber(na, fract);
         pixDestroy(&pixt);
     }
-    FREE(tab);
+    LEPT_FREE(tab);
     return na;
 }
 
 
 /*!
- *  pixFindPerimToAreaRatio()
+ * \brief   pixFindPerimToAreaRatio()
  *
- *      Input:  pixs (1 bpp)
- *              tab (<optional> pixel sum table, can be NULL)
- *              &fract (<return> perimeter/area ratio)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    tab [optional] pixel sum table, can be NULL
+ * \param[out]   pfract perimeter/area ratio
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The perimeter is the number of fg boundary pixels, and the
  *          area is the number of fg pixels.  This returns 0.0 if
  *          there are no fg pixels.
@@ -257,6 +272,7 @@ PIX       *pixt;
  *          This always has a value <= 1.0, and if the average distance
  *          of a fg pixel from the nearest bg pixel is d, this has
  *          a value ~1/d.
+ * </pre>
  */
 l_int32
 pixFindPerimToAreaRatio(PIX        *pixs,
@@ -282,7 +298,7 @@ PIX      *pixt;
 
     pixCountPixels(pixs, &nfg, tab8);
     if (nfg == 0) {
-        if (!tab) FREE(tab8);
+        if (!tab) LEPT_FREE(tab8);
         return 0;
     }
     pixt = pixErodeBrick(NULL, pixs, 3, 3);
@@ -291,24 +307,26 @@ PIX      *pixt;
     *pfract = (l_float32)nbound / (l_float32)nfg;
     pixDestroy(&pixt);
 
-    if (!tab) FREE(tab8);
+    if (!tab) LEPT_FREE(tab8);
     return 0;
 }
 
 
 /*!
- *  pixaFindPerimSizeRatio()
+ * \brief   pixaFindPerimSizeRatio()
  *
- *      Input:  pixa (of 1 bpp pix)
- *      Return: na (of fg perimeter/(2*(w+h)) ratio for each pix),
- *                  or null on error
+ * \param[in]    pixa of 1 bpp pix
+ * \return  na of fg perimeter/(2*(w+h)) ratio for each pix,
+ *                  or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is typically used for a pixa consisting of
  *          1 bpp connected components.
  *      (2) This has a minimum value for a circle of pi/4; a value for
  *          a rectangle component of approx. 1.0; and a value much larger
  *          than 1.0 for a component with a highly irregular boundary.
+ * </pre>
  */
 NUMA *
 pixaFindPerimSizeRatio(PIXA  *pixa)
@@ -333,20 +351,21 @@ PIX       *pixt;
         numaAddNumber(na, ratio);
         pixDestroy(&pixt);
     }
-    FREE(tab);
+    LEPT_FREE(tab);
     return na;
 }
 
 
 /*!
- *  pixFindPerimSizeRatio()
+ * \brief   pixFindPerimSizeRatio()
  *
- *      Input:  pixs (1 bpp)
- *              tab (<optional> pixel sum table, can be NULL)
- *              &ratio (<return> perimeter/size ratio)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    tab [optional] pixel sum table, can be NULL
+ * \param[out]   pratio perimeter/size ratio
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) We take the 'size' as twice the sum of the width and
  *          height of pixs, and the perimeter is the number of fg
  *          boundary pixels.  We use the fg pixels of the boundary
@@ -357,6 +376,7 @@ PIX       *pixt;
  *      (3) This is typically used for a single connected component.
  *          It has a value of about 1.0 for rectangular components with
  *          relatively smooth boundaries.
+ * </pre>
  */
 l_int32
 pixFindPerimSizeRatio(PIX        *pixs,
@@ -387,20 +407,22 @@ PIX      *pixt;
     *pratio = (0.5 * nbound) / (l_float32)(w + h);
     pixDestroy(&pixt);
 
-    if (!tab) FREE(tab8);
+    if (!tab) LEPT_FREE(tab8);
     return 0;
 }
 
 
 /*!
- *  pixaFindAreaFraction()
+ * \brief   pixaFindAreaFraction()
  *
- *      Input:  pixa (of 1 bpp pix)
- *      Return: na (of area fractions for each pix), or null on error
+ * \param[in]    pixa of 1 bpp pix
+ * \return  na of area fractions for each pix, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is typically used for a pixa consisting of
  *          1 bpp connected components.
+ * </pre>
  */
 NUMA *
 pixaFindAreaFraction(PIXA  *pixa)
@@ -425,23 +447,25 @@ PIX       *pixt;
         numaAddNumber(na, fract);
         pixDestroy(&pixt);
     }
-    FREE(tab);
+    LEPT_FREE(tab);
     return na;
 }
 
 
 /*!
- *  pixFindAreaFraction()
+ * \brief   pixFindAreaFraction()
  *
- *      Input:  pixs (1 bpp)
- *              tab (<optional> pixel sum table, can be NULL)
- *              &fract (<return> fg area/size ratio)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    tab [optional] pixel sum table, can be NULL
+ * \param[out]   pfract fg area/size ratio
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This finds the ratio of the number of fg pixels to the
  *          size of the pix (w * h).  It is typically used for a
  *          single connected component.
+ * </pre>
  */
 l_int32
 pixFindAreaFraction(PIX        *pixs,
@@ -467,27 +491,29 @@ l_int32  *tab8;
     pixCountPixels(pixs, &sum, tab8);
     *pfract = (l_float32)sum / (l_float32)(w * h);
 
-    if (!tab) FREE(tab8);
+    if (!tab) LEPT_FREE(tab8);
     return 0;
 }
 
 
 /*!
- *  pixaFindAreaFractionMasked()
+ * \brief   pixaFindAreaFractionMasked()
  *
- *      Input:  pixa (of 1 bpp pix)
- *              pixm (mask image)
- *              debug (1 for output, 0 to suppress)
- *      Return: na (of ratio masked/total fractions for each pix),
- *                  or null on error
+ * \param[in]    pixa of 1 bpp pix
+ * \param[in]    pixm mask image
+ * \param[in]    debug 1 for output, 0 to suppress
+ * \return  na of ratio masked/total fractions for each pix,
+ *                  or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is typically used for a pixa consisting of
  *          1 bpp connected components, which has an associated
  *          boxa giving the location of the components relative
  *          to the mask origin.
  *      (2) The debug flag displays in green and red the masked and
  *          unmasked parts of the image from which pixa was derived.
+ * </pre>
  */
 NUMA *
 pixaFindAreaFractionMasked(PIXA    *pixa,
@@ -522,7 +548,7 @@ PIX       *pix;
         boxDestroy(&box);
         pixDestroy(&pix);
     }
-    FREE(tab);
+    LEPT_FREE(tab);
 
     if (debug) {
         l_int32  w, h;
@@ -545,17 +571,18 @@ PIX       *pix;
 
 
 /*!
- *  pixFindAreaFractionMasked()
+ * \brief   pixFindAreaFractionMasked()
  *
- *      Input:  pixs (1 bpp, typically a single component)
- *              box (<optional> for pixs relative to pixm)
- *              pixm (1 bpp mask, typically over the entire image from
- *                    which the component pixs was extracted)
- *              tab (<optional> pixel sum table, can be NULL)
- *              &fract (<return> fg area/size ratio)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp, typically a single component
+ * \param[in]    box [optional] for pixs relative to pixm
+ * \param[in]    pixm 1 bpp mask, typically over the entire image from
+ *                    which the component pixs was extracted
+ * \param[in]    tab [optional] pixel sum table, can be NULL
+ * \param[out]   pfract fg area/size ratio
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This finds the ratio of the number of masked fg pixels
  *          in pixs to the total number of fg pixels in pixs.
  *          It is typically used for a single connected component.
@@ -565,6 +592,7 @@ PIX       *pix;
  *          is performed with the pix translated to its location
  *          (x, y) in the mask before ANDing.
  *          If box == NULL, the UL corners of pixs and pixm are aligned.
+ * </pre>
  */
 l_int32
 pixFindAreaFractionMasked(PIX        *pixs,
@@ -601,27 +629,29 @@ PIX      *pix1;
     pixCountPixels(pixs, &sum, tab8);
     if (sum == 0) {
         pixDestroy(&pix1);
-        if (!tab) FREE(tab8);
+        if (!tab) LEPT_FREE(tab8);
         return 0;
     }
     pixCountPixels(pix1, &masksum, tab8);
     *pfract = (l_float32)masksum / (l_float32)sum;
 
-    if (!tab) FREE(tab8);
+    if (!tab) LEPT_FREE(tab8);
     pixDestroy(&pix1);
     return 0;
 }
 
 
 /*!
- *  pixaFindWidthHeightRatio()
+ * \brief   pixaFindWidthHeightRatio()
  *
- *      Input:  pixa (of 1 bpp pix)
- *      Return: na (of width/height ratios for each pix), or null on error
+ * \param[in]    pixa of 1 bpp pix
+ * \return  na of width/height ratios for each pix, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is typically used for a pixa consisting of
  *          1 bpp connected components.
+ * </pre>
  */
 NUMA *
 pixaFindWidthHeightRatio(PIXA  *pixa)
@@ -648,14 +678,16 @@ PIX     *pixt;
 
 
 /*!
- *  pixaFindWidthHeightProduct()
+ * \brief   pixaFindWidthHeightProduct()
  *
- *      Input:  pixa (of 1 bpp pix)
- *      Return: na (of width*height products for each pix), or null on error
+ * \param[in]    pixa of 1 bpp pix
+ * \return  na of width*height products for each pix, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is typically used for a pixa consisting of
  *          1 bpp connected components.
+ * </pre>
  */
 NUMA *
 pixaFindWidthHeightProduct(PIXA  *pixa)
@@ -682,18 +714,20 @@ PIX     *pixt;
 
 
 /*!
- *  pixFindOverlapFraction()
+ * \brief   pixFindOverlapFraction()
  *
- *      Input:  pixs1, pixs2 (1 bpp)
- *              x2, y2 (location in pixs1 of UL corner of pixs2)
- *              tab (<optional> pixel sum table, can be null)
- *              &ratio (<return> ratio fg intersection to fg union)
- *              &noverlap (<optional return> number of overlapping pixels)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs1, pixs2 1 bpp
+ * \param[in]    x2, y2 location in pixs1 of UL corner of pixs2
+ * \param[in]    tab [optional] pixel sum table, can be null
+ * \param[out]   pratio ratio fg intersection to fg union
+ * \param[out]   pnoverlap [optional] number of overlapping pixels
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The UL corner of pixs2 is placed at (x2, y2) in pixs1.
  *      (2) This measure is similar to the correlation.
+ * </pre>
  */
 l_int32
 pixFindOverlapFraction(PIX        *pixs1,
@@ -710,6 +744,7 @@ PIX      *pixt;
 
     PROCNAME("pixFindOverlapFraction");
 
+    if (pnoverlap) *pnoverlap = 0;
     if (!pratio)
         return ERROR_INT("&ratio not defined", procName, 1);
     *pratio = 0.0;
@@ -732,7 +767,7 @@ PIX      *pixt;
     pixCopy(pixt, pixs1);
     pixRasterop(pixt, x2, y2, w, h, PIX_PAINT, pixs2, 0, 0);  /* OR */
     pixCountPixels(pixt, &nunion, tab8);
-    if (!tab) FREE(tab8);
+    if (!tab) LEPT_FREE(tab8);
     pixDestroy(&pixt);
 
     if (nunion > 0)
@@ -742,22 +777,24 @@ PIX      *pixt;
 
 
 /*!
- *  pixFindRectangleComps()
+ * \brief   pixFindRectangleComps()
  *
- *      Input:  pixs (1 bpp)
- *              dist (max distance allowed between bounding box and nearest
- *                    foreground pixel within it)
- *              minw, minh (minimum size in each direction as a requirement
- *                          for a conforming rectangle)
- *      Return: boxa (of components that conform), or null on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    dist max distance allowed between bounding box and nearest
+ *                    foreground pixel within it
+ * \param[in]    minw, minh minimum size in each direction as a requirement
+ *                          for a conforming rectangle
+ * \return  boxa of components that conform, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This applies the function pixConformsToRectangle() to
  *          each 8-c.c. in pixs, and returns a boxa containing the
  *          regions of all components that are conforming.
  *      (2) Conforming components must satisfy both the size constraint
- *          given by @minsize and the slop in conforming to a rectangle
- *          determined by @dist.
+ *          given by %minsize and the slop in conforming to a rectangle
+ *          determined by %dist.
+ * </pre>
  */
 BOXA *
 pixFindRectangleComps(PIX     *pixs,
@@ -804,17 +841,18 @@ PIXA    *pixa;
 
 
 /*!
- *  pixConformsToRectangle()
+ * \brief   pixConformsToRectangle()
  *
- *      Input:  pixs (1 bpp)
- *              box (<optional> if null, use the entire pixs)
- *              dist (max distance allowed between bounding box and nearest
- *                    foreground pixel within it)
- *              &conforms (<return> 0 (false) if not conforming;
- *                        1 (true) if conforming)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs 1 bpp
+ * \param[in]    box [optional] if null, use the entire pixs
+ * \param[in]    dist max distance allowed between bounding box and nearest
+ *                    foreground pixel within it
+ * \param[out]   pconforms 0 (false) if not conforming;
+ *                         1 (true) if conforming
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) There are several ways to test if a connected component has
  *          an essentially rectangular boundary, such as:
  *           a. Fraction of fill into the bounding box
@@ -826,16 +864,17 @@ PIXA    *pixa;
  *          the integrity of the outer boundary of the c.c., with respect
  *          to the enclosing bounding box, so we use it.
  *      (2) This tests if the connected component within the box conforms
- *          to the box at all points on the periphery within @dist.
+ *          to the box at all points on the periphery within %dist.
  *          Inside, at a distance from the box boundary that is greater
- *          than @dist, we don't care about the pixels in the c.c.
+ *          than %dist, we don't care about the pixels in the c.c.
  *      (3) We can think of the conforming condition as follows:
- *          No pixel inside a distance @dist from the boundary
+ *          No pixel inside a distance %dist from the boundary
  *          can connect to the boundary through a path through the bg.
  *          To implement this, we need to do a flood fill.  We can go
  *          either from inside toward the boundary, or the other direction.
  *          It's easiest to fill from the boundary, and then verify that
- *          there are no filled pixels farther than @dist from the boundary.
+ *          there are no filled pixels farther than %dist from the boundary.
+ * </pre>
  */
 l_int32
 pixConformsToRectangle(PIX      *pixs,
@@ -874,11 +913,11 @@ PIX     *pix1, *pix2;
     pixInvert(pix1, pix1);
     pix2 = pixExtractBorderConnComps(pix1, 4);
 
-        /* Mask out all pixels within a distance @dist from the box
+        /* Mask out all pixels within a distance %dist from the box
          * boundary.  Any remaining pixels are from filling that goes
-         * more than @dist from the boundary.  If no pixels remain,
+         * more than %dist from the boundary.  If no pixels remain,
          * the component conforms to the bounding rectangle within
-         * a distance @dist. */
+         * a distance %dist. */
     pixSetOrClearBorder(pix2, dist, dist, dist, dist, PIX_CLR);
     pixZero(pix2, &empty);
     pixDestroy(&pix1);
@@ -892,15 +931,17 @@ PIX     *pix1, *pix2;
  *                      Extract rectangular region                       *
  *-----------------------------------------------------------------------*/
 /*!
- *  pixClipRectangles()
+ * \brief   pixClipRectangles()
  *
- *      Input:  pixs
- *              boxa (requested clipping regions)
- *      Return: pixa (consisting of requested regions), or null on error
+ * \param[in]    pixs
+ * \param[in]    boxa requested clipping regions
+ * \return  pixa consisting of requested regions, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *     (1) The returned pixa includes the actual regions clipped out from
  *         the input pixs.
+ * </pre>
  */
 PIXA *
 pixClipRectangles(PIX   *pixs,
@@ -933,15 +974,16 @@ PIXA    *pixa;
 
 
 /*!
- *  pixClipRectangle()
+ * \brief   pixClipRectangle()
  *
- *      Input:  pixs
- *              box  (requested clipping region; const)
- *              &boxc (<optional return> actual box of clipped region)
- *      Return: clipped pix, or null on error or if rectangle
+ * \param[in]    pixs
+ * \param[in]    box  requested clipping region; const
+ * \param[out]   pboxc [optional] actual box of clipped region
+ * \return  clipped pix, or NULL on error or if rectangle
  *              doesn't intersect pixs
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *
  *  This should be simple, but there are choices to be made.
  *  The box is defined relative to the pix coordinates.  However,
@@ -965,6 +1007,7 @@ PIXA    *pixa;
  *  it is necessary to use the clipped box for alignment.
  *  Accordingly, this function has a third (optional) argument, which is
  *  the input box clipped to the src pix.
+ * </pre>
  */
 PIX *
 pixClipRectangle(PIX   *pixs,
@@ -977,8 +1020,7 @@ PIX     *pixd;
 
     PROCNAME("pixClipRectangle");
 
-    if (pboxc)
-        *pboxc = NULL;
+    if (pboxc) *pboxc = NULL;
     if (!pixs)
         return (PIX *)ERROR_PTR("pixs not defined", procName, NULL);
     if (!box)
@@ -993,10 +1035,13 @@ PIX     *pixd;
     boxGetGeometry(boxc, &bx, &by, &bw, &bh);
 
         /* Extract the block */
-    if ((pixd = pixCreate(bw, bh, d)) == NULL)
+    if ((pixd = pixCreate(bw, bh, d)) == NULL) {
+        boxDestroy(&boxc);
         return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
+    }
     pixCopyResolution(pixd, pixs);
     pixCopyColormap(pixd, pixs);
+    pixCopyText(pixd, pixs);
     pixRasterop(pixd, 0, 0, bw, bh, PIX_SRC, pixs, bx, by);
 
     if (pboxc)
@@ -1009,22 +1054,23 @@ PIX     *pixd;
 
 
 /*!
- *  pixClipMasked()
+ * \brief   pixClipMasked()
  *
- *      Input:  pixs (1, 2, 4, 8, 16, 32 bpp; colormap ok)
- *              pixm  (clipping mask, 1 bpp)
- *              x, y (origin of clipping mask relative to pixs)
- *              outval (val to use for pixels that are outside the mask)
- *      Return: pixd, (clipped pix) or null on error or if pixm doesn't
+ * \param[in]    pixs 1, 2, 4, 8, 16, 32 bpp; colormap ok
+ * \param[in]    pixm  clipping mask, 1 bpp
+ * \param[in]    x, y origin of clipping mask relative to pixs
+ * \param[in]    outval val to use for pixels that are outside the mask
+ * \return  pixd, clipped pix or NULL on error or if pixm doesn't
  *              intersect pixs
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If pixs has a colormap, it is preserved in pixd.
  *      (2) The depth of pixd is the same as that of pixs.
- *      (3) If the depth of pixs is 1, use @outval = 0 for white background
+ *      (3) If the depth of pixs is 1, use %outval = 0 for white background
  *          and 1 for black; otherwise, use the max value for white
  *          and 0 for black.  If pixs has a colormap, the max value for
- *          @outval is 0xffffffff; otherwise, it is 2^d - 1.
+ *          %outval is 0xffffffff; otherwise, it is 2^d - 1.
  *      (4) When using 1 bpp pixs, this is a simple clip and
  *          blend operation.  For example, if both pix1 and pix2 are
  *          black text on white background, and you want to OR the
@@ -1034,6 +1080,7 @@ PIX     *pixd;
  *          corresponding to the fg of the pix2), paint them black
  *          (1) in pix1.  The function call looks like
  *             pixClipMasked(pix2, pixInvert(pix1, pix1), x, y, 1);
+ * </pre>
  */
 PIX *
 pixClipMasked(PIX      *pixs,
@@ -1081,19 +1128,21 @@ PIXCMAP  *cmap;
 
 
 /*!
- *  pixCropToMatch()
+ * \brief   pixCropToMatch()
  *
- *      Input:  pixs1 (any depth, colormap OK)
- *              pixs2 (any depth, colormap OK)
- *              &pixd1 (<return> may be a clone)
- *              &pixd2 (<return> may be a clone)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    pixs1 any depth, colormap OK
+ * \param[in]    pixs2 any depth, colormap OK
+ * \param[out]   ppixd1 may be a clone
+ * \param[out]   ppixd2 may be a clone
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This resizes pixs1 and/or pixs2 by cropping at the right
  *          and bottom, so that they're the same size.
  *      (2) If a pix doesn't need to be cropped, a clone is returned.
  *      (3) Note: the images are implicitly aligned to the UL corner.
+ * </pre>
  */
 l_int32
 pixCropToMatch(PIX   *pixs1,
@@ -1125,16 +1174,18 @@ l_int32  w1, h1, w2, h2, w, h;
 
 
 /*!
- *  pixCropToSize()
+ * \brief   pixCropToSize()
  *
- *      Input:  pixs (any depth, colormap OK)
- *              w, h (max dimensions of cropped image)
- *      Return: pixd (cropped if necessary) or null on error.
+ * \param[in]    pixs any depth, colormap OK
+ * \param[in]    w, h max dimensions of cropped image
+ * \return  pixd cropped if necessary or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If either w or h is smaller than the corresponding dimension
  *          of pixs, this returns a cropped image; otherwise it returns
  *          a clone of pixs.
+ * </pre>
  */
 PIX *
 pixCropToSize(PIX     *pixs,
@@ -1167,14 +1218,15 @@ PIX     *pixd;
 
 
 /*!
- *  pixResizeToMatch()
+ * \brief   pixResizeToMatch()
  *
- *      Input:  pixs (1, 2, 4, 8, 16, 32 bpp; colormap ok)
- *              pixt  (can be null; we use only the size)
- *              w, h (ignored if pixt is defined)
- *      Return: pixd (resized to match) or null on error
+ * \param[in]    pixs 1, 2, 4, 8, 16, 32 bpp; colormap ok
+ * \param[in]    pixt  can be null; we use only the size
+ * \param[in]    w, h ignored if pixt is defined
+ * \return  pixd resized to match or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This resizes pixs to make pixd, without scaling, by either
  *          cropping or extending separately in both width and height.
  *          Extension is done by replicating the last row or column.
@@ -1182,11 +1234,12 @@ PIX     *pixd;
  *          operations, two images that are expected to be the
  *          same size can differ slightly in each dimension.
  *      (2) You can use either an existing pixt or specify
- *          both @w and @h.  If pixt is defined, the values
- *          in @w and @h are ignored.
+ *          both %w and %h.  If pixt is defined, the values
+ *          in %w and %h are ignored.
  *      (3) If pixt is larger than pixs (or if w and/or d is larger
  *          than the dimension of pixs, replicate the outer row and
  *          column of pixels in pixs into pixd.
+ * </pre>
  */
 PIX *
 pixResizeToMatch(PIX     *pixs,
@@ -1235,19 +1288,168 @@ PIX     *pixd;
 
 
 /*---------------------------------------------------------------------*
+ *                          Make a frame mask                          *
+ *---------------------------------------------------------------------*/
+/*!
+ * \brief   pixMakeFrameMask()
+ *
+ * \param[in]    w, h dimensions of output 1 bpp pix
+ * \param[in]    hf1 horizontal fraction of half-width at outer frame bdry
+ * \param[in]    hf2 horizontal fraction of half-width at inner frame bdry
+ * \param[in]    vf1 vertical fraction of half-width at outer frame bdry
+ * \param[in]    vf2 vertical fraction of half-width at inner frame bdry
+ * \return  pixd 1 bpp, or NULL on error.
+ *
+ * <pre>
+ * Notes:
+ *      (1) This makes an arbitrary 1-component mask with a centered fg
+ *          frame, which can have both an inner and an outer boundary.
+ *          All input fractional distances are measured from the image
+ *          border to the frame boundary, in units of the image half-width
+ *          for hf1 and hf2 and the image half-height for vf1 and vf2.
+ *          The distances to the outer frame boundary are given by hf1
+ *          and vf1; to the inner frame boundary, by hf2 and vf2.
+ *          Input fractions are thus in [0.0 ... 1.0], with hf1 <= hf2
+ *          and vf1 <= vf2.  Horizontal and vertical frame widths are
+ *          thus independently specified.
+ *      (2) Special cases:
+ *           * full fg mask: hf1 = vf1 = 0.0, hf2 = vf2 = 1.0.
+ *           * empty fg (zero width) mask: set  hf1 = hf2  and vf1 = vf2.
+ *           * fg rectangle with no hole: set hf2 = vf2 = 1.0.
+ *           * frame touching outer boundary: set hf1 = vf1 = 0.0.
+ *      (3) The vertical thickness of the horizontal mask parts
+ *          is 0.5 * (vf2 - vf1) * h.  The horizontal thickness of the
+ *          vertical mask parts is 0.5 * (hf2 - hf1) * w.
+ * </pre>
+ */
+PIX *
+pixMakeFrameMask(l_int32    w,
+                 l_int32    h,
+                 l_float32  hf1,
+                 l_float32  hf2,
+                 l_float32  vf1,
+                 l_float32  vf2)
+{
+l_int32  h1, h2, v1, v2;
+PIX     *pixd;
+
+    PROCNAME("pixMakeFrameMask");
+
+    if (w <= 0 || h <= 0)
+        return (PIX *)ERROR_PTR("mask size 0", procName, NULL);
+    if (hf1 < 0.0 || hf1 > 1.0 || hf2 < 0.0 || hf2 > 1.0)
+        return (PIX *)ERROR_PTR("invalid horiz fractions", procName, NULL);
+    if (vf1 < 0.0 || vf1 > 1.0 || vf2 < 0.0 || vf2 > 1.0)
+        return (PIX *)ERROR_PTR("invalid vert fractions", procName, NULL);
+    if (hf1 > hf2 || vf1 > vf2)
+        return (PIX *)ERROR_PTR("invalid relative sizes", procName, NULL);
+
+    pixd = pixCreate(w, h, 1);
+
+        /* Special cases */
+    if (hf1 == 0.0 && vf1 == 0.0 && hf2 == 1.0 && vf2 == 1.0) {  /* full */
+        pixSetAll(pixd);
+        return pixd;
+    }
+    if (hf1 == hf2 && vf1 == vf2) {  /* empty */
+        return pixd;
+    }
+
+        /* General case */
+    h1 = 0.5 * hf1 * w;
+    h2 = 0.5 * hf2 * w;
+    v1 = 0.5 * vf1 * h;
+    v2 = 0.5 * vf2 * h;
+    pixRasterop(pixd, h1, v1, w - 2 * h1, h - 2 * v1, PIX_SET, NULL, 0, 0);
+    if (hf2 < 1.0 && vf2 < 1.0)
+        pixRasterop(pixd, h2, v2, w - 2 * h2, h - 2 * v2, PIX_CLR, NULL, 0, 0);
+    return pixd;
+}
+
+
+/*---------------------------------------------------------------------*
+ *                 Fraction of Fg pixels under a mask                  *
+ *---------------------------------------------------------------------*/
+/*!
+ * \brief   pixFractionFgInMask()
+ *
+ * \param[in]    pix1 1 bpp
+ * \param[in]    pix2 1 bpp
+ * \param[out]   pfract fraction of fg pixels in 1 that are
+ *                      aligned with the fg of 2
+ * \return  0 if OK, 1 on error.
+ *
+ * <pre>
+ * Notes:
+ *      (1) This gives the fraction of fg pixels in pix1 that are in
+ *          the intersection (i.e., under the fg) of pix2:
+ *          |1 & 2|/|1|, where |...| means the number of fg pixels.
+ *          Note that this is different from the situation where
+ *          pix1 and pix2 are reversed.
+ *      (2) Both pix1 and pix2 are registered to the UL corners.  A warning
+ *          is issued if pix1 and pix2 have different sizes.
+ *      (3) This can also be used to find the fraction of fg pixels in pix1
+ *          that are NOT under the fg of pix2: 1.0 - |1 & 2|/|1|
+ *      (4) If pix1 or pix2 are empty, this returns %fract = 0.0.
+ *      (5) For example, pix2 could be a frame around the outside of the
+ *          image, made from pixMakeFrameMask().
+ * </pre>
+ */
+l_int32
+pixFractionFgInMask(PIX        *pix1,
+                    PIX        *pix2,
+                    l_float32  *pfract)
+{
+l_int32  w1, h1, w2, h2, empty, count1, count3;
+PIX     *pix3;
+
+    PROCNAME("pixFractionFgInMask");
+
+    if (!pfract)
+        return ERROR_INT("&fract not defined", procName, 1);
+    *pfract = 0.0;
+    if (!pix1 || pixGetDepth(pix1) != 1)
+        return ERROR_INT("pix1 not defined or not 1 bpp", procName, 1);
+    if (!pix2 || pixGetDepth(pix2) != 1)
+        return ERROR_INT("pix2 not defined or not 1 bpp", procName, 1);
+
+    pixGetDimensions(pix1, &w1, &h1, NULL);
+    pixGetDimensions(pix2, &w2, &h2, NULL);
+    if (w1 != w2 || h1 != h2) {
+        L_INFO("sizes unequal: (w1,w2) = (%d,%d), (h1,h2) = (%d,%d)\n",
+               procName, w1, w2, h1, h2);
+    }
+    pixZero(pix1, &empty);
+    if (empty) return 0;
+    pixZero(pix2, &empty);
+    if (empty) return 0;
+
+    pix3 = pixCopy(NULL, pix1);
+    pixAnd(pix3, pix3, pix2);
+    pixCountPixels(pix1, &count1, NULL);  /* |1| */
+    pixCountPixels(pix3, &count3, NULL);  /* |1 & 2| */
+    *pfract = (l_float32)count3 / (l_float32)count1;
+    pixDestroy(&pix3);
+    return 0;
+}
+
+
+/*---------------------------------------------------------------------*
  *                           Clip to Foreground                        *
  *---------------------------------------------------------------------*/
 /*!
- *  pixClipToForeground()
+ * \brief   pixClipToForeground()
  *
- *      Input:  pixs (1 bpp)
- *              &pixd  (<optional return> clipped pix returned)
- *              &box   (<optional return> bounding box)
- *      Return: 0 if OK; 1 on error or if there are no fg pixels
+ * \param[in]    pixs 1 bpp
+ * \param[out]   ppixd  [optional] clipped pix returned
+ * \param[out]   pbox   [optional] bounding box
+ * \return  0 if OK; 1 on error or if there are no fg pixels
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) At least one of {&pixd, &box} must be specified.
  *      (2) If there are no fg pixels, the returned ptrs are null.
+ * </pre>
  */
 l_int32
 pixClipToForeground(PIX   *pixs,
@@ -1262,12 +1464,10 @@ BOX       *box;
 
     PROCNAME("pixClipToForeground");
 
+    if (ppixd) *ppixd = NULL;
+    if (pbox) *pbox = NULL;
     if (!ppixd && !pbox)
-        return ERROR_INT("neither &pixd nor &box defined", procName, 1);
-    if (ppixd)
-        *ppixd = NULL;
-    if (pbox)
-        *pbox = NULL;
+        return ERROR_INT("no output requested", procName, 1);
     if (!pixs || (pixGetDepth(pixs) != 1))
         return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
 
@@ -1335,16 +1535,21 @@ maxx_found:
 
 
 /*!
- *  pixTestClipToForeground()
+ * \brief   pixTestClipToForeground()
  *
- *      Input:  pixs (1 bpp)
- *              &canclip (<return> 1 if fg does not extend to all four edges)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pixs 1 bpp
+ * \param[out]   pcanclip 1 if fg does not extend to all four edges
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) This is a lightweight test to determine if a 1 bpp image
  *          can be further cropped without loss of fg pixels.
  *          If it cannot, canclip is set to 0.
+ *      (2) It does not test for the existence of any fg pixels.
+ *          If there are no fg pixels, it will return %canclip = 1.
+ *          Check the output of the subsequent call to pixClipToForeground().
+ * </pre>
  */
 l_int32
 pixTestClipToForeground(PIX      *pixs,
@@ -1402,19 +1607,21 @@ l_uint32  *data, *line;
 
 
 /*!
- *  pixClipBoxToForeground()
+ * \brief   pixClipBoxToForeground()
  *
- *      Input:  pixs (1 bpp)
- *              boxs  (<optional> ; use full image if null)
- *              &pixd  (<optional return> clipped pix returned)
- *              &boxd  (<optional return> bounding box)
- *      Return: 0 if OK; 1 on error or if there are no fg pixels
+ * \param[in]    pixs 1 bpp
+ * \param[in]    boxs  [optional] ; use full image if null
+ * \param[out]   ppixd  [optional] clipped pix returned
+ * \param[out]   pboxd  [optional] bounding box
+ * \return  0 if OK; 1 on error or if there are no fg pixels
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) At least one of {&pixd, &boxd} must be specified.
  *      (2) If there are no fg pixels, the returned ptrs are null.
  *      (3) Do not use &pixs for the 3rd arg or &boxs for the 4th arg;
  *          this will leak memory.
+ * </pre>
  */
 l_int32
 pixClipBoxToForeground(PIX   *pixs,
@@ -1427,10 +1634,10 @@ BOX     *boxt, *boxd;
 
     PROCNAME("pixClipBoxToForeground");
 
-    if (!ppixd && !pboxd)
-        return ERROR_INT("neither &pixd nor &boxd defined", procName, 1);
     if (ppixd) *ppixd = NULL;
     if (pboxd) *pboxd = NULL;
+    if (!ppixd && !pboxd)
+        return ERROR_INT("no output requested", procName, 1);
     if (!pixs || (pixGetDepth(pixs) != 1))
         return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
 
@@ -1467,18 +1674,20 @@ BOX     *boxt, *boxd;
 
 
 /*!
- *  pixScanForForeground()
+ * \brief   pixScanForForeground()
  *
- *      Input:  pixs (1 bpp)
- *              box  (<optional> within which the search is conducted)
- *              scanflag (direction of scan; e.g., L_FROM_LEFT)
- *              &loc (location in scan direction of first black pixel)
- *      Return: 0 if OK; 1 on error or if no fg pixels are found
+ * \param[in]    pixs 1 bpp
+ * \param[in]    box  [optional] within which the search is conducted
+ * \param[in]    scanflag direction of scan; e.g., L_FROM_LEFT
+ * \param[out]   ploc location in scan direction of first black pixel
+ * \return  0 if OK; 1 on error or if no fg pixels are found
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If there are no fg pixels, the position is set to 0.
  *          Caller must check the return value!
- *      (2) Use @box == NULL to scan from edge of pixs
+ *      (2) Use %box == NULL to scan from edge of pixs
+ * </pre>
  */
 l_int32
 pixScanForForeground(PIX      *pixs,
@@ -1564,20 +1773,21 @@ BOX       *boxt;
 
 
 /*!
- *  pixClipBoxToEdges()
+ * \brief   pixClipBoxToEdges()
  *
- *      Input:  pixs (1 bpp)
- *              boxs  (<optional> ; use full image if null)
- *              lowthresh (threshold to choose clipping location)
- *              highthresh (threshold required to find an edge)
- *              maxwidth (max allowed width between low and high thresh locs)
- *              factor (sampling factor along pixel counting direction)
- *              &pixd  (<optional return> clipped pix returned)
- *              &boxd  (<optional return> bounding box)
- *      Return: 0 if OK; 1 on error or if a fg edge is not found from
+ * \param[in]    pixs 1 bpp
+ * \param[in]    boxs  [optional] ; use full image if null
+ * \param[in]    lowthresh threshold to choose clipping location
+ * \param[in]    highthresh threshold required to find an edge
+ * \param[in]    maxwidth max allowed width between low and high thresh locs
+ * \param[in]    factor sampling factor along pixel counting direction
+ * \param[out]   ppixd  [optional] clipped pix returned
+ * \param[out]   pboxd  [optional] bounding box
+ * \return  0 if OK; 1 on error or if a fg edge is not found from
  *              all four sides.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) At least one of {&pixd, &boxd} must be specified.
  *      (2) If there are no fg pixels, the returned ptrs are null.
  *      (3) This function attempts to locate rectangular "image" regions
@@ -1588,11 +1798,12 @@ BOX       *boxt;
  *          found, the search box is resized to use that location.
  *          Once an edge is found, it is held.  If no more edges
  *          are found in one iteration, the search fails.
- *      (5) See pixScanForEdge() for usage of the thresholds and @maxwidth.
+ *      (5) See pixScanForEdge() for usage of the thresholds and %maxwidth.
  *      (6) The thresholds must be at least 1, and the low threshold
  *          cannot be larger than the high threshold.
  *      (7) If the low and high thresholds are both 1, this is equivalent
  *          to pixClipBoxToForeground().
+ * </pre>
  */
 l_int32
 pixClipBoxToEdges(PIX     *pixs,
@@ -1610,10 +1821,10 @@ BOX     *boxt, *boxd;
 
     PROCNAME("pixClipBoxToEdges");
 
-    if (!ppixd && !pboxd)
-        return ERROR_INT("neither &pixd nor &boxd defined", procName, 1);
     if (ppixd) *ppixd = NULL;
     if (pboxd) *pboxd = NULL;
+    if (!ppixd && !pboxd)
+        return ERROR_INT("no output requested", procName, 1);
     if (!pixs || (pixGetDepth(pixs) != 1))
         return ERROR_INT("pixs not defined or not 1 bpp", procName, 1);
     if (lowthresh < 1 || highthresh < 1 ||
@@ -1696,31 +1907,33 @@ BOX     *boxt, *boxd;
 
 
 /*!
- *  pixScanForEdge()
+ * \brief   pixScanForEdge()
  *
- *      Input:  pixs (1 bpp)
- *              box  (<optional> within which the search is conducted)
- *              lowthresh (threshold to choose clipping location)
- *              highthresh (threshold required to find an edge)
- *              maxwidth (max allowed width between low and high thresh locs)
- *              factor (sampling factor along pixel counting direction)
- *              scanflag (direction of scan; e.g., L_FROM_LEFT)
- *              &loc (location in scan direction of first black pixel)
- *      Return: 0 if OK; 1 on error or if the edge is not found
+ * \param[in]    pixs 1 bpp
+ * \param[in]    box  [optional] within which the search is conducted
+ * \param[in]    lowthresh threshold to choose clipping location
+ * \param[in]    highthresh threshold required to find an edge
+ * \param[in]    maxwidth max allowed width between low and high thresh locs
+ * \param[in]    factor sampling factor along pixel counting direction
+ * \param[in]    scanflag direction of scan; e.g., L_FROM_LEFT
+ * \param[out]   ploc location in scan direction of first black pixel
+ * \return  0 if OK; 1 on error or if the edge is not found
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If there are no fg pixels, the position is set to 0.
  *          Caller must check the return value!
- *      (2) Use @box == NULL to scan from edge of pixs
+ *      (2) Use %box == NULL to scan from edge of pixs
  *      (3) As the scan progresses, the location where the sum of
- *          pixels equals or excees @lowthresh is noted (loc).  The
+ *          pixels equals or excees %lowthresh is noted (loc).  The
  *          scan is stopped when the sum of pixels equals or exceeds
- *          @highthresh.  If the scan distance between loc and that
- *          point does not exceed @maxwidth, an edge is found and
- *          its position is taken to be loc.  @maxwidth implicitly
+ *          %highthresh.  If the scan distance between loc and that
+ *          point does not exceed %maxwidth, an edge is found and
+ *          its position is taken to be loc.  %maxwidth implicitly
  *          sets a minimum on the required gradient of the edge.
  *      (4) The thresholds must be at least 1, and the low threshold
  *          cannot be larger than the high threshold.
+ * </pre>
  */
 l_int32
 pixScanForEdge(PIX      *pixs,
@@ -1883,15 +2096,16 @@ BOX       *boxt;
  *           Extract pixel averages and reversals along lines          *
  *---------------------------------------------------------------------*/
 /*!
- *  pixExtractOnLine()
+ * \brief   pixExtractOnLine()
  *
- *      Input:  pixs (1 bpp or 8 bpp; no colormap)
- *              x1, y1 (one end point for line)
- *              x2, y2 (another end pt for line)
- *              factor (sampling; >= 1)
- *      Return: na (of pixel values along line), or null on error.
+ * \param[in]    pixs 1 bpp or 8 bpp; no colormap
+ * \param[in]    x1, y1 one end point for line
+ * \param[in]    x2, y2 another end pt for line
+ * \param[in]    factor sampling; >= 1
+ * \return  na of pixel values along line, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Input end points are clipped to the pix.
  *      (2) If the line is either horizontal, or closer to horizontal
  *          than to vertical, the points will be extracted from left
@@ -1900,6 +2114,7 @@ BOX       *boxt;
  *          be extracted from top to bottom.
  *      (3) Can be used with numaCountReverals(), for example, to
  *          characterize the intensity smoothness along a line.
+ * </pre>
  */
 NUMA *
 pixExtractOnLine(PIX     *pixs,
@@ -1992,7 +2207,7 @@ PTA       *pta;
         }
 
 #if 0  /* debugging */
-        pixPlotAlongPta(pixs, pta, GPLOT_X11, NULL);
+        pixPlotAlongPta(pixs, pta, GPLOT_PNG, NULL);
 #endif
 
         ptaDestroy(&pta);
@@ -2003,21 +2218,23 @@ PTA       *pta;
 
 
 /*!
- *  pixAverageOnLine()
+ * \brief   pixAverageOnLine()
  *
- *      Input:  pixs (1 bpp or 8 bpp; no colormap)
- *              x1, y1 (starting pt for line)
- *              x2, y2 (end pt for line)
- *              factor (sampling; >= 1)
- *      Return: average of pixel values along line, or null on error.
+ * \param[in]    pixs 1 bpp or 8 bpp; no colormap
+ * \param[in]    x1, y1 starting pt for line
+ * \param[in]    x2, y2 end pt for line
+ * \param[in]    factor sampling; >= 1
+ * \return  average of pixel values along line, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The line must be either horizontal or vertical, so either
  *          y1 == y2 (horizontal) or x1 == x2 (vertical).
  *      (2) If horizontal, x1 must be <= x2.
  *          If vertical, y1 must be <= y2.
  *          characterize the intensity smoothness along a line.
  *      (3) Input end points are clipped to the pix.
+ * </pre>
  */
 l_float32
 pixAverageOnLine(PIX     *pixs,
@@ -2065,6 +2282,7 @@ l_float32  sum;
     data = pixGetData(pixs);
     wpl = pixGetWpl(pixs);
     sum = 0;
+    count = 0;
     if (direction == L_HORIZONTAL_LINE) {
         line = data + y1 * wpl;
         for (j = x1, count = 0; j <= x2; count++, j += factor) {
@@ -2088,31 +2306,33 @@ l_float32  sum;
 
 
 /*!
- *  pixAverageIntensityProfile()
+ * \brief   pixAverageIntensityProfile()
  *
- *      Input:  pixs (any depth; colormap OK)
- *              fract (fraction of image width or height to be used)
- *              dir (averaging direction: L_HORIZONTAL_LINE or L_VERTICAL_LINE)
- *              first, last (span of rows or columns to measure)
- *              factor1 (sampling along fast scan direction; >= 1)
- *              factor2 (sampling along slow scan direction; >= 1)
- *      Return: na (of reversal profile), or null on error.
+ * \param[in]    pixs any depth; colormap OK
+ * \param[in]    fract fraction of image width or height to be used
+ * \param[in]    dir averaging direction: L_HORIZONTAL_LINE or L_VERTICAL_LINE
+ * \param[in]    first, last span of rows or columns to measure
+ * \param[in]    factor1 sampling along fast scan direction; >= 1
+ * \param[in]    factor2 sampling along slow scan direction; >= 1
+ * \return  na of reversal profile, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If d != 1 bpp, colormaps are removed and the result
  *          is converted to 8 bpp.
- *      (2) If @dir == L_HORIZONTAL_LINE, the intensity is averaged
- *          along each horizontal raster line (sampled by @factor1),
+ *      (2) If %dir == L_HORIZONTAL_LINE, the intensity is averaged
+ *          along each horizontal raster line (sampled by %factor1),
  *          and the profile is the array of these averages in the
- *          vertical direction between @first and @last raster lines,
- *          and sampled by @factor2.
- *      (3) If @dir == L_VERTICAL_LINE, the intensity is averaged
- *          along each vertical line (sampled by @factor1),
+ *          vertical direction between %first and %last raster lines,
+ *          and sampled by %factor2.
+ *      (3) If %dir == L_VERTICAL_LINE, the intensity is averaged
+ *          along each vertical line (sampled by %factor1),
  *          and the profile is the array of these averages in the
- *          horizontal direction between @first and @last columns,
- *          and sampled by @factor2.
- *      (4) The averages are measured over the central @fract of the image.
- *          Use @fract == 1.0 to average across the entire width or height.
+ *          horizontal direction between %first and %last columns,
+ *          and sampled by %factor2.
+ *      (4) The averages are measured over the central %fract of the image.
+ *          Use %fract == 1.0 to average across the entire width or height.
+ * </pre>
  */
 NUMA *
 pixAverageIntensityProfile(PIX       *pixs,
@@ -2192,39 +2412,41 @@ PIX       *pixr, *pixg;
 
 
 /*!
- *  pixReversalProfile()
+ * \brief   pixReversalProfile()
  *
- *      Input:  pixs (any depth; colormap OK)
- *              fract (fraction of image width or height to be used)
- *              dir (profile direction: L_HORIZONTAL_LINE or L_VERTICAL_LINE)
- *              first, last (span of rows or columns to measure)
- *              minreversal (minimum change in intensity to trigger a reversal)
- *              factor1 (sampling along raster line (fast scan); >= 1)
- *              factor2 (sampling of raster lines (slow scan); >= 1)
- *      Return: na (of reversal profile), or null on error.
+ * \param[in]    pixs any depth; colormap OK
+ * \param[in]    fract fraction of image width or height to be used
+ * \param[in]    dir profile direction: L_HORIZONTAL_LINE or L_VERTICAL_LINE
+ * \param[in]    first, last span of rows or columns to measure
+ * \param[in]    minreversal minimum change in intensity to trigger a reversal
+ * \param[in]    factor1 sampling along raster line (fast scan); >= 1
+ * \param[in]    factor2 sampling of raster lines (slow scan); >= 1
+ * \return  na of reversal profile, or NULL on error.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If d != 1 bpp, colormaps are removed and the result
  *          is converted to 8 bpp.
- *      (2) If @dir == L_HORIZONTAL_LINE, the the reversals are counted
- *          along each horizontal raster line (sampled by @factor1),
+ *      (2) If %dir == L_HORIZONTAL_LINE, the the reversals are counted
+ *          along each horizontal raster line (sampled by %factor1),
  *          and the profile is the array of these sums in the
- *          vertical direction between @first and @last raster lines,
- *          and sampled by @factor2.
- *      (3) If @dir == L_VERTICAL_LINE, the the reversals are counted
- *          along each vertical column (sampled by @factor1),
+ *          vertical direction between %first and %last raster lines,
+ *          and sampled by %factor2.
+ *      (3) If %dir == L_VERTICAL_LINE, the the reversals are counted
+ *          along each vertical column (sampled by %factor1),
  *          and the profile is the array of these sums in the
- *          horizontal direction between @first and @last columns,
- *          and sampled by @factor2.
+ *          horizontal direction between %first and %last columns,
+ *          and sampled by %factor2.
  *      (4) For each row or column, the reversals are summed over the
- *          central @fract of the image.  Use @fract == 1.0 to sum
+ *          central %fract of the image.  Use %fract == 1.0 to sum
  *          across the entire width (of row) or height (of column).
- *      (5) @minreversal is the relative change in intensity that is
+ *      (5) %minreversal is the relative change in intensity that is
  *          required to resolve peaks and valleys.  A typical number for
  *          locating text in 8 bpp might be 50.  For 1 bpp, minreversal
  *          must be 1.
  *      (6) The reversal profile is simply the number of reversals
  *          in a row or column, vs the row or column index.
+ * </pre>
  */
 NUMA *
 pixReversalProfile(PIX       *pixs,
@@ -2313,25 +2535,27 @@ PIX      *pixr, *pixg;
  *                 Extract windowed variance along a line              *
  *---------------------------------------------------------------------*/
 /*!
- *  pixWindowedVarianceOnLine()
+ * \brief   pixWindowedVarianceOnLine()
  *
- *      Input:  pixs (8 bpp; no colormap)
- *              dir (L_HORIZONTAL_LINE or L_VERTICAL_LINE)
- *              loc (location of the constant coordinate for the line)
- *              c1, c2 (end point coordinates for the line)
- *              size (window size; must be > 1)
- *              &nad (<return> windowed square root of variance)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    pixs 8 bpp; no colormap
+ * \param[in]    dir L_HORIZONTAL_LINE or L_VERTICAL_LINE
+ * \param[in]    loc location of the constant coordinate for the line
+ * \param[in]    c1, c2 end point coordinates for the line
+ * \param[in]    size window size; must be > 1
+ * \param[out]   pnad windowed square root of variance
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) The returned variance array traverses the line starting
  *          from the smallest coordinate, min(c1,c2).
  *      (2) Line end points are clipped to pixs.
  *      (3) The reference point for the variance calculation is the center of
  *          the window.  Therefore, the numa start parameter from
- *          pixExtractOnLine() is incremented by @size/2,
+ *          pixExtractOnLine() is incremented by %size/2,
  *          to align the variance values with the pixel coordinate.
  *      (4) The square root of the variance is the RMS deviation from the mean.
+ * </pre>
  */
 l_int32
 pixWindowedVarianceOnLine(PIX     *pixs,
@@ -2405,7 +2629,7 @@ PTA        *pta;
         for (j = 0; j < size; j++) {  /* over the window */
             val = array[i + j];
             sum1 += val;
-            sum2 += val * val;
+            sum2 += (l_float64)(val) * val;
         }
         ave = norm * sum1;
         var = norm * sum2 - ave * ave;
@@ -2422,32 +2646,34 @@ PTA        *pta;
  *              Extract min/max of pixel values near lines             *
  *---------------------------------------------------------------------*/
 /*!
- *  pixMinMaxNearLine()
+ * \brief   pixMinMaxNearLine()
  *
- *      Input:  pixs (8 bpp; no colormap)
- *              x1, y1 (starting pt for line)
- *              x2, y2 (end pt for line)
- *              dist (distance to search from line in each direction)
- *              direction (L_SCAN_NEGATIVE, L_SCAN_POSITIVE, L_SCAN_BOTH)
- *              &namin (<optional return> minimum values)
- *              &namax (<optional return> maximum values)
- *              &minave (<optional return> average of minimum values)
- *              &maxave (<optional return> average of maximum values)
- *      Return: 0 if OK; 1 on error or if there are no sampled points
+ * \param[in]    pixs 8 bpp; no colormap
+ * \param[in]    x1, y1 starting pt for line
+ * \param[in]    x2, y2 end pt for line
+ * \param[in]    dist distance to search from line in each direction
+ * \param[in]    direction L_SCAN_NEGATIVE, L_SCAN_POSITIVE, L_SCAN_BOTH
+ * \param[out]   pnamin [optional] minimum values
+ * \param[out]   pnamax [optional] maximum values
+ * \param[out]   pminave [optional] average of minimum values
+ * \param[out]   pmaxave [optional] average of maximum values
+ * \return  0 if OK; 1 on error or if there are no sampled points
  *              within the image.
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If the line is more horizontal than vertical, the values
  *          are computed for [x1, x2], and the pixels are taken
  *          below and/or above the local y-value.  Otherwise, the
  *          values are computed for [y1, y2] and the pixels are taken
  *          to the left and/or right of the local x value.
- *      (2) @direction specifies which side (or both sides) of the
+ *      (2) %direction specifies which side (or both sides) of the
  *          line are scanned for min and max values.
  *      (3) There are two ways to tell if the returned values of min
  *          and max averages are valid: the returned values cannot be
  *          negative and the function must return 0.
  *      (4) All accessed pixels are clipped to the pix.
+ * </pre>
  */
 l_int32
 pixMinMaxNearLine(PIX        *pixs,
@@ -2560,15 +2786,17 @@ PTA       *pta;
  *                     Rank row and column transforms                  *
  *---------------------------------------------------------------------*/
 /*!
- *  pixRankRowTransform()
+ * \brief   pixRankRowTransform()
  *
- *      Input:  pixs (8 bpp; no colormap)
- *      Return: pixd (with pixels sorted in each row, from
- *                    min to max value)
+ * \param[in]    pixs 8 bpp; no colormap
+ * \return  pixd with pixels sorted in each row, from
+ *                    min to max value
  *
+ * <pre>
  * Notes:
  *     (1) The time is O(n) in the number of pixels and runs about
  *         100 Mpixels/sec on a 3 GHz machine.
+ * </pre>
  */
 PIX *
 pixRankRowTransform(PIX  *pixs)
@@ -2588,7 +2816,7 @@ PIX       *pixd;
         return (PIX *)ERROR_PTR("pixs has a colormap", procName, NULL);
 
     pixGetDimensions(pixs, &w, &h, NULL);
-    pixd = pixCreateTemplateNoInit(pixs);
+    pixd = pixCreateTemplate(pixs);
     datas = pixGetData(pixs);
     datad = pixGetData(pixd);
     wpl = pixGetWpl(pixs);
@@ -2611,15 +2839,17 @@ PIX       *pixd;
 
 
 /*!
- *  pixRankColumnTransform()
+ * \brief   pixRankColumnTransform()
  *
- *      Input:  pixs (8 bpp; no colormap)
- *      Return: pixd (with pixels sorted in each column, from
- *                    min to max value)
+ * \param[in]    pixs 8 bpp; no colormap
+ * \return  pixd with pixels sorted in each column, from
+ *                    min to max value
  *
+ * <pre>
  * Notes:
  *     (1) The time is O(n) in the number of pixels and runs about
  *         50 Mpixels/sec on a 3 GHz machine.
+ * </pre>
  */
 PIX *
 pixRankColumnTransform(PIX  *pixs)
@@ -2639,7 +2869,7 @@ PIX       *pixd;
         return (PIX *)ERROR_PTR("pixs has a colormap", procName, NULL);
 
     pixGetDimensions(pixs, &w, &h, NULL);
-    pixd = pixCreateTemplateNoInit(pixs);
+    pixd = pixCreateTemplate(pixs);
     lines8 = pixGetLinePtrs(pixs, NULL);
     lined8 = pixGetLinePtrs(pixd, NULL);
     for (j = 0; j < w; j++) {
@@ -2654,7 +2884,7 @@ PIX       *pixd;
         }
     }
 
-    FREE(lines8);
-    FREE(lined8);
+    LEPT_FREE(lines8);
+    LEPT_FREE(lined8);
     return pixd;
 }

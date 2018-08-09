@@ -24,8 +24,9 @@
  -  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *====================================================================*/
 
-/*
- *  fpix1.c
+/*!
+ * \file fpix1.c
+ * <pre>
  *
  *    This file has basic constructors, destructors and field accessors
  *    for FPix, FPixa and DPix.  It also has uncompressed read/write.
@@ -68,6 +69,7 @@
  *          l_int32        fpixaChangeRefcount()
  *          FPIX          *fpixaGetFPix()
  *          l_int32        fpixaGetFPixDimensions()
+ *          l_float32     *fpixaGetData()
  *          l_int32        fpixaGetPixel()
  *          l_int32        fpixaSetPixel()
  *
@@ -97,19 +99,24 @@
  *    FPix serialized I/O
  *          FPIX          *fpixRead()
  *          FPIX          *fpixReadStream()
+ *          FPIX          *fpixReadMem()
  *          l_int32        fpixWrite()
  *          l_int32        fpixWriteStream()
+ *          l_int32        fpixWriteMem()
  *          FPIX          *fpixEndianByteSwap()
  *
  *    DPix serialized I/O
  *          DPIX          *dpixRead()
  *          DPIX          *dpixReadStream()
+ *          DPIX          *dpixReadMem()
  *          l_int32        dpixWrite()
  *          l_int32        dpixWriteStream()
+ *          l_int32        dpixWriteMem()
  *          DPIX          *dpixEndianByteSwap()
  *
  *    Print FPix (subsampled, for debugging)
  *          l_int32        fpixPrintStream()
+ * </pre>
  */
 
 #include <string.h>
@@ -126,22 +133,24 @@ static l_int32 fpixaExtendArrayToSize(FPIXA *fpixa, l_int32 size);
  *                     FPix Create/copy/destroy                       *
  *--------------------------------------------------------------------*/
 /*!
- *  fpixCreate()
+ * \brief   fpixCreate()
  *
- *      Input:  width, height
- *      Return: fpixd (with data allocated and initialized to 0),
- *                     or null on error
+ * \param[in]       width, height
+ * \return  fpixd   with data allocated and initialized to 0, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Makes a FPix of specified size, with the data array
  *          allocated and initialized to 0.
+ *      (2) The number of pixels must be less than 2^29.
+ * </pre>
  */
 FPIX *
 fpixCreate(l_int32  width,
            l_int32  height)
 {
 l_float32  *data;
-l_uint64    bignum;
+l_uint64    npix64;
 FPIX       *fpixd;
 
     PROCNAME("fpixCreate");
@@ -152,37 +161,39 @@ FPIX       *fpixd;
         return (FPIX *)ERROR_PTR("height must be > 0", procName, NULL);
 
         /* Avoid overflow in malloc arg, malicious or otherwise */
-    bignum = 4L * width * height;   /* max number of bytes requested */
-    if (bignum > ((1LL << 31) - 1)) {
+    npix64 = (l_uint64)width * (l_uint64)height;   /* # of 4-byte pixels */
+    if (npix64 >= (1LL << 29)) {
         L_ERROR("requested w = %d, h = %d\n", procName, width, height);
         return (FPIX *)ERROR_PTR("requested bytes >= 2^31", procName, NULL);
     }
 
-    if ((fpixd = (FPIX *)CALLOC(1, sizeof(FPIX))) == NULL)
-        return (FPIX *)ERROR_PTR("CALLOC fail for fpixd", procName, NULL);
+    fpixd = (FPIX *)LEPT_CALLOC(1, sizeof(FPIX));
     fpixSetDimensions(fpixd, width, height);
     fpixSetWpl(fpixd, width);  /* 4-byte words */
     fpixd->refcount = 1;
 
-    data = (l_float32 *)CALLOC(width * height, sizeof(l_float32));
-    if (!data)
-        return (FPIX *)ERROR_PTR("CALLOC fail for data", procName, NULL);
+    data = (l_float32 *)LEPT_CALLOC(width * height, sizeof(l_float32));
+    if (!data) {
+        fpixDestroy(&fpixd);
+        return (FPIX *)ERROR_PTR("calloc fail for data", procName, NULL);
+    }
     fpixSetData(fpixd, data);
-
     return fpixd;
 }
 
 
 /*!
- *  fpixCreateTemplate()
+ * \brief   fpixCreateTemplate()
  *
- *      Input:  fpixs
- *      Return: fpixd, or null on error
+ * \param[in]    fpixs
+ * \return  fpixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Makes a FPix of the same size as the input FPix, with the
  *          data array allocated and initialized to 0.
  *      (2) Copies the resolution.
+ * </pre>
  */
 FPIX *
 fpixCreateTemplate(FPIX  *fpixs)
@@ -196,20 +207,23 @@ FPIX    *fpixd;
         return (FPIX *)ERROR_PTR("fpixs not defined", procName, NULL);
 
     fpixGetDimensions(fpixs, &w, &h);
-    fpixd = fpixCreate(w, h);
+    if ((fpixd = fpixCreate(w, h)) == NULL)
+        return (FPIX *)ERROR_PTR("fpixd not made", procName, NULL);
     fpixCopyResolution(fpixd, fpixs);
     return fpixd;
 }
 
 
 /*!
- *  fpixClone()
+ * \brief   fpixClone()
  *
- *      Input:  fpix
- *      Return: same fpix (ptr), or null on error
+ * \param[in]    fpix
+ * \return  same fpix ptr, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See pixClone() for definition and usage.
+ * </pre>
  */
 FPIX *
 fpixClone(FPIX  *fpix)
@@ -225,14 +239,15 @@ fpixClone(FPIX  *fpix)
 
 
 /*!
- *  fpixCopy()
+ * \brief   fpixCopy()
  *
- *      Input:  fpixd (<optional>; can be null, or equal to fpixs,
- *                    or different from fpixs)
- *              fpixs
- *      Return: fpixd, or null on error
+ * \param[in]    fpixd [optional]; can be null, or equal to fpixs,
+ *                    or different from fpixs
+ * \param[in]    fpixs
+ * \return  fpixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) There are three cases:
  *            (a) fpixd == null  (makes a new fpix; refcount = 1)
  *            (b) fpixd == fpixs  (no-op)
@@ -251,6 +266,7 @@ fpixClone(FPIX  *fpix)
  *          and the copy proceeds.  The refcount of fpixd is unchanged.
  *      (4) This operation, like all others that may involve a pre-existing
  *          fpixd, will side-effect any existing clones of fpixd.
+ * </pre>
  */
 FPIX *
 fpixCopy(FPIX  *fpixd,   /* can be null */
@@ -293,16 +309,18 @@ l_float32  *datas, *datad;
 
 
 /*!
- *  fpixResizeImageData()
+ * \brief   fpixResizeImageData()
  *
- *      Input:  fpixd, fpixs
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fpixd, fpixs
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) If the data sizes differ, this destroys the existing
  *          data in fpixd and allocates a new, uninitialized, data array
  *          of the same size as the data in fpixs.  Otherwise, this
  *          doesn't do anything.
+ * </pre>
  */
 l_int32
 fpixResizeImageData(FPIX  *fpixd,
@@ -327,23 +345,25 @@ l_float32  *data;
     fpixSetWpl(fpixd, ws);
     bytes = 4 * ws * hs;
     data = fpixGetData(fpixd);
-    if (data) FREE(data);
-    if ((data = (l_float32 *)MALLOC(bytes)) == NULL)
-        return ERROR_INT("MALLOC fail for data", procName, 1);
+    if (data) LEPT_FREE(data);
+    if ((data = (l_float32 *)LEPT_MALLOC(bytes)) == NULL)
+        return ERROR_INT("LEPT_MALLOC fail for data", procName, 1);
     fpixSetData(fpixd, data);
     return 0;
 }
 
 
 /*!
- *  fpixDestroy()
+ * \brief   fpixDestroy()
  *
- *      Input:  &fpix <will be nulled>
- *      Return: void
+ * \param[in,out]   pfpix will be nulled
+ * \return  void
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Decrements the ref count and, if 0, destroys the fpix.
  *      (2) Always nulls the input ptr.
+ * </pre>
  */
 void
 fpixDestroy(FPIX  **pfpix)
@@ -365,8 +385,8 @@ FPIX       *fpix;
     fpixChangeRefcount(fpix, -1);
     if (fpixGetRefcount(fpix) <= 0) {
         if ((data = fpixGetData(fpix)) != NULL)
-            FREE(data);
-        FREE(fpix);
+            LEPT_FREE(data);
+        LEPT_FREE(fpix);
     }
 
     *pfpix = NULL;
@@ -378,11 +398,11 @@ FPIX       *fpix;
  *                          FPix  Accessors                           *
  *--------------------------------------------------------------------*/
 /*!
- *  fpixGetDimensions()
+ * \brief   fpixGetDimensions()
  *
- *      Input:  fpix
- *              &w, &h (<optional return>; each can be null)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fpix
+ * \param[out]   pw, ph [optional]  each can be null
+ * \return  0 if OK, 1 on error
  */
 l_int32
 fpixGetDimensions(FPIX     *fpix,
@@ -391,6 +411,10 @@ fpixGetDimensions(FPIX     *fpix,
 {
     PROCNAME("fpixGetDimensions");
 
+    if (!pw && !ph)
+        return ERROR_INT("no return val requested", procName, 1);
+    if (pw) *pw = 0;
+    if (ph) *ph = 0;
     if (!fpix)
         return ERROR_INT("fpix not defined", procName, 1);
     if (pw) *pw = fpix->w;
@@ -400,11 +424,11 @@ fpixGetDimensions(FPIX     *fpix,
 
 
 /*!
- *  fpixSetDimensions()
+ * \brief   fpixSetDimensions()
  *
- *      Input:  fpix
- *              w, h
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fpix
+ * \param[in]    w, h
+ * \return  0 if OK, 1 on error
  */
 l_int32
 fpixSetDimensions(FPIX     *fpix,
@@ -421,6 +445,12 @@ fpixSetDimensions(FPIX     *fpix,
 }
 
 
+/*!
+ * \brief   fpixGetWpl()
+ *
+ * \param[in]    fpix
+ * \return  wpl, or UNDEF on error
+ */
 l_int32
 fpixGetWpl(FPIX  *fpix)
 {
@@ -432,6 +462,13 @@ fpixGetWpl(FPIX  *fpix)
 }
 
 
+/*!
+ * \brief   fpixSetWpl()
+ *
+ * \param[in]    fpix
+ * \param[in]    wpl
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 fpixSetWpl(FPIX    *fpix,
            l_int32  wpl)
@@ -446,6 +483,12 @@ fpixSetWpl(FPIX    *fpix,
 }
 
 
+/*!
+ * \brief   fpixGetRefcount()
+ *
+ * \param[in]    fpix
+ * \return  refcount, or UNDEF on error
+ */
 l_int32
 fpixGetRefcount(FPIX  *fpix)
 {
@@ -457,6 +500,13 @@ fpixGetRefcount(FPIX  *fpix)
 }
 
 
+/*!
+ * \brief   fpixChangeRefcount()
+ *
+ * \param[in]    fpix
+ * \param[in]    delta
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 fpixChangeRefcount(FPIX    *fpix,
                    l_int32  delta)
@@ -471,6 +521,13 @@ fpixChangeRefcount(FPIX    *fpix,
 }
 
 
+/*!
+ * \brief   fpixGetResolution()
+ *
+ * \param[in]    fpix
+ * \param[out]   pxres, pyres [optional] x and y resolution
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 fpixGetResolution(FPIX     *fpix,
                   l_int32  *pxres,
@@ -486,6 +543,13 @@ fpixGetResolution(FPIX     *fpix,
 }
 
 
+/*!
+ * \brief   fpixSetResolution()
+ *
+ * \param[in]    fpix
+ * \param[in]    xres, yres x and y resolution
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 fpixSetResolution(FPIX    *fpix,
                   l_int32  xres,
@@ -502,6 +566,12 @@ fpixSetResolution(FPIX    *fpix,
 }
 
 
+/*!
+ * \brief   fpixCopyResolution()
+ *
+ * \param[in]    fpixd, fpixs
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 fpixCopyResolution(FPIX  *fpixd,
                    FPIX  *fpixs)
@@ -518,6 +588,12 @@ l_int32  xres, yres;
 }
 
 
+/*!
+ * \brief   fpixGetData()
+ *
+ * \param[in]    fpix
+ * \return  ptr FPix::data, or NULL on error
+ */
 l_float32 *
 fpixGetData(FPIX  *fpix)
 {
@@ -529,6 +605,13 @@ fpixGetData(FPIX  *fpix)
 }
 
 
+/*!
+ * \brief   fpixSetData()
+ *
+ * \param[in]    fpix
+ * \param[in]    data
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 fpixSetData(FPIX       *fpix,
             l_float32  *data)
@@ -544,12 +627,12 @@ fpixSetData(FPIX       *fpix,
 
 
 /*!
- *  fpixGetPixel()
+ * \brief   fpixGetPixel()
  *
- *      Input:  fpix
- *              (x,y) pixel coords
- *              &val (<return> pixel value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fpix
+ * \param[in]    x,y pixel coords
+ * \param[out]   pval pixel value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 fpixGetPixel(FPIX       *fpix,
@@ -579,12 +662,12 @@ l_int32  w, h;
 
 
 /*!
- *  fpixSetPixel()
+ * \brief   fpixSetPixel()
  *
- *      Input:  fpix
- *              (x,y) pixel coords
- *              val (pixel value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fpix
+ * \param[in]    x,y pixel coords
+ * \param[in]    val pixel value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 fpixSetPixel(FPIX      *fpix,
@@ -614,10 +697,10 @@ l_int32  w, h;
  *                     FPixa Create/copy/destroy                      *
  *--------------------------------------------------------------------*/
 /*!
- *  fpixaCreate()
+ * \brief   fpixaCreate()
  *
- *      Input:  n  (initial number of ptrs)
- *      Return: fpixa, or null on error
+ * \param[in]    n  initial number of ptrs
+ * \return  fpixa, or NULL on error
  */
 FPIXA *
 fpixaCreate(l_int32  n)
@@ -629,28 +712,35 @@ FPIXA  *fpixa;
     if (n <= 0)
         n = INITIAL_PTR_ARRAYSIZE;
 
-    if ((fpixa = (FPIXA *)CALLOC(1, sizeof(FPIXA))) == NULL)
-        return (FPIXA *)ERROR_PTR("pixa not made", procName, NULL);
+    if ((fpixa = (FPIXA *)LEPT_CALLOC(1, sizeof(FPIXA))) == NULL)
+        return (FPIXA *)ERROR_PTR("fpixa not made", procName, NULL);
     fpixa->n = 0;
     fpixa->nalloc = n;
     fpixa->refcount = 1;
 
-    if ((fpixa->fpix = (FPIX **)CALLOC(n, sizeof(FPIX *))) == NULL)
-        return (FPIXA *)ERROR_PTR("fpix ptrs not made", procName, NULL);
+    if ((fpixa->fpix = (FPIX **)LEPT_CALLOC(n, sizeof(FPIX *))) == NULL) {
+        fpixaDestroy(&fpixa);
+        return (FPIXA *)ERROR_PTR("fpixa ptrs not made", procName, NULL);
+    }
 
     return fpixa;
 }
 
 
 /*!
- *  fpixaCopy()
+ * \brief   fpixaCopy()
  *
- *      Input:  fpixas
- *              copyflag:
- *                L_COPY makes a new fpixa and copies each fpix
- *                L_CLONE gives a new ref-counted handle to the input fpixa
- *                L_COPY_CLONE makes a new fpixa with clones of all fpix
- *      Return: new fpixa, or null on error
+ * \param[in]    fpixa
+ * \param[in]    copyflag L_COPY, L_CLODE or L_COPY_CLONE
+ * \return  new fpixa, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      copyflag may be one of
+ *        ~ L_COPY makes a new fpixa and copies each fpix
+ *        ~ L_CLONE gives a new ref-counted handle to the input fpixa
+ *        ~ L_COPY_CLONE makes a new fpixa with clones of all fpix
+ * </pre>
  */
 FPIXA *
 fpixaCopy(FPIXA   *fpixa,
@@ -688,14 +778,16 @@ FPIXA   *fpixac;
 
 
 /*!
- *  fpixaDestroy()
+ * \brief   fpixaDestroy()
  *
- *      Input:  &fpixa (<can be nulled>)
- *      Return: void
+ * \param[in,out]   pfpixa to be nulled
+ * \return  void
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Decrements the ref count and, if 0, destroys the fpixa.
  *      (2) Always nulls the input ptr.
+ * </pre>
  */
 void
 fpixaDestroy(FPIXA  **pfpixa)
@@ -718,8 +810,8 @@ FPIXA   *fpixa;
     if (fpixa->refcount <= 0) {
         for (i = 0; i < fpixa->n; i++)
             fpixDestroy(&fpixa->fpix[i]);
-        FREE(fpixa->fpix);
-        FREE(fpixa);
+        LEPT_FREE(fpixa->fpix);
+        LEPT_FREE(fpixa);
     }
 
     *pfpixa = NULL;
@@ -731,12 +823,12 @@ FPIXA   *fpixa;
  *                           FPixa addition                           *
  *--------------------------------------------------------------------*/
 /*!
- *  fpixaAddFPix()
+ * \brief   fpixaAddFPix()
  *
- *      Input:  fpixa
- *              fpix  (to be added)
- *              copyflag (L_INSERT, L_COPY, L_CLONE)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fpixa
+ * \param[in]    fpix  to be added
+ * \param[in]    copyflag L_INSERT, L_COPY, L_CLONE
+ * \return  0 if OK; 1 on error
  */
 l_int32
 fpixaAddFPix(FPIXA   *fpixa,
@@ -775,13 +867,15 @@ FPIX    *fpixc;
 
 
 /*!
- *  fpixaExtendArray()
+ * \brief   fpixaExtendArray()
  *
- *      Input:  fpixa
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fpixa
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Doubles the size of the fpixa ptr array.
+ * </pre>
  */
 static l_int32
 fpixaExtendArray(FPIXA  *fpixa)
@@ -796,13 +890,16 @@ fpixaExtendArray(FPIXA  *fpixa)
 
 
 /*!
- *  fpixaExtendArrayToSize()
+ * \brief   fpixaExtendArrayToSize()
  *
- *      Input:  fpixa
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fpixa
+ * \param[in]    size new size
+ * \return  0 if OK; 1 on error
  *
- *  Notes:
- *      (1) If necessary, reallocs new fpixa ptrs array to @size.
+ * <pre>
+ * Notes:
+ *      (1) If necessary, reallocs new fpixa ptrs array to %size.
+ * </pre>
  */
 static l_int32
 fpixaExtendArrayToSize(FPIXA   *fpixa,
@@ -828,10 +925,10 @@ fpixaExtendArrayToSize(FPIXA   *fpixa,
  *                          FPixa accessors                           *
  *--------------------------------------------------------------------*/
 /*!
- *  fpixaGetCount()
+ * \brief   fpixaGetCount()
  *
- *      Input:  fpixa
- *      Return: count, or 0 if no pixa
+ * \param[in]    fpixa
+ * \return  count, or 0 if no pixa
  */
 l_int32
 fpixaGetCount(FPIXA  *fpixa)
@@ -846,10 +943,11 @@ fpixaGetCount(FPIXA  *fpixa)
 
 
 /*!
- *  fpixaChangeRefcount()
+ * \brief   fpixaChangeRefcount()
  *
- *      Input:  fpixa
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fpixa
+ * \param[in]    delta
+ * \return  0 if OK, 1 on error
  */
 l_int32
 fpixaChangeRefcount(FPIXA   *fpixa,
@@ -866,12 +964,12 @@ fpixaChangeRefcount(FPIXA   *fpixa,
 
 
 /*!
- *  fpixaGetFPix()
+ * \brief   fpixaGetFPix()
  *
- *      Input:  fpixa
- *              index  (to the index-th fpix)
- *              accesstype  (L_COPY or L_CLONE)
- *      Return: fpix, or null on error
+ * \param[in]    fpixa
+ * \param[in]    index  to the index-th fpix
+ * \param[in]    accesstype  L_COPY or L_CLONE
+ * \return  fpix, or NULL on error
  */
 FPIX *
 fpixaGetFPix(FPIXA   *fpixa,
@@ -895,12 +993,12 @@ fpixaGetFPix(FPIXA   *fpixa,
 
 
 /*!
- *  fpixaGetFPixDimensions()
+ * \brief   fpixaGetFPixDimensions()
  *
- *      Input:  fpixa
- *              index  (to the index-th box)
- *              &w, &h (<optional return>; each can be null)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fpixa
+ * \param[in]    index  to the index-th box
+ * \param[out]   pw, ph [optional]  each can be null
+ * \return  0 if OK, 1 on error
  */
 l_int32
 fpixaGetFPixDimensions(FPIXA    *fpixa,
@@ -912,6 +1010,10 @@ FPIX  *fpix;
 
     PROCNAME("fpixaGetFPixDimensions");
 
+    if (!pw && !ph)
+        return ERROR_INT("no return val requested", procName, 1);
+    if (pw) *pw = 0;
+    if (ph) *ph = 0;
     if (!fpixa)
         return ERROR_INT("fpixa not defined", procName, 1);
     if (index < 0 || index >= fpixa->n)
@@ -926,13 +1028,43 @@ FPIX  *fpix;
 
 
 /*!
- *  fpixaGetPixel()
+ * \brief   fpixaGetData()
  *
- *      Input:  fpixa
- *              index (into fpixa array)
- *              (x,y) pixel coords
- *              &val (<return> pixel value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fpixa
+ * \param[in]    index into fpixa array
+ * \return  data not a copy, or NULL on error
+ */
+l_float32 *
+fpixaGetData(FPIXA      *fpixa,
+             l_int32     index)
+{
+l_int32     n;
+l_float32  *data;
+FPIX       *fpix;
+
+    PROCNAME("fpixaGetData");
+
+    if (!fpixa)
+        return (l_float32 *)ERROR_PTR("fpixa not defined", procName, NULL);
+    n = fpixaGetCount(fpixa);
+    if (index < 0 || index >= n)
+        return (l_float32 *)ERROR_PTR("invalid index", procName, NULL);
+
+    fpix = fpixaGetFPix(fpixa, index, L_CLONE);
+    data = fpixGetData(fpix);
+    fpixDestroy(&fpix);
+    return data;
+}
+
+
+/*!
+ * \brief   fpixaGetPixel()
+ *
+ * \param[in]    fpixa
+ * \param[in]    index into fpixa array
+ * \param[in]    x,y pixel coords
+ * \param[out]   pval pixel value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 fpixaGetPixel(FPIXA      *fpixa,
@@ -963,13 +1095,13 @@ FPIX    *fpix;
 
 
 /*!
- *  fpixaSetPixel()
+ * \brief   fpixaSetPixel()
  *
- *      Input:  fpixa
- *              index (into fpixa array)
- *              (x,y) pixel coords
- *              val (pixel value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    fpixa
+ * \param[in]    index into fpixa array
+ * \param[in]    x,y pixel coords
+ * \param[in]    val pixel value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 fpixaSetPixel(FPIXA     *fpixa,
@@ -1000,22 +1132,24 @@ FPIX    *fpix;
  *                     DPix Create/copy/destroy                       *
  *--------------------------------------------------------------------*/
 /*!
- *  dpixCreate()
+ * \brief   dpixCreate()
  *
- *      Input:  width, height
- *      Return: dpix (with data allocated and initialized to 0),
- *                     or null on error
+ * \param[in]     width, height
+ * \return  dpix  with data allocated and initialized to 0, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Makes a DPix of specified size, with the data array
  *          allocated and initialized to 0.
+ *      (2) The number of pixels must be less than 2^28.
+ * </pre>
  */
 DPIX *
 dpixCreate(l_int32  width,
            l_int32  height)
 {
 l_float64  *data;
-l_uint64    bignum;
+l_uint64    npix64;
 DPIX       *dpix;
 
     PROCNAME("dpixCreate");
@@ -1026,37 +1160,39 @@ DPIX       *dpix;
         return (DPIX *)ERROR_PTR("height must be > 0", procName, NULL);
 
         /* Avoid overflow in malloc arg, malicious or otherwise */
-    bignum = 8L * width * height;   /* max number of bytes requested */
-    if (bignum > ((1LL << 31) - 1)) {
+    npix64 = (l_uint64)width * (l_uint64)height;   /* # of 8 byte pixels */
+    if (npix64 >= (1LL << 28)) {
         L_ERROR("requested w = %d, h = %d\n", procName, width, height);
         return (DPIX *)ERROR_PTR("requested bytes >= 2^31", procName, NULL);
     }
 
-    if ((dpix = (DPIX *)CALLOC(1, sizeof(DPIX))) == NULL)
-        return (DPIX *)ERROR_PTR("CALLOC fail for dpix", procName, NULL);
+    dpix = (DPIX *)LEPT_CALLOC(1, sizeof(DPIX));
     dpixSetDimensions(dpix, width, height);
     dpixSetWpl(dpix, width);  /* 8 byte words */
     dpix->refcount = 1;
 
-    data = (l_float64 *)CALLOC(width * height, sizeof(l_float64));
-    if (!data)
-        return (DPIX *)ERROR_PTR("CALLOC fail for data", procName, NULL);
+    data = (l_float64 *)LEPT_CALLOC(width * height, sizeof(l_float64));
+    if (!data) {
+        dpixDestroy(&dpix);
+        return (DPIX *)ERROR_PTR("calloc fail for data", procName, NULL);
+    }
     dpixSetData(dpix, data);
-
     return dpix;
 }
 
 
 /*!
- *  dpixCreateTemplate()
+ * \brief   dpixCreateTemplate()
  *
- *      Input:  dpixs
- *      Return: dpixd, or null on error
+ * \param[in]    dpixs
+ * \return  dpixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Makes a DPix of the same size as the input DPix, with the
  *          data array allocated and initialized to 0.
  *      (2) Copies the resolution.
+ * </pre>
  */
 DPIX *
 dpixCreateTemplate(DPIX  *dpixs)
@@ -1077,13 +1213,15 @@ DPIX    *dpixd;
 
 
 /*!
- *  dpixClone()
+ * \brief   dpixClone()
  *
- *      Input:  dpix
- *      Return: same dpix (ptr), or null on error
+ * \param[in]    dpix
+ * \return  same dpix ptr, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) See pixClone() for definition and usage.
+ * </pre>
  */
 DPIX *
 dpixClone(DPIX  *dpix)
@@ -1099,14 +1237,15 @@ dpixClone(DPIX  *dpix)
 
 
 /*!
- *  dpixCopy()
+ * \brief   dpixCopy()
  *
- *      Input:  dpixd (<optional>; can be null, or equal to dpixs,
- *                    or different from dpixs)
- *              dpixs
- *      Return: dpixd, or null on error
+ * \param[in]    dpixd [optional]; can be null, or equal to dpixs,
+ *                    or different from dpixs
+ * \param[in]    dpixs
+ * \return  dpixd, or NULL on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) There are three cases:
  *            (a) dpixd == null  (makes a new dpix; refcount = 1)
  *            (b) dpixd == dpixs  (no-op)
@@ -1125,6 +1264,7 @@ dpixClone(DPIX  *dpix)
  *          and the copy proceeds.  The refcount of dpixd is unchanged.
  *      (4) This operation, like all others that may involve a pre-existing
  *          dpixd, will side-effect any existing clones of dpixd.
+ * </pre>
  */
 DPIX *
 dpixCopy(DPIX  *dpixd,   /* can be null */
@@ -1167,10 +1307,10 @@ l_float64  *datas, *datad;
 
 
 /*!
- *  dpixResizeImageData()
+ * \brief   dpixResizeImageData()
  *
- *      Input:  dpixd, dpixs
- *      Return: 0 if OK, 1 on error
+ * \param[in]    dpixd, dpixs
+ * \return  0 if OK, 1 on error
  */
 l_int32
 dpixResizeImageData(DPIX  *dpixd,
@@ -1195,23 +1335,25 @@ l_float64  *data;
     dpixSetWpl(dpixd, ws);  /* 8 byte words */
     bytes = 8 * ws * hs;
     data = dpixGetData(dpixd);
-    if (data) FREE(data);
-    if ((data = (l_float64 *)MALLOC(bytes)) == NULL)
-        return ERROR_INT("MALLOC fail for data", procName, 1);
+    if (data) LEPT_FREE(data);
+    if ((data = (l_float64 *)LEPT_MALLOC(bytes)) == NULL)
+        return ERROR_INT("LEPT_MALLOC fail for data", procName, 1);
     dpixSetData(dpixd, data);
     return 0;
 }
 
 
 /*!
- *  dpixDestroy()
+ * \brief   dpixDestroy()
  *
- *      Input:  &dpix <will be nulled>
- *      Return: void
+ * \param[in,out]   pdpix will be nulled
+ * \return  void
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Decrements the ref count and, if 0, destroys the dpix.
  *      (2) Always nulls the input ptr.
+ * </pre>
  */
 void
 dpixDestroy(DPIX  **pdpix)
@@ -1233,8 +1375,8 @@ DPIX       *dpix;
     dpixChangeRefcount(dpix, -1);
     if (dpixGetRefcount(dpix) <= 0) {
         if ((data = dpixGetData(dpix)) != NULL)
-            FREE(data);
-        FREE(dpix);
+            LEPT_FREE(data);
+        LEPT_FREE(dpix);
     }
 
     *pdpix = NULL;
@@ -1246,11 +1388,11 @@ DPIX       *dpix;
  *                          DPix  Accessors                           *
  *--------------------------------------------------------------------*/
 /*!
- *  dpixGetDimensions()
+ * \brief   dpixGetDimensions()
  *
- *      Input:  dpix
- *              &w, &h (<optional return>; each can be null)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    dpix
+ * \param[out]   pw, ph [optional]  each can be null
+ * \return  0 if OK, 1 on error
  */
 l_int32
 dpixGetDimensions(DPIX     *dpix,
@@ -1259,6 +1401,10 @@ dpixGetDimensions(DPIX     *dpix,
 {
     PROCNAME("dpixGetDimensions");
 
+    if (!pw && !ph)
+        return ERROR_INT("no return val requested", procName, 1);
+    if (pw) *pw = 0;
+    if (ph) *ph = 0;
     if (!dpix)
         return ERROR_INT("dpix not defined", procName, 1);
     if (pw) *pw = dpix->w;
@@ -1268,11 +1414,11 @@ dpixGetDimensions(DPIX     *dpix,
 
 
 /*!
- *  dpixSetDimensions()
+ * \brief   dpixSetDimensions()
  *
- *      Input:  dpix
- *              w, h
- *      Return: 0 if OK, 1 on error
+ * \param[in]    dpix
+ * \param[in]    w, h
+ * \return  0 if OK, 1 on error
  */
 l_int32
 dpixSetDimensions(DPIX     *dpix,
@@ -1289,6 +1435,12 @@ dpixSetDimensions(DPIX     *dpix,
 }
 
 
+/*!
+ * \brief   dpixGetWpl()
+ *
+ * \param[in]    dpix
+ * \return  wpl, or UNDEF on error
+ */
 l_int32
 dpixGetWpl(DPIX  *dpix)
 {
@@ -1300,6 +1452,13 @@ dpixGetWpl(DPIX  *dpix)
 }
 
 
+/*!
+ * \brief   dpixSetWpl()
+ *
+ * \param[in]    dpix
+ * \param[in]    wpl
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 dpixSetWpl(DPIX    *dpix,
            l_int32  wpl)
@@ -1314,6 +1473,12 @@ dpixSetWpl(DPIX    *dpix,
 }
 
 
+/*!
+ * \brief   dpixGetRefcount()
+ *
+ * \param[in]    dpix
+ * \return  refcount, or UNDEF on error
+ */
 l_int32
 dpixGetRefcount(DPIX  *dpix)
 {
@@ -1325,6 +1490,13 @@ dpixGetRefcount(DPIX  *dpix)
 }
 
 
+/*!
+ * \brief   dpixChangeRefcount()
+ *
+ * \param[in]    dpix
+ * \param[in]    delta
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 dpixChangeRefcount(DPIX    *dpix,
                    l_int32  delta)
@@ -1339,6 +1511,13 @@ dpixChangeRefcount(DPIX    *dpix,
 }
 
 
+/*!
+ * \brief   dpixGetResolution()
+ *
+ * \param[in]    dpix
+ * \param[out]   pxres, pyres [optional] x and y resolution
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 dpixGetResolution(DPIX     *dpix,
                   l_int32  *pxres,
@@ -1354,6 +1533,13 @@ dpixGetResolution(DPIX     *dpix,
 }
 
 
+/*!
+ * \brief   dpixSetResolution()
+ *
+ * \param[in]    dpix
+ * \param[in]    xres, yres x and y resolution
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 dpixSetResolution(DPIX    *dpix,
                   l_int32  xres,
@@ -1370,6 +1556,12 @@ dpixSetResolution(DPIX    *dpix,
 }
 
 
+/*!
+ * \brief   dpixCopyResolution()
+ *
+ * \param[in]    dpixd, dpixs
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 dpixCopyResolution(DPIX  *dpixd,
                    DPIX  *dpixs)
@@ -1386,6 +1578,12 @@ l_int32  xres, yres;
 }
 
 
+/*!
+ * \brief   dpixGetData()
+ *
+ * \param[in]    dpix
+ * \return  ptr DPix::data, or NULL on error
+ */
 l_float64 *
 dpixGetData(DPIX  *dpix)
 {
@@ -1397,6 +1595,13 @@ dpixGetData(DPIX  *dpix)
 }
 
 
+/*!
+ * \brief   dpixSetData()
+ *
+ * \param[in]    dpix
+ * \param[in]    data
+ * \return  0 if OK, 1 on error
+ */
 l_int32
 dpixSetData(DPIX       *dpix,
             l_float64  *data)
@@ -1412,12 +1617,12 @@ dpixSetData(DPIX       *dpix,
 
 
 /*!
- *  dpixGetPixel()
+ * \brief   dpixGetPixel()
  *
- *      Input:  dpix
- *              (x,y) pixel coords
- *              &val (<return> pixel value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    dpix
+ * \param[in]    x,y pixel coords
+ * \param[out]   pval pixel value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 dpixGetPixel(DPIX       *dpix,
@@ -1447,12 +1652,12 @@ l_int32  w, h;
 
 
 /*!
- *  dpixSetPixel()
+ * \brief   dpixSetPixel()
  *
- *      Input:  dpix
- *              (x,y) pixel coords
- *              val (pixel value)
- *      Return: 0 if OK; 1 on error
+ * \param[in]    dpix
+ * \param[in]    x,y pixel coords
+ * \param[in]    val pixel value
+ * \return  0 if OK; 1 on error
  */
 l_int32
 dpixSetPixel(DPIX      *dpix,
@@ -1482,10 +1687,10 @@ l_int32  w, h;
  *                       FPix serialized I/O                          *
  *--------------------------------------------------------------------*/
 /*!
- *  fpixRead()
+ * \brief   fpixRead()
  *
- *      Input:  filename
- *      Return: fpix, or null on error
+ * \param[in]    filename
+ * \return  fpix, or NULL on error
  */
 FPIX *
 fpixRead(const char  *filename)
@@ -1497,24 +1702,22 @@ FPIX  *fpix;
 
     if (!filename)
         return (FPIX *)ERROR_PTR("filename not defined", procName, NULL);
+
     if ((fp = fopenReadStream(filename)) == NULL)
         return (FPIX *)ERROR_PTR("stream not opened", procName, NULL);
-
-    if ((fpix = fpixReadStream(fp)) == NULL) {
-        fclose(fp);
-        return (FPIX *)ERROR_PTR("fpix not read", procName, NULL);
-    }
-
+    fpix = fpixReadStream(fp);
     fclose(fp);
+    if (!fpix)
+        return (FPIX *)ERROR_PTR("fpix not read", procName, NULL);
     return fpix;
 }
 
 
 /*!
- *  fpixReadStream()
+ * \brief   fpixReadStream()
  *
- *      Input:  stream
- *      Return: fpix, or null on error
+ * \param[in]    fp file stream
+ * \return  fpix, or NULL on error
  */
 FPIX *
 fpixReadStream(FILE  *fp)
@@ -1550,8 +1753,10 @@ FPIX       *fpix;
         return (FPIX *)ERROR_PTR("fpix not made", procName, NULL);
     fpixSetResolution(fpix, xres, yres);
     data = fpixGetData(fpix);
-    if (fread(data, 1, nbytes, fp) != nbytes)
+    if (fread(data, 1, nbytes, fp) != nbytes) {
+        fpixDestroy(&fpix);
         return (FPIX *)ERROR_PTR("read error for nbytes", procName, NULL);
+    }
     fgetc(fp);  /* ending nl */
 
         /* Convert to little-endian if necessary */
@@ -1561,17 +1766,46 @@ FPIX       *fpix;
 
 
 /*!
- *  fpixWrite()
+ * \brief   fpixReadMem()
  *
- *      Input:  filename
- *              fpix
- *      Return: 0 if OK, 1 on error
+ * \param[in]    data  of serialized fpix
+ * \param[in]    size  of data in bytes
+ * \return  fpix, or NULL on error
+ */
+FPIX *
+fpixReadMem(const l_uint8  *data,
+            size_t          size)
+{
+FILE  *fp;
+FPIX  *fpix;
+
+    PROCNAME("fpixReadMem");
+
+    if (!data)
+        return (FPIX *)ERROR_PTR("data not defined", procName, NULL);
+    if ((fp = fopenReadFromMemory(data, size)) == NULL)
+        return (FPIX *)ERROR_PTR("stream not opened", procName, NULL);
+
+    fpix = fpixReadStream(fp);
+    fclose(fp);
+    if (!fpix) L_ERROR("fpix not read\n", procName);
+    return fpix;
+}
+
+
+/*!
+ * \brief   fpixWrite()
+ *
+ * \param[in]    filename
+ * \param[in]    fpix
+ * \return  0 if OK, 1 on error
  */
 l_int32
 fpixWrite(const char  *filename,
           FPIX        *fpix)
 {
-FILE  *fp;
+l_int32  ret;
+FILE    *fp;
 
     PROCNAME("fpixWrite");
 
@@ -1582,20 +1816,20 @@ FILE  *fp;
 
     if ((fp = fopenWriteStream(filename, "wb")) == NULL)
         return ERROR_INT("stream not opened", procName, 1);
-    if (fpixWriteStream(fp, fpix))
-        return ERROR_INT("fpix not written to stream", procName, 1);
+    ret = fpixWriteStream(fp, fpix);
     fclose(fp);
-
+    if (ret)
+        return ERROR_INT("fpix not written to stream", procName, 1);
     return 0;
 }
 
 
 /*!
- *  fpixWriteStream()
+ * \brief   fpixWriteStream()
  *
- *      Input:  stream (opened for "wb")
- *              fpix
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fp file stream opened for "wb"
+ * \param[in]    fpix
+ * \return  0 if OK, 1 on error
  */
 l_int32
 fpixWriteStream(FILE  *fp,
@@ -1631,13 +1865,68 @@ FPIX       *fpixt;
 
 
 /*!
- *  fpixEndianByteSwap()
+ * \brief   fpixWriteMem()
  *
- *      Input:  fpixd (can be equal to fpixs or NULL)
- *              fpixs
- *      Return: fpixd always
+ * \param[out]   pdata data of serialized fpix
+ * \param[out]   psize size of returned data
+ * \param[in]    fpix
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
+ *      (1) Serializes a fpix in memory and puts the result in a buffer.
+ * </pre>
+ */
+l_int32
+fpixWriteMem(l_uint8  **pdata,
+             size_t    *psize,
+             FPIX      *fpix)
+{
+l_int32  ret;
+FILE    *fp;
+
+    PROCNAME("fpixWriteMem");
+
+    if (pdata) *pdata = NULL;
+    if (psize) *psize = 0;
+    if (!pdata)
+        return ERROR_INT("&data not defined", procName, 1);
+    if (!psize)
+        return ERROR_INT("&size not defined", procName, 1);
+    if (!fpix)
+        return ERROR_INT("fpix not defined", procName, 1);
+
+#if HAVE_FMEMOPEN
+    if ((fp = open_memstream((char **)pdata, psize)) == NULL)
+        return ERROR_INT("stream not opened", procName, 1);
+    ret = fpixWriteStream(fp, fpix);
+#else
+    L_INFO("work-around: writing to a temp file\n", procName);
+  #ifdef _WIN32
+    if ((fp = fopenWriteWinTempfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #else
+    if ((fp = tmpfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #endif  /* _WIN32 */
+    ret = fpixWriteStream(fp, fpix);
+    rewind(fp);
+    *pdata = l_binaryReadStream(fp, psize);
+#endif  /* HAVE_FMEMOPEN */
+    fclose(fp);
+    return ret;
+}
+
+
+/*!
+ * \brief   fpixEndianByteSwap()
+ *
+ * \param[in]    fpixd can be equal to fpixs or NULL
+ * \param[in]    fpixs
+ * \return  fpixd always
+ *
+ * <pre>
+ * Notes:
  *      (1) On big-endian hardware, this does byte-swapping on each of
  *          the 4-byte floats in the fpix data.  On little-endians,
  *          the data is unchanged.  This is used for serialization
@@ -1646,6 +1935,7 @@ FPIX       *fpixt;
  *      (2) The operation can be either in-place or, if fpixd == NULL,
  *          a new fpix is made.  If not in-place, caller must catch
  *          the returned pointer.
+ * </pre>
  */
 FPIX *
 fpixEndianByteSwap(FPIX  *fpixd,
@@ -1694,10 +1984,10 @@ fpixEndianByteSwap(FPIX  *fpixd,
  *                       DPix serialized I/O                          *
  *--------------------------------------------------------------------*/
 /*!
- *  dpixRead()
+ * \brief   dpixRead()
  *
- *      Input:  filename
- *      Return: dpix, or null on error
+ * \param[in]    filename
+ * \return  dpix, or NULL on error
  */
 DPIX *
 dpixRead(const char  *filename)
@@ -1709,24 +1999,22 @@ DPIX  *dpix;
 
     if (!filename)
         return (DPIX *)ERROR_PTR("filename not defined", procName, NULL);
+
     if ((fp = fopenReadStream(filename)) == NULL)
         return (DPIX *)ERROR_PTR("stream not opened", procName, NULL);
-
-    if ((dpix = dpixReadStream(fp)) == NULL) {
-        fclose(fp);
-        return (DPIX *)ERROR_PTR("dpix not read", procName, NULL);
-    }
-
+    dpix = dpixReadStream(fp);
     fclose(fp);
+    if (!dpix)
+        return (DPIX *)ERROR_PTR("dpix not read", procName, NULL);
     return dpix;
 }
 
 
 /*!
- *  dpixReadStream()
+ * \brief   dpixReadStream()
  *
- *      Input:  stream
- *      Return: dpix, or null on error
+ * \param[in]    fp file stream
+ * \return  dpix, or NULL on error
  */
 DPIX *
 dpixReadStream(FILE  *fp)
@@ -1762,8 +2050,10 @@ DPIX       *dpix;
         return (DPIX *)ERROR_PTR("dpix not made", procName, NULL);
     dpixSetResolution(dpix, xres, yres);
     data = dpixGetData(dpix);
-    if (fread(data, 1, nbytes, fp) != nbytes)
+    if (fread(data, 1, nbytes, fp) != nbytes) {
+        dpixDestroy(&dpix);
         return (DPIX *)ERROR_PTR("read error for nbytes", procName, NULL);
+    }
     fgetc(fp);  /* ending nl */
 
         /* Convert to little-endian if necessary */
@@ -1773,17 +2063,46 @@ DPIX       *dpix;
 
 
 /*!
- *  dpixWrite()
+ * \brief   dpixReadMem()
  *
- *      Input:  filename
- *              dpix
- *      Return: 0 if OK, 1 on error
+ * \param[in]    data  of serialized dpix
+ * \param[in]    size  of data in bytes
+ * \return  dpix, or NULL on error
+ */
+DPIX *
+dpixReadMem(const l_uint8  *data,
+            size_t          size)
+{
+FILE  *fp;
+DPIX  *dpix;
+
+    PROCNAME("dpixReadMem");
+
+    if (!data)
+        return (DPIX *)ERROR_PTR("data not defined", procName, NULL);
+    if ((fp = fopenReadFromMemory(data, size)) == NULL)
+        return (DPIX *)ERROR_PTR("stream not opened", procName, NULL);
+
+    dpix = dpixReadStream(fp);
+    fclose(fp);
+    if (!dpix) L_ERROR("dpix not read\n", procName);
+    return dpix;
+}
+
+
+/*!
+ * \brief   dpixWrite()
+ *
+ * \param[in]    filename
+ * \param[in]    dpix
+ * \return  0 if OK, 1 on error
  */
 l_int32
 dpixWrite(const char  *filename,
           DPIX        *dpix)
 {
-FILE  *fp;
+l_int32  ret;
+FILE    *fp;
 
     PROCNAME("dpixWrite");
 
@@ -1794,20 +2113,20 @@ FILE  *fp;
 
     if ((fp = fopenWriteStream(filename, "wb")) == NULL)
         return ERROR_INT("stream not opened", procName, 1);
-    if (dpixWriteStream(fp, dpix))
-        return ERROR_INT("dpix not written to stream", procName, 1);
+    ret = dpixWriteStream(fp, dpix);
     fclose(fp);
-
+    if (ret)
+        return ERROR_INT("dpix not written to stream", procName, 1);
     return 0;
 }
 
 
 /*!
- *  dpixWriteStream()
+ * \brief   dpixWriteStream()
  *
- *      Input:  stream (opened for "wb")
- *              dpix
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fp file stream opened for "wb"
+ * \param[in]    dpix
+ * \return  0 if OK, 1 on error
  */
 l_int32
 dpixWriteStream(FILE  *fp,
@@ -1843,13 +2162,68 @@ DPIX       *dpixt;
 
 
 /*!
- *  dpixEndianByteSwap()
+ * \brief   dpixWriteMem()
  *
- *      Input:  dpixd (can be equal to dpixs or NULL)
- *              dpixs
- *      Return: dpixd always
+ * \param[out]   pdata data of serialized dpix
+ * \param[out]   psize size of returned data
+ * \param[in]    dpix
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
+ *      (1) Serializes a dpix in memory and puts the result in a buffer.
+ * </pre>
+ */
+l_int32
+dpixWriteMem(l_uint8  **pdata,
+             size_t    *psize,
+             DPIX      *dpix)
+{
+l_int32  ret;
+FILE    *fp;
+
+    PROCNAME("dpixWriteMem");
+
+    if (pdata) *pdata = NULL;
+    if (psize) *psize = 0;
+    if (!pdata)
+        return ERROR_INT("&data not defined", procName, 1);
+    if (!psize)
+        return ERROR_INT("&size not defined", procName, 1);
+    if (!dpix)
+        return ERROR_INT("dpix not defined", procName, 1);
+
+#if HAVE_FMEMOPEN
+    if ((fp = open_memstream((char **)pdata, psize)) == NULL)
+        return ERROR_INT("stream not opened", procName, 1);
+    ret = dpixWriteStream(fp, dpix);
+#else
+    L_INFO("work-around: writing to a temp file\n", procName);
+  #ifdef _WIN32
+    if ((fp = fopenWriteWinTempfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #else
+    if ((fp = tmpfile()) == NULL)
+        return ERROR_INT("tmpfile stream not opened", procName, 1);
+  #endif  /* _WIN32 */
+    ret = dpixWriteStream(fp, dpix);
+    rewind(fp);
+    *pdata = l_binaryReadStream(fp, psize);
+#endif  /* HAVE_FMEMOPEN */
+    fclose(fp);
+    return ret;
+}
+
+
+/*!
+ * \brief   dpixEndianByteSwap()
+ *
+ * \param[in]    dpixd can be equal to dpixs or NULL
+ * \param[in]    dpixs
+ * \return  dpixd always
+ *
+ * <pre>
+ * Notes:
  *      (1) On big-endian hardware, this does byte-swapping on each of
  *          the 4-byte words in the dpix data.  On little-endians,
  *          the data is unchanged.  This is used for serialization
@@ -1858,6 +2232,7 @@ DPIX       *dpixt;
  *      (2) The operation can be either in-place or, if dpixd == NULL,
  *          a new dpix is made.  If not in-place, caller must catch
  *          the returned pointer.
+ * </pre>
  */
 DPIX *
 dpixEndianByteSwap(DPIX  *dpixd,
@@ -1906,15 +2281,17 @@ dpixEndianByteSwap(DPIX  *dpixd,
  *                 Print FPix (subsampled, for debugging)             *
  *--------------------------------------------------------------------*/
 /*!
- *  fpixPrintStream()
+ * \brief   fpixPrintStream()
  *
- *      Input:  stream
- *              fpix
- *              factor (subsampled)
- *      Return: 0 if OK, 1 on error
+ * \param[in]    fp file stream
+ * \param[in]    fpix
+ * \param[in]    factor subsampled
+ * \return  0 if OK, 1 on error
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Subsampled printout of fpix for debugging.
+ * </pre>
  */
 l_int32
 fpixPrintStream(FILE    *fp,
