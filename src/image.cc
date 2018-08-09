@@ -1404,7 +1404,7 @@ NAN_METHOD(Image::ToBuffer)
                 state.info_png.color.colortype = LCT_PALETTE;
                 state.info_png.color.bitdepth = obj->pix_->d;
                 if (obj->pix_->d == 8)
-                    state.encoder.auto_convert = LAC_NO;
+                    state.encoder.auto_convert = false;
                 state.info_png.color.palettesize = pixcmapGetCount(obj->pix_->colormap);
                 state.info_png.color.palette = new unsigned char[1024];
                 state.info_raw.palettesize = pixcmapGetCount(obj->pix_->colormap);
