@@ -279,21 +279,31 @@ Mat::Mat(const Mat& m, const Range& _rowRange, const Range& _colRange) : size(&r
     }
 
     *this = m;
-    if( _rowRange != Range::all() && _rowRange != Range(0,rows) )
+    try
     {
-        CV_Assert( 0 <= _rowRange.start && _rowRange.start <= _rowRange.end && _rowRange.end <= m.rows );
-        rows = _rowRange.size();
-        data += step*_rowRange.start;
-        flags |= SUBMATRIX_FLAG;
-    }
+        if( _rowRange != Range::all() && _rowRange != Range(0,rows) )
+        {
+            CV_Assert( 0 <= _rowRange.start && _rowRange.start <= _rowRange.end
+                       && _rowRange.end <= m.rows );
+            rows = _rowRange.size();
+            data += step*_rowRange.start;
+            flags |= SUBMATRIX_FLAG;
+        }
 
-    if( _colRange != Range::all() && _colRange != Range(0,cols) )
+        if( _colRange != Range::all() && _colRange != Range(0,cols) )
+        {
+            CV_Assert( 0 <= _colRange.start && _colRange.start <= _colRange.end
+                       && _colRange.end <= m.cols );
+            cols = _colRange.size();
+            data += _colRange.start*elemSize();
+            flags &= cols < m.cols ? ~CONTINUOUS_FLAG : -1;
+            flags |= SUBMATRIX_FLAG;
+        }
+    }
+    catch(...)
     {
-        CV_Assert( 0 <= _colRange.start && _colRange.start <= _colRange.end && _colRange.end <= m.cols );
-        cols = _colRange.size();
-        data += _colRange.start*elemSize();
-        flags &= cols < m.cols ? ~CONTINUOUS_FLAG : -1;
-        flags |= SUBMATRIX_FLAG;
+        release();
+        throw;
     }
 
     if( rows == 1 )
@@ -2691,15 +2701,17 @@ double cv::kmeans( InputArray _data, int K,
                    int flags, OutputArray _centers )
 {
     const int SPP_TRIALS = 3;
-    Mat data = _data.getMat();
-    bool isrow = data.rows == 1 && data.channels() > 1;
-    int N = !isrow ? data.rows : data.cols;
-    int dims = (!isrow ? data.cols : 1)*data.channels();
-    int type = data.depth();
+    Mat data0 = _data.getMat();
+    bool isrow = data0.rows == 1 && data0.channels() > 1;
+    int N = !isrow ? data0.rows : data0.cols;
+    int dims = (!isrow ? data0.cols : 1)*data0.channels();
+    int type = data0.depth();
 
     attempts = std::max(attempts, 1);
-    CV_Assert( data.dims <= 2 && type == CV_32F && K > 0 );
+    CV_Assert( data0.dims <= 2 && type == CV_32F && K > 0 );
     CV_Assert( N >= K );
+
+    Mat data(N, dims, CV_32F, data0.data, isrow ? dims * sizeof(float) : static_cast<size_t>(data0.step));
 
     _bestLabels.create(N, 1, CV_32S, -1, true);
 
@@ -3437,7 +3449,7 @@ ptrdiff_t operator - (const MatConstIterator& b, const MatConstIterator& a)
     if( a.m != b.m )
         return INT_MAX;
     if( a.sliceEnd == b.sliceEnd )
-        return (b.ptr - a.ptr)/b.elemSize;
+        return (b.ptr - a.ptr)/static_cast<ptrdiff_t>(b.elemSize);
 
     return b.lpos() - a.lpos();
 }
@@ -4272,6 +4284,16 @@ Rect RotatedRect::boundingRect() const
            cvCeil(max(max(max(pt[0].y, pt[1].y), pt[2].y), pt[3].y)));
     r.width -= r.x - 1;
     r.height -= r.y - 1;
+    return r;
+}
+
+
+Rect_<float> RotatedRect::boundingRect2f() const
+{
+    Point2f pt[4];
+    points(pt);
+    Rect_<float> r(Point_<float>(min(min(min(pt[0].x, pt[1].x), pt[2].x), pt[3].x), min(min(min(pt[0].y, pt[1].y), pt[2].y), pt[3].y)),
+                   Point_<float>(max(max(max(pt[0].x, pt[1].x), pt[2].x), pt[3].x), max(max(max(pt[0].y, pt[1].y), pt[2].y), pt[3].y)));
     return r;
 }
 

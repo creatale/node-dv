@@ -97,6 +97,17 @@ CV_INLINE IppiSize ippiSize(int width, int height)
     IppiSize size = { width, height };
     return size;
 }
+
+CV_INLINE IppiSize ippiSize(const cv::Size & _size)
+{
+    IppiSize size = { _size.width, _size.height };
+    return size;
+}
+
+#if IPP_VERSION_MAJOR >= 9 // IPP 9+ is not supported
+#undef HAVE_IPP
+#undef IPP_VERSION_MAJOR
+#endif
 #endif
 
 #ifndef IPPI_CALL
@@ -134,6 +145,10 @@ CV_INLINE IppiSize ippiSize(int width, int height)
 #      define __xgetbv() 0
 #    endif
 #  endif
+#  if defined __AVX2__
+#    include <immintrin.h>
+#    define CV_AVX2 1
+#  endif
 #endif
 
 
@@ -142,7 +157,7 @@ CV_INLINE IppiSize ippiSize(int width, int height)
 # include "arm_neon.h"
 # define CV_NEON 1
 # define CPU_HAS_NEON_FEATURE (true)
-#elif defined(__ARM_NEON__)
+#elif defined(__ARM_NEON__) || defined(__ARM_NEON)
 #  include <arm_neon.h>
 #  define CV_NEON 1
 #  define CPU_HAS_NEON_FEATURE (true)
@@ -168,6 +183,9 @@ CV_INLINE IppiSize ippiSize(int width, int height)
 #endif
 #ifndef CV_AVX
 #  define CV_AVX 0
+#endif
+#ifndef CV_AVX2
+#  define CV_AVX2 0
 #endif
 #ifndef CV_NEON
 #  define CV_NEON 0
@@ -278,7 +296,7 @@ namespace cv
         return classname##_info_var; \
     } \
     \
-    static ::cv::AlgorithmInfo& classname##_info_auto = classname##_info(); \
+    CV_ATTR_USED static ::cv::AlgorithmInfo& classname##_info_auto = classname##_info(); \
     \
     ::cv::AlgorithmInfo* classname::info() const \
     { \
@@ -520,7 +538,7 @@ void func_name( T *array, size_t total, user_data_type aux )                    
     }                                                                               \
     stack[48];                                                                      \
                                                                                     \
-    aux = aux;                                                                      \
+    (void)aux;                                                                      \
                                                                                     \
     if( total <= 1 )                                                                \
         return;                                                                     \

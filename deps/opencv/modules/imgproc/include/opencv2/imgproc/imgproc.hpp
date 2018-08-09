@@ -1,7 +1,3 @@
-/*! \file imgproc.hpp
- \brief The Image Processing
- */
-
 /*M///////////////////////////////////////////////////////////////////////////////////////
 //
 //  IMPORTANT: READ BEFORE DOWNLOADING, COPYING, INSTALLING OR USING.
@@ -84,7 +80,7 @@ public:
     BaseRowFilter();
     //! the destructor
     virtual ~BaseRowFilter();
-    //! the filtering operator. Must be overrided in the derived classes. The horizontal border interpolation is done outside of the class.
+    //! the filtering operator. Must be overridden in the derived classes. The horizontal border interpolation is done outside of the class.
     virtual void operator()(const uchar* src, uchar* dst,
                             int width, int cn) = 0;
     int ksize, anchor;
@@ -111,7 +107,7 @@ public:
     BaseColumnFilter();
     //! the destructor
     virtual ~BaseColumnFilter();
-    //! the filtering operator. Must be overrided in the derived classes. The vertical border interpolation is done outside of the class.
+    //! the filtering operator. Must be overridden in the derived classes. The vertical border interpolation is done outside of the class.
     virtual void operator()(const uchar** src, uchar* dst, int dststep,
                             int dstcount, int width) = 0;
     //! resets the internal buffers, if any
@@ -356,7 +352,7 @@ CV_EXPORTS_W Mat getGaborKernel( Size ksize, double sigma, double theta, double 
 enum { MORPH_ERODE=CV_MOP_ERODE, MORPH_DILATE=CV_MOP_DILATE,
        MORPH_OPEN=CV_MOP_OPEN, MORPH_CLOSE=CV_MOP_CLOSE,
        MORPH_GRADIENT=CV_MOP_GRADIENT, MORPH_TOPHAT=CV_MOP_TOPHAT,
-       MORPH_BLACKHAT=CV_MOP_BLACKHAT };
+       MORPH_BLACKHAT=CV_MOP_BLACKHAT, MORPH_HITMISS };
 
 //! returns horizontal 1D morphological filter
 CV_EXPORTS Ptr<BaseRowFilter> getMorphologyRowFilter(int op, int type, int ksize, int anchor=-1);

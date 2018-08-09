@@ -346,6 +346,7 @@ CV_IMPL CvString
 cvMemStorageAllocString( CvMemStorage* storage, const char* ptr, int len )
 {
     CvString str;
+    memset(&str, 0, sizeof(CvString));
 
     str.len = len >= 0 ? len : (int)strlen(ptr);
     str.ptr = (char*)cvMemStorageAlloc( storage, str.len + 1 );
@@ -645,7 +646,7 @@ icvGrowSeq( CvSeq *seq, int in_front_of )
         /* If there is a free space just after last allocated block
            and it is big enough then enlarge the last block.
            This can happen only if the new block is added to the end of sequence: */
-        if( (unsigned)(ICV_FREE_PTR(storage) - seq->block_max) < CV_STRUCT_ALIGN &&
+        if( (size_t)(ICV_FREE_PTR(storage) - seq->block_max) < CV_STRUCT_ALIGN &&
             storage->free_space >= seq->elem_size && !in_front_of )
         {
             int delta = storage->free_space / elem_size;
@@ -1687,6 +1688,9 @@ cvSeqRemoveSlice( CvSeq* seq, CvSlice slice )
         CV_Error( CV_StsOutOfRange, "start slice index is out of range" );
 
     slice.end_index = slice.start_index + length;
+
+    if ( slice.start_index == slice.end_index )
+        return;
 
     if( slice.end_index < total )
     {

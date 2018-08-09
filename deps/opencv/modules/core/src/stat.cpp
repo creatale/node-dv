@@ -728,10 +728,10 @@ void cv::meanStdDev( InputArray _src, OutputArray _mean, OutputArray _sdv, Input
             dcn_stddev = (int)stddev.total();
             pstddev = (Ipp64f *)stddev.data;
         }
-        for( int k = cn; k < dcn_mean; k++ )
-            pmean[k] = 0;
-        for( int k = cn; k < dcn_stddev; k++ )
-            pstddev[k] = 0;
+        for( int c = cn; c < dcn_mean; c++ )
+            pmean[c] = 0;
+        for( int c = cn; c < dcn_stddev; c++ )
+            pstddev[c] = 0;
         IppiSize sz = { cols, rows };
         int type = src.type();
         if( !mask.empty() )
@@ -1097,8 +1097,8 @@ void cv::minMaxIdx(InputArray _src, double* minVal,
 
     size_t minidx = 0, maxidx = 0;
     int iminval = INT_MAX, imaxval = INT_MIN;
-    float fminval = FLT_MAX, fmaxval = -FLT_MAX;
-    double dminval = DBL_MAX, dmaxval = -DBL_MAX;
+    float  fminval = std::numeric_limits<float>::infinity(),  fmaxval = -fminval;
+    double dminval = std::numeric_limits<double>::infinity(), dmaxval = -dminval;
     size_t startidx = 1;
     int *minval = &iminval, *maxval = &imaxval;
     int planeSize = (int)it.size*cn;
@@ -1110,6 +1110,14 @@ void cv::minMaxIdx(InputArray _src, double* minVal,
 
     for( size_t i = 0; i < it.nplanes; i++, ++it, startidx += planeSize )
         func( ptrs[0], ptrs[1], minval, maxval, &minidx, &maxidx, planeSize, startidx );
+
+    if (!src.empty() && mask.empty())
+    {
+        if( minidx == 0 )
+             minidx = 1;
+         if( maxidx == 0 )
+             maxidx = 1;
+    }
 
     if( minidx == 0 )
         dminval = dmaxval = 0;
@@ -2463,14 +2471,14 @@ struct BatchDistInvoker : public ParallelLoopBody
 }
 
 void cv::batchDistance( InputArray _src1, InputArray _src2,
-                        OutputArray _dist, int dtype, OutputArray _nidx,
-                        int normType, int K, InputArray _mask,
-                        int update, bool crosscheck )
+                       OutputArray _dist, int dtype, OutputArray _nidx,
+                       int normType, int K, InputArray _mask,
+                       int update, bool crosscheck )
 {
     Mat src1 = _src1.getMat(), src2 = _src2.getMat(), mask = _mask.getMat();
     int type = src1.type();
     CV_Assert( type == src2.type() && src1.cols == src2.cols &&
-               (type == CV_32F || type == CV_8U));
+              (type == CV_32F || type == CV_8U));
     CV_Assert( _nidx.needed() == (K > 0) );
 
     if( dtype == -1 )
@@ -2579,6 +2587,11 @@ void cv::findNonZero( InputArray _src, OutputArray _idx )
     Mat src = _src.getMat();
     CV_Assert( src.type() == CV_8UC1 );
     int n = countNonZero(src);
+    if (n == 0)
+    {
+        _idx.release();
+        return;
+    }
     if( _idx.kind() == _InputArray::MAT && !_idx.getMatRef().isContinuous() )
         _idx.release();
     _idx.create(n, 1, CV_32SC2);
