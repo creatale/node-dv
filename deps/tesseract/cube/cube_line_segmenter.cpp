@@ -106,14 +106,26 @@ Pixa *CubeLineSegmenter::VerticalClosing(Pix *pix,
   return pixac;
 }
 
+// Helper cleans up after CrackLine.
+static void CleanupCrackLine(int line_cnt, Pixa **lines_pixa,
+                             Boxa **line_con_comps,
+                             Pixa **line_con_comps_pix) {
+  for (int line = 0; line < line_cnt; line++) {
+    if (lines_pixa[line] != NULL) {
+      pixaDestroy(&lines_pixa[line]);
+    }
+  }
+
+  delete []lines_pixa;
+  boxaDestroy(line_con_comps);
+  pixaDestroy(line_con_comps_pix);
+}
+
 // do a desperate attempt at cracking lines
 Pixa *CubeLineSegmenter::CrackLine(Pix *cracked_line_pix,
                                    Box *cracked_line_box, int line_cnt) {
   // create lines pixa array
   Pixa **lines_pixa = new Pixa*[line_cnt];
-  if (lines_pixa == NULL) {
-    return NULL;
-  }
 
   memset(lines_pixa, 0, line_cnt * sizeof(*lines_pixa));
 
@@ -139,9 +151,8 @@ Pixa *CubeLineSegmenter::CrackLine(Pix *cracked_line_pix,
     if (lines_pixa[line_idx] == NULL) {
       lines_pixa[line_idx] = pixaCreate(line_con_comps->n);
       if (lines_pixa[line_idx] == NULL) {
-        delete []lines_pixa;
-        boxaDestroy(&line_con_comps);
-        pixaDestroy(&line_con_comps_pix);
+        CleanupCrackLine(line_cnt, lines_pixa, &line_con_comps,
+                         &line_con_comps_pix);
         return NULL;
       }
     }
@@ -149,9 +160,9 @@ Pixa *CubeLineSegmenter::CrackLine(Pix *cracked_line_pix,
     // add the concomp to the line
     if (pixaAddPix(lines_pixa[line_idx], con_pix, L_CLONE) != 0 ||
         pixaAddBox(lines_pixa[line_idx], con_box, L_CLONE)) {
-      delete []lines_pixa;
-      boxaDestroy(&line_con_comps);
-      pixaDestroy(&line_con_comps_pix);
+      CleanupCrackLine(line_cnt, lines_pixa, &line_con_comps,
+                       &line_con_comps_pix);
+      return NULL;
     }
   }
 
@@ -192,15 +203,8 @@ Pixa *CubeLineSegmenter::CrackLine(Pix *cracked_line_pix,
   }
 
   // cleanup
-  for (int line = 0; line < line_cnt; line++) {
-    if (lines_pixa[line] != NULL) {
-      pixaDestroy(&lines_pixa[line]);
-    }
-  }
-
-  delete []lines_pixa;
-  boxaDestroy(&line_con_comps);
-  pixaDestroy(&line_con_comps_pix);
+  CleanupCrackLine(line_cnt, lines_pixa, &line_con_comps,
+                   &line_con_comps_pix);
 
   if (success == false) {
     pixaDestroy(&lines);
@@ -230,7 +234,7 @@ Pixa *CubeLineSegmenter::CrackLine(Pix *cracked_line_pix,
   return NULL;
 }
 
-// split a line continously until valid or fail
+// split a line continuously until valid or fail
 Pixa *CubeLineSegmenter::SplitLine(Pix *line_mask_pix, Box *line_box) {
   // clone the line mask
   Pix *line_pix = pixClone(line_mask_pix);
@@ -613,9 +617,6 @@ bool CubeLineSegmenter::AddLines(Pixa *lines) {
 // Index the specific pixa using RTL reading order
 int *CubeLineSegmenter::IndexRTL(Pixa *pixa) {
   int *pix_index = new int[pixa->n];
-  if (pix_index == NULL) {
-    return NULL;
-  }
 
   for (int pix = 0; pix < pixa->n; pix++) {
     pix_index[pix] = pix;
@@ -732,7 +733,7 @@ bool CubeLineSegmenter::LineSegment() {
   return true;
 }
 
-// Estimate the paramters of the font(s) used in the page
+// Estimate the parameters of the font(s) used in the page
 bool CubeLineSegmenter::EstimateFontParams() {
   int hgt_hist[kHgtBins];
   int max_hgt;

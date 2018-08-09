@@ -17,15 +17,17 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
+#include "unicharset.h"
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "params.h"
+#include "serialis.h"
 #include "tesscallback.h"
 #include "tprintf.h"
 #include "unichar.h"
-#include "unicharset.h"
-#include "params.h"
 
 // Special character used in representing character fragments.
 static const char kSeparator = '|';
@@ -97,12 +99,12 @@ void UNICHARSET::UNICHAR_PROPERTIES::SetRangesOpen() {
   max_bottom = MAX_UINT8;
   min_top = 0;
   max_top = MAX_UINT8;
-  min_width = 0;
-  max_width = MAX_INT16;
-  min_bearing = 0;
-  max_bearing = MAX_INT16;
-  min_advance = 0;
-  max_advance = MAX_INT16;
+  width = 0.0f;
+  width_sd = 0.0f;
+  bearing = 0.0f;
+  bearing_sd = 0.0f;
+  advance = 0.0f;
+  advance_sd = 0.0f;
 }
 
 // Sets all ranges to empty. Used before expanding with font-based data.
@@ -111,20 +113,18 @@ void UNICHARSET::UNICHAR_PROPERTIES::SetRangesEmpty() {
   max_bottom = 0;
   min_top = MAX_UINT8;
   max_top = 0;
-  min_width = MAX_INT16;
-  max_width = 0;
-  min_bearing = MAX_INT16;
-  max_bearing = 0;
-  min_advance = MAX_INT16;
-  max_advance = 0;
+  width = 0.0f;
+  width_sd = 0.0f;
+  bearing = 0.0f;
+  bearing_sd = 0.0f;
+  advance = 0.0f;
+  advance_sd = 0.0f;
 }
 
-// Returns true if any of the top/bottom/width/bearing/advance ranges is
-// emtpy.
+// Returns true if any of the top/bottom/width/bearing/advance ranges/stats
+// is emtpy.
 bool UNICHARSET::UNICHAR_PROPERTIES::AnyRangeEmpty() const {
-  return min_bottom > max_bottom || min_top > max_top ||
-      min_width > max_width || min_bearing > max_bearing ||
-      min_advance > max_advance;
+  return width == 0.0f || advance == 0.0f;
 }
 
 // Expands the ranges with the ranges from the src properties.
@@ -134,12 +134,18 @@ void UNICHARSET::UNICHAR_PROPERTIES::ExpandRangesFrom(
   UpdateRange(src.max_bottom, &min_bottom, &max_bottom);
   UpdateRange(src.min_top, &min_top, &max_top);
   UpdateRange(src.max_top, &min_top, &max_top);
-  UpdateRange(src.min_width, &min_width, &max_width);
-  UpdateRange(src.max_width, &min_width, &max_width);
-  UpdateRange(src.min_bearing, &min_bearing, &max_bearing);
-  UpdateRange(src.max_bearing, &min_bearing, &max_bearing);
-  UpdateRange(src.min_advance, &min_advance, &max_advance);
-  UpdateRange(src.max_advance, &min_advance, &max_advance);
+  if (src.width_sd > width_sd) {
+    width = src.width;
+    width_sd = src.width_sd;
+  }
+  if (src.bearing_sd > bearing_sd) {
+    bearing = src.bearing;
+    bearing_sd = src.bearing_sd;
+  }
+  if (src.advance_sd > advance_sd) {
+    advance = src.advance;
+    advance_sd = src.advance_sd;
+  }
 }
 
 // Copies the properties from src into this.
@@ -184,14 +190,14 @@ void UNICHARSET::reserve(int unichars_number) {
   }
 }
 
-const UNICHAR_ID
+UNICHAR_ID
 UNICHARSET::unichar_to_id(const char* const unichar_repr) const {
   return ids.contains(unichar_repr) ?
     ids.unichar_to_id(unichar_repr) : INVALID_UNICHAR_ID;
 }
 
-const UNICHAR_ID UNICHARSET::unichar_to_id(const char* const unichar_repr,
-                                           int length) const {
+UNICHAR_ID UNICHARSET::unichar_to_id(const char* const unichar_repr,
+                                     int length) const {
   assert(length > 0 && length <= UNICHAR_LEN);
   return ids.contains(unichar_repr, length) ?
     ids.unichar_to_id(unichar_repr, length) : INVALID_UNICHAR_ID;
@@ -208,34 +214,6 @@ int UNICHARSET::step(const char* str) const {
   encode_string(str, true, &encoding, &lengths, NULL);
   if (encoding.empty() || encoding[0] == INVALID_UNICHAR_ID) return 0;
   return lengths[0];
-}
-// As step except constraining the search to unichar-ids that are
-// self-normalized. Unlike step, does not encode the whole string, therefore
-// should be used on short strings (like those obtained from
-// get_normed_unichar.)
-int UNICHARSET::normed_step(const char* str) const {
-  // Find the length of the first matching unicharset member.
-  int length = ids.minmatch(str);
-  if (length == 0)
-    return 0;  // Empty string or illegal char.
-
-  while (length <= UNICHAR_LEN) {
-    if (ids.contains(str, length)) {
-      int matched_id = unichar_to_id(str, length);
-      const GenericVector<UNICHAR_ID>& matched_norms = normed_ids(matched_id);
-      bool good_start = matched_norms.size() == 1 &&
-                        matched_norms[0] == matched_id;
-      if (str[length] == '\0') {
-        return good_start ? length : 0;
-      }
-      if (normed_step(str + length) > 0)
-        return length;  // This length works!
-    } else if (str[length] == '\0') {
-      return 0;  // Ran out of string.
-    }
-    ++length;
-  }
-  return 0;
 }
 
 // Return whether the given UTF-8 string is encodable with this UNICHARSET.
@@ -285,7 +263,7 @@ bool UNICHARSET::encode_string(const char* str, bool give_up_on_failure,
   return perfect;
 }
 
-const char* const UNICHARSET::id_to_unichar(UNICHAR_ID id) const {
+const char* UNICHARSET::id_to_unichar(UNICHAR_ID id) const {
   if (id == INVALID_UNICHAR_ID) {
     return INVALID_UNICHAR;
   }
@@ -293,7 +271,7 @@ const char* const UNICHARSET::id_to_unichar(UNICHAR_ID id) const {
   return unichars[id].representation;
 }
 
-const char* const UNICHARSET::id_to_unichar_ext(UNICHAR_ID id) const {
+const char* UNICHARSET::id_to_unichar_ext(UNICHAR_ID id) const {
   if (id == INVALID_UNICHAR_ID) {
     return INVALID_UNICHAR;
   }
@@ -369,19 +347,13 @@ STRING UNICHARSET::debug_str(UNICHAR_ID id) const {
 // stored in the file, and needs to be set when the UNICHARSET is loaded.
 void UNICHARSET::set_normed_ids(UNICHAR_ID unichar_id) {
   unichars[unichar_id].properties.normed_ids.truncate(0);
-  int length = unichars[unichar_id].properties.normed.length();
-  const char* normed_str = unichars[unichar_id].properties.normed.string();
-  int step = 0;
-  for (int offset = 0; offset < length; offset+= step) {
-    step = normed_step(normed_str + offset);
-    if (step == 0) {
-      unichars[unichar_id].properties.normed_ids.truncate(0);
-      unichars[unichar_id].properties.normed_ids.push_back(unichar_id);
-      break;
-    }
-    int normed_id = unichar_to_id(normed_str + offset, step);
-    ASSERT_HOST(normed_id >= 0);
-    unichars[unichar_id].properties.normed_ids.push_back(normed_id);
+  if (unichar_id == UNICHAR_SPACE && id_to_unichar(unichar_id)[0] == ' ') {
+    unichars[unichar_id].properties.normed_ids.push_back(UNICHAR_SPACE);
+  } else if (!encode_string(unichars[unichar_id].properties.normed.string(),
+                            true, &unichars[unichar_id].properties.normed_ids,
+                            NULL, NULL)) {
+    unichars[unichar_id].properties.normed_ids.truncate(0);
+    unichars[unichar_id].properties.normed_ids.push_back(unichar_id);
   }
 }
 
@@ -428,8 +400,6 @@ void UNICHARSET::PartialSetPropertiesFromOther(int start_index,
       }
       unichars[ch].properties.CopyFrom(properties);
       set_normed_ids(ch);
-    } else {
-      tprintf("Failed to get properties for index %d = %s\n", ch, utf8);
     }
   }
 }
@@ -448,11 +418,19 @@ void UNICHARSET::ExpandRangesFromOther(const UNICHARSET& src) {
   }
 }
 
-// Makes this a copy of src. Clears this completely first, so the automattic
-// ids will not be present in this if not in src.
+// Makes this a copy of src. Clears this completely first, so the automatic
+// ids will not be present in this if not in src. Does NOT reorder the set!
 void UNICHARSET::CopyFrom(const UNICHARSET& src) {
   clear();
-  AppendOtherUnicharset(src);
+  for (int ch = 0; ch < src.size_used; ++ch) {
+    const UNICHAR_PROPERTIES& src_props = src.unichars[ch].properties;
+    const char* utf8 = src.id_to_unichar(ch);
+    unichar_insert(utf8);
+    unichars[ch].properties.ExpandRangesFrom(src_props);
+  }
+  // Set properties, including mirror and other_case, WITHOUT reordering
+  // the unicharset.
+  PartialSetPropertiesFromOther(0, src);
 }
 
 // For each id in src, if it does not occur in this, add it, as in
@@ -463,15 +441,15 @@ void UNICHARSET::AppendOtherUnicharset(const UNICHARSET& src) {
   for (int ch = 0; ch < src.size_used; ++ch) {
     const UNICHAR_PROPERTIES& src_props = src.unichars[ch].properties;
     const char* utf8 = src.id_to_unichar(ch);
-    if (strcmp(utf8, " ") != 0 && src_props.AnyRangeEmpty()) {
+    if (ch >= SPECIAL_UNICHAR_CODES_COUNT && src_props.AnyRangeEmpty()) {
       // Only use fully valid entries.
       tprintf("Bad properties for index %d, char %s: "
-              "%d,%d %d,%d %d,%d %d,%d %d,%d\n",
+              "%d,%d %d,%d %g,%g %g,%g %g,%g\n",
               ch, utf8, src_props.min_bottom, src_props.max_bottom,
               src_props.min_top, src_props.max_top,
-              src_props.min_width, src_props.max_width,
-              src_props.min_bearing, src_props.max_bearing,
-              src_props.min_advance, src_props.max_advance);
+              src_props.width, src_props.width_sd,
+              src_props.bearing, src_props.bearing_sd,
+              src_props.advance, src_props.advance_sd);
       continue;
     }
     int id = size_used;
@@ -554,8 +532,6 @@ bool UNICHARSET::GetStrProperties(const char* utf8_str,
                                   UNICHAR_PROPERTIES* props) const {
   props->Init();
   props->SetRangesEmpty();
-  props->min_advance = 0;
-  props->max_advance = 0;
   int total_unicodes = 0;
   GenericVector<UNICHAR_ID> encoding;
   if (!encode_string(utf8_str, true, &encoding, NULL, NULL))
@@ -576,21 +552,16 @@ bool UNICHARSET::GetStrProperties(const char* utf8_str,
     UpdateRange(src_props.max_bottom, &props->min_bottom, &props->max_bottom);
     UpdateRange(src_props.min_top, &props->min_top, &props->max_top);
     UpdateRange(src_props.max_top, &props->min_top, &props->max_top);
-    int bearing = ClipToRange(props->min_advance + src_props.min_bearing,
-                              -MAX_INT16, MAX_INT16);
-    if (total_unicodes == 0 || bearing < props->min_bearing)
-      props->min_bearing = bearing;
-    bearing = ClipToRange(props->max_advance + src_props.max_bearing,
-                          -MAX_INT16, MAX_INT16);
-    if (total_unicodes == 0 || bearing < props->max_bearing)
-      props->max_bearing = bearing;
-    props->min_advance = ClipToRange(props->min_advance + src_props.min_advance,
-                                     -MAX_INT16, MAX_INT16);
-    props->max_advance = ClipToRange(props->max_advance + src_props.max_advance,
-                                     -MAX_INT16, MAX_INT16);
+    float bearing = props->advance + src_props.bearing;
+    if (total_unicodes == 0 || bearing < props->bearing) {
+      props->bearing = bearing;
+      props->bearing_sd = props->advance_sd + src_props.bearing_sd;
+    }
+    props->advance += src_props.advance;
+    props->advance_sd += src_props.advance_sd;
     // With a single width, just use the widths stored in the unicharset.
-    props->min_width = src_props.min_width;
-    props->max_width = src_props.max_width;
+    props->width = src_props.width;
+    props->width_sd = src_props.width_sd;
     // Use the first script id, other_case, mirror, direction.
     // Note that these will need translation, except direction.
     if (total_unicodes == 0) {
@@ -606,10 +577,8 @@ bool UNICHARSET::GetStrProperties(const char* utf8_str,
   }
   if (total_unicodes > 1) {
     // Estimate the total widths from the advance - bearing.
-    props->min_width = ClipToRange(props->min_advance - props->max_bearing,
-                                   -MAX_INT16, MAX_INT16);
-    props->max_width = ClipToRange(props->max_advance - props->min_bearing,
-                                   -MAX_INT16, MAX_INT16);
+    props->width = props->advance - props->bearing;
+    props->width_sd = props->advance_sd + props->bearing_sd;
   }
   return total_unicodes > 0;
 }
@@ -689,37 +658,42 @@ bool UNICHARSET::eq(UNICHAR_ID unichar_id,
   return strcmp(this->id_to_unichar(unichar_id), unichar_repr) == 0;
 }
 
-bool UNICHARSET::save_to_file(FILE *file) const {
-  fprintf(file, "%d\n", this->size());
+bool UNICHARSET::save_to_string(STRING *str) const {
+  const int kFileBufSize = 1024;
+  char buffer[kFileBufSize + 1];
+  snprintf(buffer, kFileBufSize, "%d\n", this->size());
+  *str = buffer;
   for (UNICHAR_ID id = 0; id < this->size(); ++id) {
     int min_bottom, max_bottom, min_top, max_top;
     get_top_bottom(id, &min_bottom, &max_bottom, &min_top, &max_top);
-    int min_width, max_width;
-    get_width_range(id, &min_width, &max_width);
-    int min_bearing, max_bearing;
-    get_bearing_range(id, &min_bearing, &max_bearing);
-    int min_advance, max_advance;
-    get_advance_range(id, &min_advance, &max_advance);
+    float width, width_sd;
+    get_width_stats(id, &width, &width_sd);
+    float bearing, bearing_sd;
+    get_bearing_stats(id, &bearing, &bearing_sd);
+    float advance, advance_sd;
+    get_advance_stats(id, &advance, &advance_sd);
     unsigned int properties = this->get_properties(id);
     if (strcmp(this->id_to_unichar(id), " ") == 0) {
-      fprintf(file, "%s %x %s %d\n", "NULL", properties,
+      snprintf(buffer, kFileBufSize, "%s %x %s %d\n", "NULL", properties,
               this->get_script_from_script_id(this->get_script(id)),
               this->get_other_case(id));
     } else {
-      fprintf(file,
-              "%s %x %d,%d,%d,%d,%d,%d,%d,%d,%d,%d %s %d %d %d %s\t# %s\n",
+      snprintf(buffer, kFileBufSize,
+              "%s %x %d,%d,%d,%d,%g,%g,%g,%g,%g,%g %s %d %d %d %s\t# %s\n",
               this->id_to_unichar(id), properties,
-              min_bottom, max_bottom, min_top, max_top, min_width, max_width,
-              min_bearing, max_bearing, min_advance, max_advance,
+              min_bottom, max_bottom, min_top, max_top, width, width_sd,
+              bearing, bearing_sd, advance, advance_sd,
               this->get_script_from_script_id(this->get_script(id)),
               this->get_other_case(id), this->get_direction(id),
               this->get_mirror(id), this->get_normed_unichar(id),
               this->debug_str(id).string());
     }
+    *str += buffer;
   }
   return true;
 }
 
+// TODO(rays) Replace with TFile everywhere.
 class InMemoryFilePointer {
  public:
   InMemoryFilePointer(const char *memory, int mem_size)
@@ -776,6 +750,14 @@ bool UNICHARSET::load_from_file(FILE *file, bool skip_fragments) {
   return success;
 }
 
+bool UNICHARSET::load_from_file(tesseract::TFile *file, bool skip_fragments) {
+  TessResultCallback2<char *, char *, int> *fgets_cb =
+      NewPermanentTessCallback(file, &tesseract::TFile::FGets);
+  bool success = load_via_fgets(fgets_cb, skip_fragments);
+  delete fgets_cb;
+  return success;
+}
+
 bool UNICHARSET::load_via_fgets(
     TessResultCallback2<char *, char *, int> *fgets_cb,
     bool skip_fragments) {
@@ -798,12 +780,12 @@ bool UNICHARSET::load_via_fgets(
     int max_bottom = MAX_UINT8;
     int min_top = 0;
     int max_top = MAX_UINT8;
-    int min_width = 0;
-    int max_width = MAX_INT16;
-    int min_bearing = 0;
-    int max_bearing = MAX_INT16;
-    int min_advance = 0;
-    int max_advance = MAX_INT16;
+    float width = 0.0f;
+    float width_sd = 0.0f;
+    float bearing = 0.0f;
+    float bearing_sd = 0.0f;
+    float advance = 0.0f;
+    float advance_sd = 0.0f;
     // TODO(eger): check that this default it ok
     // after enabling BiDi iterator for Arabic+Cube.
     int direction = UNICHARSET::U_LEFT_TO_RIGHT;
@@ -813,19 +795,19 @@ bool UNICHARSET::load_via_fgets(
     int v = -1;
     if (fgets_cb->Run(buffer, sizeof (buffer)) == NULL ||
         ((v = sscanf(buffer,
-                     "%s %x %d,%d,%d,%d,%d,%d,%d,%d,%d,%d %63s %d %d %d %63s",
+                     "%s %x %d,%d,%d,%d,%g,%g,%g,%g,%g,%g %63s %d %d %d %63s",
                      unichar, &properties,
                      &min_bottom, &max_bottom, &min_top, &max_top,
-                     &min_width, &max_width, &min_bearing, &max_bearing,
-                     &min_advance, &max_advance, script, &other_case,
+                     &width, &width_sd, &bearing, &bearing_sd,
+                     &advance, &advance_sd, script, &other_case,
                      &direction, &mirror, normed)) != 17 &&
          (v = sscanf(buffer,
-                     "%s %x %d,%d,%d,%d,%d,%d,%d,%d,%d,%d %63s %d %d %d",
+                     "%s %x %d,%d,%d,%d,%g,%g,%g,%g,%g,%g %63s %d %d %d",
                      unichar, &properties,
                      &min_bottom, &max_bottom, &min_top, &max_top,
-                     &min_width, &max_width, &min_bearing, &max_bearing,
-                     &min_advance, &max_advance,
-                     script, &other_case, &direction, &mirror)) != 16 &&
+                     &width, &width_sd, &bearing, &bearing_sd,
+                     &advance, &advance_sd, script, &other_case,
+                     &direction, &mirror)) != 16 &&
           (v = sscanf(buffer, "%s %x %d,%d,%d,%d %63s %d %d %d",
                       unichar, &properties,
                       &min_bottom, &max_bottom, &min_top, &max_top,
@@ -844,8 +826,11 @@ bool UNICHARSET::load_via_fgets(
     // Skip fragments if needed.
     CHAR_FRAGMENT *frag = NULL;
     if (skip_fragments && (frag = CHAR_FRAGMENT::parse_from_string(unichar))) {
+      int num_pieces = frag->get_total();
       delete frag;
-      continue;
+      // Skip multi-element fragments, but keep singles like UNICHAR_BROKEN in.
+      if (num_pieces > 1)
+        continue;
     }
     // Insert unichar into unicharset and set its properties.
     if (strcmp(unichar, "NULL") == 0)
@@ -862,9 +847,9 @@ bool UNICHARSET::load_via_fgets(
     this->set_script(id, script);
     this->unichars[id].properties.enabled = true;
     this->set_top_bottom(id, min_bottom, max_bottom, min_top, max_top);
-    this->set_width_range(id, min_width, max_width);
-    this->set_bearing_range(id, min_bearing, max_bearing);
-    this->set_advance_range(id, min_advance, max_advance);
+    this->set_width_stats(id, width, width_sd);
+    this->set_bearing_stats(id, bearing, bearing_sd);
+    this->set_advance_stats(id, advance, advance_sd);
     this->set_direction(id, static_cast<UNICHARSET::Direction>(direction));
     ASSERT_HOST(other_case < unicharset_size);
     this->set_other_case(id, (v>3) ? other_case : id);
@@ -959,8 +944,10 @@ bool UNICHARSET::major_right_to_left() const {
 // Set a whitelist and/or blacklist of characters to recognize.
 // An empty or NULL whitelist enables everything (minus any blacklist).
 // An empty or NULL blacklist disables nothing.
+// An empty or NULL blacklist has no effect.
 void UNICHARSET::set_black_and_whitelist(const char* blacklist,
-                                         const char* whitelist) {
+                                         const char* whitelist,
+                                         const char* unblacklist) {
   bool def_enabled = whitelist == NULL || whitelist[0] == '\0';
   // Set everything to default
   for (int ch = 0; ch < size_used; ++ch)
@@ -983,6 +970,33 @@ void UNICHARSET::set_black_and_whitelist(const char* blacklist,
         unichars[encoding[i]].properties.enabled = false;
     }
   }
+  if (unblacklist != NULL && unblacklist[0] != '\0') {
+    // Re-enable the unblacklist.
+    GenericVector<UNICHAR_ID> encoding;
+    encode_string(unblacklist, false, &encoding, NULL, NULL);
+    for (int i = 0; i < encoding.size(); ++i) {
+      if (encoding[i] != INVALID_UNICHAR_ID)
+        unichars[encoding[i]].properties.enabled = true;
+    }
+  }
+}
+
+// Returns true if there are any repeated unicodes in the normalized
+// text of any unichar-id in the unicharset.
+bool UNICHARSET::AnyRepeatedUnicodes() const {
+  int start_id = 0;
+  if (has_special_codes()) start_id = SPECIAL_UNICHAR_CODES_COUNT;
+  for (int id = start_id; id < size_used; ++id) {
+    // Convert to unicodes.
+    GenericVector<int> unicodes;
+    if (UNICHAR::UTF8ToUnicode(get_normed_unichar(id), &unicodes) &&
+        unicodes.size() > 1) {
+      for (int u = 1; u < unicodes.size(); ++u) {
+        if (unicodes[u - 1] == unicodes[u]) return true;
+      }
+    }
+  }
+  return false;
 }
 
 int UNICHARSET::add_script(const char* script) {
@@ -993,13 +1007,13 @@ int UNICHARSET::add_script(const char* script) {
   if (script_table_size_reserved == 0) {
     script_table_size_reserved = 8;
     script_table = new char*[script_table_size_reserved];
-  }
-  if (script_table_size_used + 1 >= script_table_size_reserved) {
-    char** new_script_table = new char*[script_table_size_reserved * 2];
-    memcpy(new_script_table, script_table, script_table_size_reserved * sizeof(char*));
+  } else if (script_table_size_used >= script_table_size_reserved) {
+    assert(script_table_size_used == script_table_size_reserved);
+    script_table_size_reserved += script_table_size_reserved;
+    char** new_script_table = new char*[script_table_size_reserved];
+    memcpy(new_script_table, script_table, script_table_size_used * sizeof(char*));
     delete[] script_table;
     script_table = new_script_table;
-      script_table_size_reserved = 2 * script_table_size_reserved;
   }
   script_table[script_table_size_used] = new char[strlen(script) + 1];
   strcpy(script_table[script_table_size_used], script);

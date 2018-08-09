@@ -58,7 +58,6 @@ const int par2 = 6750 / (approx_dist * approx_dist);
 
 
 TESSLINE* ApproximateOutline(bool allow_detailed_fx, C_OUTLINE* c_outline) {
-  EDGEPT *edgept;                // converted steps
   TBOX loop_box;                  // bounding box
   inT32 area;                    // loop area
   EDGEPT stack_edgepts[FASTEDGELENGTH];  // converted path
@@ -73,9 +72,9 @@ TESSLINE* ApproximateOutline(bool allow_detailed_fx, C_OUTLINE* c_outline) {
   if (!poly_wide_objects_better && loop_box.width() > area)
     area = loop_box.width();
   area *= area;
-  edgept = edgesteps_to_edgepts(c_outline, edgepts);
+  edgesteps_to_edgepts(c_outline, edgepts);
   fix2(edgepts, area);
-  edgept = poly2 (edgepts, area);  // 2nd approximation.
+  EDGEPT* edgept = poly2(edgepts, area);  // 2nd approximation.
   EDGEPT* startpt = edgept;
   EDGEPT* result = NULL;
   EDGEPT* prev_result = NULL;
@@ -215,18 +214,18 @@ EDGEPT edgepts[]                 //output is array
 void fix2(                //polygonal approx
           EDGEPT *start,  /*loop to approimate */
           int area) {
-  register EDGEPT *edgept;       /*current point */
-  register EDGEPT *edgept1;
-  register EDGEPT *loopstart;    /*modified start of loop */
-  register EDGEPT *linestart;    /*start of line segment */
-  register int dir1, dir2;       /*directions of line */
-  register int sum1, sum2;       /*lengths in dir1,dir2 */
+  EDGEPT *edgept; /*current point */
+  EDGEPT *edgept1;
+  EDGEPT *loopstart;             /*modified start of loop */
+  EDGEPT *linestart;             /*start of line segment */
+  int dir1, dir2;                /*directions of line */
+  int sum1, sum2;                /*lengths in dir1,dir2 */
   int stopped;                   /*completed flag */
   int fixed_count;               //no of fixed points
   int d01, d12, d23, gapmin;
   TPOINT d01vec, d12vec, d23vec;
-  register EDGEPT *edgefix, *startfix;
-  register EDGEPT *edgefix0, *edgefix1, *edgefix2, *edgefix3;
+  EDGEPT *edgefix, *startfix;
+  EDGEPT *edgefix0, *edgefix1, *edgefix2, *edgefix3;
 
   edgept = start;                /*start of loop */
   while (((edgept->flags[DIR] - edgept->prev->flags[DIR] + 1) & 7) < 3
@@ -401,10 +400,10 @@ EDGEPT *poly2(                  //second poly
               EDGEPT *startpt,  /*start of loop */
               int area          /*area of blob box */
              ) {
-  register EDGEPT *edgept;       /*current outline point */
+  EDGEPT *edgept;                /*current outline point */
   EDGEPT *loopstart;             /*starting point */
-  register EDGEPT *linestart;    /*start of line */
-  register int edgesum;          /*correction count */
+  EDGEPT *linestart;             /*start of line */
+  int edgesum;                   /*correction count */
 
   if (area < 1200)
     area = 1200;                 /*minimum value */
@@ -500,13 +499,13 @@ void cutline(                //recursive refine
              EDGEPT *last,
              int area        /*area of object */
             ) {
-  register EDGEPT *edge;         /*current edge */
+  EDGEPT *edge;                  /*current edge */
   TPOINT vecsum;                 /*vector sum */
   int vlen;                      /*approx length of vecsum */
   TPOINT vec;                    /*accumulated vector */
   EDGEPT *maxpoint;              /*worst point */
   int maxperp;                   /*max deviation */
-  register int perp;             /*perp distance */
+  int perp;                      /*perp distance */
   int ptcount;                   /*no of points */
   int squaresum;                 /*sum of perps */
 

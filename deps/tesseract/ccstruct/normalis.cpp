@@ -382,7 +382,7 @@ void DENORM::LocalDenormTransform(const FCOORD& pt, FCOORD* original) const {
 }
 
 // Transforms the given coords all the way back to source image space using
-// the full transformation sequence defined by this and its predecesors
+// the full transformation sequence defined by this and its predecessors
 // recursively, shallowest first, and finally any block re_rotation.
 // If last_denorm is not NULL, then the last transformation used will
 // be last_denorm, and the block re_rotation will never be executed.
@@ -451,8 +451,8 @@ void DENORM::XHeightRange(int unichar_id, const UNICHARSET& unicharset,
                             &min_top, &max_top);
 
   // Calculate the scale factor we'll use to get to image y-pixels
-  double midx = (bbox.left() + bbox.right()) / 2;
-  double ydiff = (bbox.top() - bbox.bottom()) + 2;
+  double midx = (bbox.left() + bbox.right()) / 2.0;
+  double ydiff = (bbox.top() - bbox.bottom()) + 2.0;
   FCOORD mid_bot(midx, bbox.bottom()), tmid_bot;
   FCOORD mid_high(midx, bbox.bottom() + ydiff), tmid_high;
   DenormTransform(NULL, mid_bot, &tmid_bot);
@@ -487,7 +487,7 @@ void DENORM::XHeightRange(int unichar_id, const UNICHARSET& unicharset,
       top > kBlnCellHeight - kBlnBaselineOffset / 2)
     max_top += kBlnBaselineOffset;
   top -= bln_yshift;
-  int height = top - kBlnBaselineOffset - bottom_shift;
+  int height = top - kBlnBaselineOffset;
   double min_height = min_top - kBlnBaselineOffset - tolerance;
   double max_height = max_top - kBlnBaselineOffset + tolerance;
 

@@ -22,6 +22,7 @@
 #define TESSERACT_TEXTORD_TEXTORD_H__
 
 #include "ccstruct.h"
+#include "bbgrid.h"
 #include "blobbox.h"
 #include "gap_map.h"
 #include "publictypes.h"  // For PageSegMode.
@@ -35,6 +36,35 @@ class ScrollView;
 
 namespace tesseract {
 
+// A simple class that can be used by BBGrid to hold a word and an expanded
+// bounding box that makes it easy to find words to put diacritics.
+class WordWithBox {
+ public:
+  WordWithBox() : word_(NULL) {}
+  explicit WordWithBox(WERD *word)
+      : word_(word), bounding_box_(word->bounding_box()) {
+    int height = bounding_box_.height();
+    bounding_box_.pad(height, height);
+  }
+
+  const TBOX &bounding_box() const { return bounding_box_; }
+  // Returns the bounding box of only the good blobs.
+  TBOX true_bounding_box() const { return word_->true_bounding_box(); }
+  C_BLOB_LIST *RejBlobs() const { return word_->rej_cblob_list(); }
+  const WERD *word() const { return word_; }
+
+ private:
+  // Borrowed pointer to a real word somewhere that must outlive this class.
+  WERD *word_;
+  // Cached expanded bounding box of the word, padded all round by its height.
+  TBOX bounding_box_;
+};
+
+// Make it usable by BBGrid.
+CLISTIZEH(WordWithBox)
+typedef BBGrid<WordWithBox, WordWithBox_CLIST, WordWithBox_C_IT> WordGrid;
+typedef GridSearch<WordWithBox, WordWithBox_CLIST, WordWithBox_C_IT> WordSearch;
+
 class Textord {
  public:
   explicit Textord(CCStruct* ccstruct);
@@ -47,11 +77,13 @@ class Textord {
   // thresholds_pix is expected to be present iff grey_pix is present and
   // can be an integer factor reduction of the grey_pix. It represents the
   // thresholds that were used to create the binary_pix from the grey_pix.
-  void TextordPage(PageSegMode pageseg_mode, const FCOORD& reskew,
-                   int width, int height, Pix* binary_pix,
-                   Pix* thresholds_pix, Pix* grey_pix,
-                   bool use_box_bottoms,
-                   BLOCK_LIST* blocks, TO_BLOCK_LIST* to_blocks);
+  // diacritic_blobs contain small confusing components that should be added
+  // to the appropriate word(s) in case they are really diacritics.
+  void TextordPage(PageSegMode pageseg_mode, const FCOORD &reskew, int width,
+                   int height, Pix *binary_pix, Pix *thresholds_pix,
+                   Pix *grey_pix, bool use_box_bottoms,
+                   BLOBNBOX_LIST *diacritic_blobs, BLOCK_LIST *blocks,
+                   TO_BLOCK_LIST *to_blocks);
 
   // If we were supposed to return only a single textline, and there is more
   // than one, clean up and leave only the best.
@@ -206,12 +238,23 @@ class Textord {
   // Must have at least one WERD.
   // WERDs contain a fake blob.
   void cleanup_nontext_block(BLOCK* block);
-  void cleanup_blocks(BLOCK_LIST *blocks);
+  void cleanup_blocks(bool clean_noise, BLOCK_LIST *blocks);
   BOOL8 clean_noise_from_row(ROW *row);
   void clean_noise_from_words(ROW *row);
   // Remove outlines that are a tiny fraction in either width or height
   // of the word height.
   void clean_small_noise_from_words(ROW *row);
+  // Groups blocks by rotation, then, for each group, makes a WordGrid and calls
+  // TransferDiacriticsToWords to copy the diacritic blobs to the most
+  // appropriate words in the group of blocks. Source blobs are not touched.
+  void TransferDiacriticsToBlockGroups(BLOBNBOX_LIST* diacritic_blobs,
+                                       BLOCK_LIST* blocks);
+  // Places a copy of blobs that are near a word (after applying rotation to the
+  // blob) in the most appropriate word, unless there is doubt, in which case a
+  // blob can end up in two words. Source blobs are not touched.
+  void TransferDiacriticsToWords(BLOBNBOX_LIST *diacritic_blobs,
+                                 const FCOORD &rotation, WordGrid *word_grid);
+
  public:
   // makerow.cpp ///////////////////////////////////////////
   BOOL_VAR_H(textord_single_height_mode, false,
@@ -243,7 +286,7 @@ class Textord {
   BOOL_VAR_H(tosp_only_small_gaps_for_kern, false, "Better guess");
   BOOL_VAR_H(tosp_all_flips_fuzzy, false, "Pass ANY flip to context?");
   BOOL_VAR_H(tosp_fuzzy_limit_all, true,
-             "Dont restrict kn->sp fuzzy limit to tables");
+             "Don't restrict kn->sp fuzzy limit to tables");
   BOOL_VAR_H(tosp_stats_use_xht_gaps, true,
              "Use within xht gap for wd breaks");
   BOOL_VAR_H(tosp_use_xht_gaps, true,
@@ -251,7 +294,7 @@ class Textord {
   BOOL_VAR_H(tosp_only_use_xht_gaps, false,
              "Only use within xht gap for wd breaks");
   BOOL_VAR_H(tosp_rule_9_test_punct, false,
-             "Dont chng kn to space next to punct");
+             "Don't chng kn to space next to punct");
   BOOL_VAR_H(tosp_flip_fuzz_kn_to_sp, true, "Default flip");
   BOOL_VAR_H(tosp_flip_fuzz_sp_to_kn, true, "Default flip");
   BOOL_VAR_H(tosp_improve_thresh, false,
@@ -307,7 +350,7 @@ class Textord {
   double_VAR_H(tosp_fuzzy_kn_fraction, 0.5, "New fuzzy kn alg");
   double_VAR_H(tosp_fuzzy_sp_fraction, 0.5, "New fuzzy sp alg");
   double_VAR_H(tosp_min_sane_kn_sp, 1.5,
-               "Dont trust spaces less than this time kn");
+               "Don't trust spaces less than this time kn");
   double_VAR_H(tosp_init_guess_kn_mult, 2.2,
                "Thresh guess - mult kn by this");
   double_VAR_H(tosp_init_guess_xht_mult, 0.28,
@@ -315,15 +358,15 @@ class Textord {
   double_VAR_H(tosp_max_sane_kn_thresh, 5.0,
                "Multiplier on kn to limit thresh");
   double_VAR_H(tosp_flip_caution, 0.0,
-               "Dont autoflip kn to sp when large separation");
+               "Don't autoflip kn to sp when large separation");
   double_VAR_H(tosp_large_kerning, 0.19,
                "Limit use of xht gap with large kns");
   double_VAR_H(tosp_dont_fool_with_small_kerns, -1,
                "Limit use of xht gap with odd small kns");
   double_VAR_H(tosp_near_lh_edge, 0,
-               "Dont reduce box if the top left is non blank");
+               "Don't reduce box if the top left is non blank");
   double_VAR_H(tosp_silly_kn_sp_gap, 0.2,
-               "Dont let sp minus kn get too small");
+               "Don't let sp minus kn get too small");
   double_VAR_H(tosp_pass_wide_fuzz_sp_to_context, 0.75,
                "How wide fuzzies need context");
   // tordmain.cpp ///////////////////////////////////////////

@@ -23,7 +23,6 @@
 #include "dawg.h"
 #include "dawg_cache.h"
 #include "host.h"
-#include "oldlist.h"
 #include "ratngs.h"
 #include "stopper.h"
 #include "trie.h"
@@ -76,11 +75,13 @@ enum XHeightConsistencyEnum {XH_GOOD, XH_SUBNORMAL, XH_INCONSISTENT};
 
 struct DawgArgs {
   DawgArgs(DawgPositionVector *d, DawgPositionVector *up, PermuterType p)
-      : active_dawgs(d), updated_dawgs(up), permuter(p) {}
+      : active_dawgs(d), updated_dawgs(up), permuter(p), valid_end(false) {}
 
   DawgPositionVector *active_dawgs;
   DawgPositionVector *updated_dawgs;
   PermuterType permuter;
+  // True if the current position is a valid word end.
+  bool valid_end;
 };
 
 class Dict {
@@ -243,7 +244,7 @@ class Dict {
                              CHAR_FRAGMENT_INFO *char_frag_info);
 
   /* stopper.cpp *************************************************************/
-  bool NoDangerousAmbig(WERD_CHOICE *BestChoice,
+  bool TESS_API NoDangerousAmbig(WERD_CHOICE *BestChoice,
                         DANGERR *fixpt,
                         bool fix_replaceable,
                         MATRIX* ratings);
@@ -294,7 +295,13 @@ class Dict {
   /// Initialize Dict class - load dawgs from [lang].traineddata and
   /// user-specified wordlist and parttern list.
   static DawgCache *GlobalDawgCache();
-  void Load(DawgCache *dawg_cache);
+  // Sets up ready for a Load.
+  void SetupForLoad(DawgCache *dawg_cache);
+  // Loads the dawgs needed by Tesseract. Call FinishLoad() after.
+  void Load(const char *data_file_name, const STRING &lang);
+  // Completes the loading process after Load().
+  // Returns false if no dictionaries were loaded.
+  bool FinishLoad();
   void End();
 
   // Resets the document dictionary analogous to ResetAdaptiveClassifier.
@@ -374,10 +381,11 @@ class Dict {
   double def_probability_in_context(
       const char* lang, const char* context, int context_bytes,
       const char* character, int character_bytes) {
-    (void) context;
-    (void) context_bytes;
-    (void) character;
-    (void) character_bytes;
+    (void)lang;
+    (void)context;
+    (void)context_bytes;
+    (void)character;
+    (void)character_bytes;
     return 0.0;
   }
   double ngram_probability_in_context(const char* lang,
@@ -397,11 +405,9 @@ class Dict {
   }
 
   inline void SetWildcardID(UNICHAR_ID id) { wildcard_unichar_id_ = id; }
-  inline const UNICHAR_ID WildcardID() const {
-    return wildcard_unichar_id_;
-  }
+  inline UNICHAR_ID WildcardID() const { return wildcard_unichar_id_; }
   /// Return the number of dawgs in the dawgs_ vector.
-  inline const int NumDawgs() const { return dawgs_.size(); }
+  inline int NumDawgs() const { return dawgs_.size(); }
   /// Return i-th dawg pointer recorded in the dawgs_ vector.
   inline const Dawg *GetDawg(int index) const { return dawgs_[index]; }
   /// Return the points to the punctuation dawg.
@@ -436,7 +442,7 @@ class Dict {
   /// edges were found.
   void ProcessPatternEdges(const Dawg *dawg, const DawgPosition &info,
                            UNICHAR_ID unichar_id, bool word_end,
-                           DawgPositionVector *updated_dawgs,
+                           DawgArgs *dawg_args,
                            PermuterType *current_permuter) const;
 
   /// Read/Write/Access special purpose dawgs which contain words
@@ -483,6 +489,8 @@ class Dict {
   inline void SetWordsegRatingAdjustFactor(float f) {
     wordseg_rating_adjust_factor_ = f;
   }
+  /// Returns true if the language is space-delimited (not CJ, or T).
+  bool IsSpaceDelimitedLang() const;
 
  private:
   /** Private member variables. */
@@ -544,9 +552,13 @@ class Dict {
   /// Variable members.
   /// These have to be declared and initialized after image_ptr_, which contains
   /// the pointer to the params vector - the member of its base CCUtil class.
-  STRING_VAR_H(user_words_suffix, "", "A list of user-provided words.");
+  STRING_VAR_H(user_words_file, "", "A filename of user-provided words.");
+  STRING_VAR_H(user_words_suffix, "",
+               "A suffix of user-provided words located in tessdata.");
+  STRING_VAR_H(user_patterns_file, "",
+               "A filename of user-provided patterns.");
   STRING_VAR_H(user_patterns_suffix, "",
-               "A list of user-provided patterns.");
+               "A suffix of user-provided patterns located in tessdata.");
   BOOL_VAR_H(load_system_dawg, true, "Load system word dawg.");
   BOOL_VAR_H(load_freq_dawg, true, "Load frequent word dawg.");
   BOOL_VAR_H(load_unambig_dawg, true, "Load unambiguous word dawg.");
@@ -610,7 +622,7 @@ class Dict {
              "Make AcceptableChoice() always return false. Useful"
              " when there is a need to explore all segmentations");
   BOOL_VAR_H(save_raw_choices, false,
-             "Deprecated- backward compatability only");
+             "Deprecated- backward compatibility only");
   INT_VAR_H(tessedit_truncate_wordchoice_log, 10, "Max words to keep in list");
   STRING_VAR_H(word_to_debug, "", "Word for which stopper debug information"
                " should be printed to stdout");

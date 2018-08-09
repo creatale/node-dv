@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        fpchop.cpp  (Formerly fp_chop.c)
  * Description: Code to chop fixed pitch text into character cells.
- * Author:		Ray Smith
- * Created:		Thu Sep 16 11:14:15 BST 1993
+ * Author:    Ray Smith
+ * Created:   Thu Sep 16 11:14:15 BST 1993
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -259,8 +259,8 @@ void split_to_blob(                                 //split the blob
                      pitch_error,
                      left_coutlines,
                      right_coutlines);
-  if (blob != NULL)
-    delete blob;                 //free it
+
+  delete blob;
 }
 
 /**********************************************************************
@@ -730,12 +730,11 @@ C_OUTLINE *join_chopped_fragments(                         //join pieces
   return NULL;
 }
 
-
 /**********************************************************************
  * join_segments
  *
  * Join the two edgestep fragments such that the second comes after
- * the first and the gap beween them is closed.
+ * the first and the gap between them is closed.
  **********************************************************************/
 
 void join_segments(                         //join pieces

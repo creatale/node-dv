@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        reject.cpp  (Formerly reject.c)
  * Description: Rejection functions used in tessedit
- * Author:		Phil Cheatle
- * Created:		Wed Sep 23 16:50:21 BST 1992
+ * Author:    Phil Cheatle
+ * Created:   Wed Sep 23 16:50:21 BST 1992
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -232,7 +232,7 @@ float compute_reject_threshold(WERD_CHOICE* word) {
 
   int blob_count = word->length();
   GenericVector<float> ratings;
-  ratings.init_to_size(blob_count, 0.0f);
+  ratings.resize_no_init(blob_count);
   for (int i = 0; i < blob_count; ++i) {
     ratings[i] = word->certainty(i);
   }
@@ -521,7 +521,7 @@ BOOL8 Tesseract::word_contains_non_1_digit(const char *word,
 
 /*************************************************************************
  * dont_allow_1Il()
- * Dont unreject LONE accepted 1Il conflict set chars
+ * Don't unreject LONE accepted 1Il conflict set chars
  *************************************************************************/
 void Tesseract::dont_allow_1Il(WERD_RES *word) {
   int i = 0;
@@ -633,7 +633,7 @@ void Tesseract::flip_hyphens(WERD_RES *word_res) {
       next_left = 9999;
     else
       next_left = word_res->rebuild_word->blobs[i + 1]->bounding_box().left();
-    // Dont touch small or touching blobs - it is too dangerous.
+    // Don't touch small or touching blobs - it is too dangerous.
     if ((out_box.width() > 8 * word_res->denorm.x_scale()) &&
         (out_box.left() > prev_right) && (out_box.right() < next_left)) {
       aspect_ratio = out_box.width() / (float) out_box.height();

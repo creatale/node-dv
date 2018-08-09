@@ -23,7 +23,6 @@
 #include "language_model.h"
 
 #include "dawg.h"
-#include "freelist.h"
 #include "intproto.h"
 #include "helpers.h"
 #include "lm_state.h"
@@ -32,7 +31,7 @@
 #include "params.h"
 #include "params_training_featdef.h"
 
-#if defined(_MSC_VER) || defined(ANDROID)
+#if (defined(_MSC_VER) && _MSC_VER < 1900) || defined(ANDROID)
 double log2(double n) {
   return log(n) / log(2.0);
 }
@@ -119,20 +118,15 @@ LanguageModel::LanguageModel(const UnicityTable<FontInfo> *fontinfo_table,
     BOOL_INIT_MEMBER(language_model_use_sigmoidal_certainty, false,
                      "Use sigmoidal score for certainty",
                      dict->getCCUtil()->params()),
+  dawg_args_(NULL, new DawgPositionVector(), NO_PERM),
   fontinfo_table_(fontinfo_table), dict_(dict),
   fixed_pitch_(false), max_char_wh_ratio_(0.0),
   acceptable_choice_found_(false) {
   ASSERT_HOST(dict_ != NULL);
-  dawg_args_ = new DawgArgs(NULL, new DawgPositionVector(), NO_PERM);
-  very_beginning_active_dawgs_ = new DawgPositionVector();
-  beginning_active_dawgs_ = new DawgPositionVector();
 }
 
 LanguageModel::~LanguageModel() {
-  delete very_beginning_active_dawgs_;
-  delete beginning_active_dawgs_;
-  delete dawg_args_->updated_dawgs;
-  delete dawg_args_;
+  delete dawg_args_.updated_dawgs;
 }
 
 void LanguageModel::InitForWord(const WERD_CHOICE *prev_word,
@@ -145,10 +139,10 @@ void LanguageModel::InitForWord(const WERD_CHOICE *prev_word,
   correct_segmentation_explored_ = false;
 
   // Initialize vectors with beginning DawgInfos.
-  very_beginning_active_dawgs_->clear();
-  dict_->init_active_dawgs(very_beginning_active_dawgs_, false);
-  beginning_active_dawgs_->clear();
-  dict_->default_dawgs(beginning_active_dawgs_, false);
+  very_beginning_active_dawgs_.clear();
+  dict_->init_active_dawgs(&very_beginning_active_dawgs_, false);
+  beginning_active_dawgs_.clear();
+  dict_->default_dawgs(&beginning_active_dawgs_, false);
 
   // Fill prev_word_str_ with the last language_model_ngram_order
   // unichars from prev_word.
@@ -171,8 +165,10 @@ void LanguageModel::InitForWord(const WERD_CHOICE *prev_word,
   }
 }
 
-// Helper scans the collection of predecessors for competing siblings that
-// have the same letter with the opposite case, setting competing_vse.
+/**
+ * Helper scans the collection of predecessors for competing siblings that
+ * have the same letter with the opposite case, setting competing_vse.
+ */
 static void ScanParentsForCaseMix(const UNICHARSET& unicharset,
                                   LanguageModelState* parent_node) {
   if (parent_node == NULL) return;
@@ -200,8 +196,10 @@ static void ScanParentsForCaseMix(const UNICHARSET& unicharset,
   }
 }
 
-// Helper returns true if the given choice has a better case variant before
-// it in the choice_list that is not distinguishable by size.
+/**
+ * Helper returns true if the given choice has a better case variant before
+ * it in the choice_list that is not distinguishable by size.
+ */
 static bool HasBetterCaseVariant(const UNICHARSET& unicharset,
                                  const BLOB_CHOICE* choice,
                                  BLOB_CHOICE_LIST* choices) {
@@ -222,27 +220,32 @@ static bool HasBetterCaseVariant(const UNICHARSET& unicharset,
   return false;  // Should never happen, but just in case.
 }
 
-// UpdateState has the job of combining the ViterbiStateEntry lists on each
-// of the choices on parent_list with each of the blob choices in curr_list,
-// making a new ViterbiStateEntry for each sensible path.
-// This could be a huge set of combinations, creating a lot of work only to
-// be truncated by some beam limit, but only certain kinds of paths will
-// continue at the next step:
-//  paths that are liked by the language model: either a DAWG or the n-gram
-//    model, where active.
-//  paths that represent some kind of top choice. The old permuter permuted
-//   the top raw classifier score, the top upper case word and the top lower-
-//   case word. UpdateState now concentrates its top-choice paths on top
-//   lower-case, top upper-case (or caseless alpha), and top digit sequence,
-//   with allowance for continuation of these paths through blobs where such
-//   a character does not appear in the choices list.
-// GetNextParentVSE enforces some of these models to minimize the number of
-// calls to AddViterbiStateEntry, even prior to looking at the language model.
-// Thus an n-blob sequence of [l1I] will produce 3n calls to
-// AddViterbiStateEntry instead of 3^n.
-// Of course it isn't quite that simple as Title Case is handled by allowing
-// lower case to continue an upper case initial, but it has to be detected
-// in the combiner so it knows which upper case letters are initial alphas.
+/**
+ * UpdateState has the job of combining the ViterbiStateEntry lists on each
+ * of the choices on parent_list with each of the blob choices in curr_list,
+ * making a new ViterbiStateEntry for each sensible path.
+ *
+ * This could be a huge set of combinations, creating a lot of work only to
+ * be truncated by some beam limit, but only certain kinds of paths will
+ * continue at the next step:
+ * - paths that are liked by the language model: either a DAWG or the n-gram
+ *   model, where active.
+ * - paths that represent some kind of top choice. The old permuter permuted
+ *   the top raw classifier score, the top upper case word and the top lower-
+ *   case word. UpdateState now concentrates its top-choice paths on top
+ *   lower-case, top upper-case (or caseless alpha), and top digit sequence,
+ *   with allowance for continuation of these paths through blobs where such
+ *   a character does not appear in the choices list.
+ *
+ * GetNextParentVSE enforces some of these models to minimize the number of
+ * calls to AddViterbiStateEntry, even prior to looking at the language model.
+ * Thus an n-blob sequence of [l1I] will produce 3n calls to
+ * AddViterbiStateEntry instead of 3^n.
+ *
+ * Of course it isn't quite that simple as Title Case is handled by allowing
+ * lower case to continue an upper case initial, but it has to be detected
+ * in the combiner so it knows which upper case letters are initial alphas.
+ */
 bool LanguageModel::UpdateState(
     bool just_classified,
     int curr_col, int curr_row,
@@ -299,7 +302,7 @@ bool LanguageModel::UpdateState(
     //if (!curr_list->singleton() && c_it.data()->unichar_id() == 0) continue;
     UNICHAR_ID unichar_id = choice->unichar_id();
     if (unicharset.get_fragment(unichar_id)) {
-      continue;  // skip fragments
+      continue;  // Skip fragments.
     }
     // Set top choice flags.
     LanguageModelFlagsType blob_choice_flags = kXhtConsistentFlag;
@@ -367,10 +370,12 @@ bool LanguageModel::UpdateState(
   return new_changed;
 }
 
-// Finds the first lower and upper case letter and first digit in curr_list.
-// For non-upper/lower languages, alpha counts as upper.
-// Uses the first character in the list in place of empty results.
-// Returns true if both alpha and digits are found.
+/**
+ * Finds the first lower and upper case letter and first digit in curr_list.
+ * For non-upper/lower languages, alpha counts as upper.
+ * Uses the first character in the list in place of empty results.
+ * Returns true if both alpha and digits are found.
+ */
 bool LanguageModel::GetTopLowerUpperDigit(BLOB_CHOICE_LIST *curr_list,
                                           BLOB_CHOICE **first_lower,
                                           BLOB_CHOICE **first_upper,
@@ -402,13 +407,15 @@ bool LanguageModel::GetTopLowerUpperDigit(BLOB_CHOICE_LIST *curr_list,
   return mixed;
 }
 
-// Forces there to be at least one entry in the overall set of the
-// viterbi_state_entries of each element of parent_node that has the
-// top_choice_flag set for lower, upper and digit using the same rules as
-// GetTopLowerUpperDigit, setting the flag on the first found suitable
-// candidate, whether or not the flag is set on some other parent.
-// Returns 1 if both alpha and digits are found among the parents, -1 if no
-// parents are found at all (a legitimate case), and 0 otherwise.
+/**
+ * Forces there to be at least one entry in the overall set of the
+ * viterbi_state_entries of each element of parent_node that has the
+ * top_choice_flag set for lower, upper and digit using the same rules as
+ * GetTopLowerUpperDigit, setting the flag on the first found suitable
+ * candidate, whether or not the flag is set on some other parent.
+ * Returns 1 if both alpha and digits are found among the parents, -1 if no
+ * parents are found at all (a legitimate case), and 0 otherwise.
+ */
 int LanguageModel::SetTopParentLowerUpperDigit(
     LanguageModelState *parent_node) const {
   if (parent_node == NULL) return -1;
@@ -481,9 +488,11 @@ int LanguageModel::SetTopParentLowerUpperDigit(
   return mixed ? 1 : 0;
 }
 
-// Finds the next ViterbiStateEntry with which the given unichar_id can
-// combine sensibly, taking into account any mixed alnum/mixed case
-// situation, and whether this combination has been inspected before.
+/**
+ * Finds the next ViterbiStateEntry with which the given unichar_id can
+ * combine sensibly, taking into account any mixed alnum/mixed case
+ * situation, and whether this combination has been inspected before.
+ */
 ViterbiStateEntry* LanguageModel::GetNextParentVSE(
     bool just_classified, bool mixed_alnum, const BLOB_CHOICE* bc,
     LanguageModelFlagsType blob_choice_flags, const UNICHARSET& unicharset,
@@ -651,6 +660,8 @@ bool LanguageModel::AddViterbiStateEntry(
       ngram_info, (language_model_debug_level > 0) ?
           dict_->getUnicharset().id_to_unichar(b->unichar_id()) : NULL);
   new_vse->cost = ComputeAdjustedPathCost(new_vse);
+  if (language_model_debug_level >= 3)
+    tprintf("Adjusted cost = %g\n", new_vse->cost);
 
   // Invoke Top Choice language model component to make the final adjustments
   // to new_vse->top_choice_flags.
@@ -775,18 +786,18 @@ LanguageModelDawgInfo *LanguageModel::GenerateDawgInfo(
   // Initialize active_dawgs from parent_vse if it is not NULL.
   // Otherwise use very_beginning_active_dawgs_.
   if (parent_vse == NULL) {
-    dawg_args_->active_dawgs = very_beginning_active_dawgs_;
-    dawg_args_->permuter = NO_PERM;
+    dawg_args_.active_dawgs = &very_beginning_active_dawgs_;
+    dawg_args_.permuter = NO_PERM;
   } else {
     if (parent_vse->dawg_info == NULL) return NULL;  // not a dict word path
-    dawg_args_->active_dawgs = parent_vse->dawg_info->active_dawgs;
-    dawg_args_->permuter = parent_vse->dawg_info->permuter;
+    dawg_args_.active_dawgs = &parent_vse->dawg_info->active_dawgs;
+    dawg_args_.permuter = parent_vse->dawg_info->permuter;
   }
 
   // Deal with hyphenated words.
   if (word_end && dict_->has_hyphen_end(b.unichar_id(), curr_col == 0)) {
     if (language_model_debug_level > 0) tprintf("Hyphenated word found\n");
-    return new LanguageModelDawgInfo(dawg_args_->active_dawgs,
+    return new LanguageModelDawgInfo(dawg_args_.active_dawgs,
                                      COMPOUND_PERM);
   }
 
@@ -799,14 +810,14 @@ LanguageModelDawgInfo *LanguageModel::GenerateDawgInfo(
     // Do not allow compounding of words with lengths shorter than
     // language_model_min_compound_length
     if (parent_vse == NULL || word_end ||
-        dawg_args_->permuter == COMPOUND_PERM ||
+        dawg_args_.permuter == COMPOUND_PERM ||
         parent_vse->length < language_model_min_compound_length) return NULL;
 
     int i;
     // Check a that the path terminated before the current character is a word.
     bool has_word_ending = false;
-    for (i = 0; i < parent_vse->dawg_info->active_dawgs->size(); ++i) {
-      const DawgPosition &pos = (*parent_vse->dawg_info->active_dawgs)[i];
+    for (i = 0; i < parent_vse->dawg_info->active_dawgs.size(); ++i) {
+      const DawgPosition &pos = parent_vse->dawg_info->active_dawgs[i];
       const Dawg *pdawg = pos.dawg_index < 0
           ? NULL : dict_->GetDawg(pos.dawg_index);
       if (pdawg == NULL || pos.back_to_punc) continue;;
@@ -819,7 +830,7 @@ LanguageModelDawgInfo *LanguageModel::GenerateDawgInfo(
     if (!has_word_ending) return NULL;
 
     if (language_model_debug_level > 0) tprintf("Compound word found\n");
-    return new LanguageModelDawgInfo(beginning_active_dawgs_, COMPOUND_PERM);
+    return new LanguageModelDawgInfo(&beginning_active_dawgs_, COMPOUND_PERM);
   }  // done dealing with compound words
 
   LanguageModelDawgInfo *dawg_info = NULL;
@@ -834,22 +845,22 @@ LanguageModelDawgInfo *LanguageModel::GenerateDawgInfo(
     if (language_model_debug_level > 2)
       tprintf("Test Letter OK for unichar %d, normed %d\n",
               b.unichar_id(), normed_ids[i]);
-    dict_->LetterIsOkay(dawg_args_, normed_ids[i],
+    dict_->LetterIsOkay(&dawg_args_, normed_ids[i],
                         word_end && i == normed_ids.size() - 1);
-    if (dawg_args_->permuter == NO_PERM) {
+    if (dawg_args_.permuter == NO_PERM) {
       break;
     } else if (i < normed_ids.size() - 1) {
-      tmp_active_dawgs = *dawg_args_->updated_dawgs;
-      dawg_args_->active_dawgs = &tmp_active_dawgs;
+      tmp_active_dawgs = *dawg_args_.updated_dawgs;
+      dawg_args_.active_dawgs = &tmp_active_dawgs;
     }
     if (language_model_debug_level > 2)
       tprintf("Letter was OK for unichar %d, normed %d\n",
               b.unichar_id(), normed_ids[i]);
   }
-  dawg_args_->active_dawgs = NULL;
-  if (dawg_args_->permuter != NO_PERM) {
-    dawg_info = new LanguageModelDawgInfo(dawg_args_->updated_dawgs,
-                                          dawg_args_->permuter);
+  dawg_args_.active_dawgs = NULL;
+  if (dawg_args_.permuter != NO_PERM) {
+    dawg_info = new LanguageModelDawgInfo(dawg_args_.updated_dawgs,
+                                          dawg_args_.permuter);
   } else if (language_model_debug_level > 3) {
     tprintf("Letter %s not OK!\n",
             dict_->getUnicharset().id_to_unichar(b.unichar_id()));
@@ -971,7 +982,7 @@ float LanguageModel::ComputeNgramCost(const char *unichar,
             unichar, context_ptr, CertaintyScore(certainty)/denom, prob,
             ngram_and_classifier_cost);
   }
-  if (modified_context != NULL) delete[] modified_context;
+  delete[] modified_context;
   return ngram_and_classifier_cost;
 }
 
@@ -1159,8 +1170,12 @@ void LanguageModel::FillConsistencyInfo(
         float actual_gap =
             static_cast<float>(word_res->GetBlobsGap(curr_col-1));
         float gap_ratio = expected_gap / actual_gap;
-        // TODO(daria): find a good way to tune this heuristic estimate.
-        if (gap_ratio < 1/2 || gap_ratio > 2) {
+        // TODO(rays) The gaps seem to be way off most of the time, saved by
+        // the error here that the ratio was compared to 1/2, when it should
+        // have been 0.5f. Find the source of the gaps discrepancy and put
+        // the 0.5f here in place of 0.0f.
+        // Test on 2476595.sj, pages 0 to 6. (In French.)
+        if (gap_ratio < 0.0f || gap_ratio > 2.0f) {
           consistency_info->num_inconsistent_spaces++;
         }
         if (language_model_debug_level > 1) {
@@ -1300,7 +1315,7 @@ void LanguageModel::UpdateBestChoice(
     // Update hyphen state if we are dealing with a dictionary word.
     if (vse->dawg_info != NULL) {
       if (dict_->has_hyphen_end(*word)) {
-        dict_->set_hyphen_word(*word, *(dawg_args_->active_dawgs));
+        dict_->set_hyphen_word(*word, *(dawg_args_.active_dawgs));
       } else {
         dict_->reset_hyphen_vars(true);
       }
@@ -1311,7 +1326,7 @@ void LanguageModel::UpdateBestChoice(
           vse->dawg_info != NULL && vse->top_choice_flags);
     }
   }
-  if (wordrec_display_segmentations) {
+  if (wordrec_display_segmentations && word_res->chopped_word != NULL) {
     word->DisplaySegmentation(word_res->chopped_word);
   }
 }

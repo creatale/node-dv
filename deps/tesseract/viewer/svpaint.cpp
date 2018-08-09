@@ -1,6 +1,15 @@
 // Copyright 2007 Google Inc. All Rights Reserved.
 //
 // Author: Joern Wanke
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //
 // Simple drawing program to illustrate ScrollView capabilities.
 //
@@ -27,7 +36,7 @@ int rgb[3] = { 255, 255, 255 };
 
 class SVPaint : public SVEventHandler {
  public:
-   SVPaint(const char* server_name);
+   explicit SVPaint(const char* server_name);
 // This is the main event handling function that we need to overwrite, defined
 // in SVEventHandler.
    void Notify(const SVEvent* sv_event);
@@ -126,7 +135,7 @@ void SVPaint::ClickHandler(const SVEvent* sv_event) {
     // finally delete the input pointer.
     char* p = window_->ShowInputDialog("Text:");
     window_->Text(sv_event->x, sv_event->y, p);
-    delete p;
+    delete [] p;
     break;
   }
 }

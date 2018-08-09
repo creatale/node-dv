@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        oldbasel.cpp  (Formerly oldbl.c)
  * Description: A re-implementation of the old baseline algorithm.
- * Author:		Ray Smith
- * Created:		Wed Oct  6 09:41:48 BST 1993
+ * Author:    Ray Smith
+ * Created:   Wed Oct  6 09:41:48 BST 1993
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -121,8 +121,8 @@ void Textord::make_old_baselines(TO_BLOCK *block,   // block to do
 void Textord::correlate_lines(TO_BLOCK *block, float gradient) {
   TO_ROW **rows;                 //array of ptrs
   int rowcount;                  /*no of rows to do */
-  register int rowindex;         /*no of row */
-                                 //iterator
+  int rowindex;                  /*no of row */
+                                 // iterator
   TO_ROW_IT row_it = block->get_rows ();
 
   rowcount = row_it.length ();
@@ -164,8 +164,8 @@ void Textord::correlate_neighbours(TO_BLOCK *block,  // block rows are in.
                                    TO_ROW **rows,    // rows of block.
                                    int rowcount) {   // no of rows to do.
   TO_ROW *row;                   /*current row */
-  register int rowindex;         /*no of row */
-  register int otherrow;         /*second row */
+  int rowindex;                  /*no of row */
+  int otherrow;                  /*second row */
   int upperrow;                  /*row above to use */
   int lowerrow;                  /*row below to use */
   float biggest;
@@ -220,7 +220,7 @@ int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
                                   int rowcount,   // no of rows to do.
                                   TO_BLOCK* block) {
   TO_ROW *row;                   /*current row */
-  register int rowindex;         /*no of row */
+  int rowindex;                  /*no of row */
   float lineheight;              /*mean x-height */
   float ascheight;               /*average ascenders */
   float minascheight;            /*min allowed ascheight */
@@ -447,7 +447,7 @@ int get_blob_coords(                    //get boxes
                    ) {
                                  //blobs
   BLOBNBOX_IT blob_it = row->blob_list ();
-  register int blobindex;        /*no along text line */
+  int blobindex;                 /*no along text line */
   int losscount;                 //lost blobs
   int maxlosscount;              //greatest lost blobs
                                  /*height stat collection */
@@ -719,7 +719,7 @@ QSPLINE * spline,                /*curve to fit to */
 float jumplimit,                 /*allowed delta change */
 float ydiffs[]                   /*diff from spline */
 ) {
-  register int blobindex;        /*no along text line */
+  int blobindex;                 /*no along text line */
   int bestpart;                  /*best new partition */
   int biggestpart;               /*part with most members */
   float diff;                    /*difference from line */
@@ -800,7 +800,7 @@ float jumplimit                  /*allowed delta change */
 ) {
   BOOL8 found_one;               //found a bestpart blob
   BOOL8 close_one;               //found was close enough
-  register int blobindex;        /*no along text line */
+  int blobindex;                 /*no along text line */
   int prevpart;                  //previous iteration
   int runlength;                 //no in this part
   float diff;                    /*difference from line */
@@ -909,7 +909,7 @@ int blobcount,                   /*no of blobs */
 QSPLINE * spline,                /*approximating spline */
 float ydiffs[]                   /*output */
 ) {
-  register int blobindex;        /*current blob */
+  int blobindex;                 /*current blob */
   int xcentre;                   /*xcoord */
   int lastx;                     /*last xcentre */
   float diffsum;                 /*sum of diffs */
@@ -963,7 +963,7 @@ float* drift,
 float* lastdelta,
 int *partcount                   /*no of partitions */
 ) {
-  register int partition;        /*partition no */
+  int partition;                 /*partition no */
   int bestpart;                  /*best new partition */
   float bestdelta;               /*best gap from a part */
   float delta;                   /*diff from part */
@@ -1018,61 +1018,6 @@ int *partcount                   /*no of partitions */
   return bestpart;
 }
 
-
-///*merge_partitions(partids,partcount,blobcount,bestpart) discards funny looking
-//partitions and gives all the rest partid 0*/
-//
-//merge_partitions(partids,partcount,blobcount,bestpart)
-//register char              *partids;                     /*partition numbers*/
-//int                        partcount;                    /*no of partitions*/
-//int                        blobcount;                    /*no of blobs*/
-//int                        bestpart;                     /*best partition*/
-//{
-//   register int            blobindex;                    /*no along text line*/
-//   int                     runlength;                    /*run of same partition*/
-//   int                     bestrun;                      /*biggest runlength*/
-//
-//   bestrun=0;                                            /*no runs yet*/
-//   runlength=1;
-//   for (blobindex=1;blobindex<blobcount;blobindex++)
-//   {  if (partids[blobindex]!=partids[blobindex-1])
-//      {  if (runlength>bestrun)
-//            bestrun=runlength;                           /*find biggest run*/
-//         runlength=1;                                    /*new run*/
-//      }
-//      else
-//      {  runlength++;
-//      }
-//   }
-//   if (runlength>bestrun)
-//      bestrun=runlength;
-//
-//   for (blobindex=0;blobindex<blobcount;blobindex++)
-//   {  if (blobindex<1
-//      || partids[blobindex]!=partids[blobindex-1])
-//      {  if ((blobindex+1>=blobcount
-//         || partids[blobindex]!=partids[blobindex+1])
-//                                                         /*loner*/
-//         && (bestrun>2 || partids[blobindex]!=bestpart))
-//         {  partids[blobindex]=partcount;                /*discard loner*/
-//         }
-//         else if (blobindex+1<blobcount
-//         && partids[blobindex]==partids[blobindex+1]
-//                                                         /*pair*/
-//         && (blobindex+2>=blobcount
-//         || partids[blobindex]!=partids[blobindex+2])
-//         && (bestrun>3 || partids[blobindex]!=bestpart))
-//         {  partids[blobindex]=partcount;                /*discard both*/
-//            partids[blobindex+1]=partcount;
-//         }
-//      }
-//   }
-//   for (blobindex=0;blobindex<blobcount;blobindex++)
-//   {  if (partids[blobindex]<partcount)
-//         partids[blobindex]=0;                           /*all others together*/
-//   }
-//}
-
 /**********************************************************************
  * partition_coords
  *
@@ -1089,7 +1034,7 @@ int bestpart,                    /*best new partition */
 int xcoords[],                   /*points to work on */
 int ycoords[]                    /*points to work on */
 ) {
-  register int blobindex;        /*no along text line */
+  int blobindex;                 /*no along text line */
   int pointcount;                /*no of points */
 
   pointcount = 0;
@@ -1120,8 +1065,8 @@ int ycoords[],                   /*points to work on */
 int degree, int pointcount,      /*no of points */
 int xstarts[]                    //result
 ) {
-  register int ptindex;          /*no along text line */
-  register int segment;          /*partition no */
+  int ptindex;                   /*no along text line */
+  int segment;                   /*partition no */
   int lastmin, lastmax;          /*possible turn points */
   int turnpoints[SPLINESIZE];    /*good turning points */
   int turncount;                 /*no of turning points */
@@ -1245,7 +1190,7 @@ int xstarts[],                   //result
 int &segments                    //no of segments
 ) {
   BOOL8 doneany;                 //return value
-  register int segment;          /*partition no */
+  int segment;                   /*partition no */
   int startindex, centreindex, endindex;
   float leftcoord, rightcoord;
   int leftindex, rightindex;
@@ -1377,8 +1322,8 @@ int partsizes[],                 /*size of each part */
 int partcount,                   /*no of partitions */
 int bestpart                     /*biggest partition */
 ) {
-  register int blobindex;        /*index of blob */
-  register int partition;        /*current partition */
+  int blobindex;                 /*index of blob */
+  int partition;                 /*current partition */
   int xcentre;                   /*centre of blob */
   int poscount;                  /*count of best up step */
   int negcount;                  /*count of best down step */
@@ -1414,14 +1359,12 @@ int bestpart                     /*biggest partition */
   bestneg = 0.0;       /*no step yet */
   for (partition = 0; partition < partcount; partition++) {
     if (partition != bestpart) {
-
-	//by jetsoft divide by zero possible
-		if (partsizes[partition]==0)
-		partsteps[partition]=0;
-       else
-		partsteps[partition] /= partsizes[partition];
-	//
-
+      // by jetsoft divide by zero possible
+      if (partsizes[partition] == 0)
+        partsteps[partition] = 0;
+      else
+        partsteps[partition] /= partsizes[partition];
+      //
 
       if (partsteps[partition] >= MINASCRISE
       && partsizes[partition] > poscount) {
@@ -1459,8 +1402,8 @@ int blobcount,                   /*blobs in blobcoords */
 QSPLINE * baseline,              /*established */
 float jumplimit                  /*min ascender height */
 ) {
-  register int blobindex;        /*current blob */
-                                 /*height statistics */
+  int blobindex; /*current blob */
+                 /*height statistics */
   STATS heightstat (0, MAXHEIGHT);
   int height;                    /*height of blob */
   int xcentre;                   /*centre of blob */
@@ -1469,7 +1412,7 @@ float jumplimit                  /*min ascender height */
   int asccount;                  /*no of ascenders */
   float xsum;                    /*xheight sum */
   int xcount;                    /*xheight count */
-  register float diff;           /*height difference */
+  float diff;                    /*height difference */
 
   if (blobcount > 1) {
     for (blobindex = 0; blobindex < blobcount; blobindex++) {

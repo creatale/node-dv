@@ -48,25 +48,19 @@ int OtsuThreshold(Pix* src_pix, int left, int top, int width, int height,
   double best_hi_dist = 0.0;
   *thresholds = new int[num_channels];
   *hi_values = new int[num_channels];
-  // all of channel 0 then all of channel 1...
-  int *histogramAllChannels = new int[kHistogramSize * num_channels];
 
   // only use opencl if compiled w/ OpenCL and selected device is opencl
 #ifdef USE_OPENCL
-    // Calculate Histogram on GPU
-    OpenclDevice od;
-    if (od.selectedDeviceIsOpenCL() &&
-        (num_channels == 1 || num_channels == 4) && top == 0 && left == 0 ) {
-      od.HistogramRectOCL(
-          (const unsigned char*)pixGetData(src_pix),
-          num_channels,
-          pixGetWpl(src_pix) * 4,
-          left,
-          top,
-          width,
-          height,
-          kHistogramSize,
-          histogramAllChannels);
+  // all of channel 0 then all of channel 1...
+  int* histogramAllChannels = new int[kHistogramSize * num_channels];
+
+  // Calculate Histogram on GPU
+  OpenclDevice od;
+  if (od.selectedDeviceIsOpenCL() && (num_channels == 1 || num_channels == 4) &&
+      top == 0 && left == 0) {
+    od.HistogramRectOCL((unsigned char*)pixGetData(src_pix), num_channels,
+                        pixGetWpl(src_pix) * 4, left, top, width, height,
+                        kHistogramSize, histogramAllChannels);
 
     // Calculate Threshold from Histogram on cpu
     for (int ch = 0; ch < num_channels; ++ch) {
@@ -139,8 +133,8 @@ int OtsuThreshold(Pix* src_pix, int left, int top, int width, int height,
     }
 #ifdef USE_OPENCL
   }
-#endif  // USE_OPENCL
   delete[] histogramAllChannels;
+#endif  // USE_OPENCL
 
   if (!any_good_hivalue) {
     // Use the best of the ones that were not good enough.

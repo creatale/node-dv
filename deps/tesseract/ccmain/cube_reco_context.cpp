@@ -32,11 +32,13 @@
 
 namespace tesseract {
 
-// Instantiate a CubeRecoContext object using a Tesseract object.
-// CubeRecoContext will not take ownership of tess_obj, but will
-// record the pointer to it and will make use of various Tesseract
-// components (language model, flags, etc). Thus the caller should
-// keep tess_obj alive so long as the instantiated CubeRecoContext is used.
+/**
+ * Instantiate a CubeRecoContext object using a Tesseract object.
+ * CubeRecoContext will not take ownership of tess_obj, but will
+ * record the pointer to it and will make use of various Tesseract
+ * components (language model, flags, etc). Thus the caller should
+ * keep tess_obj alive so long as the instantiated CubeRecoContext is used.
+ */
 CubeRecoContext::CubeRecoContext(Tesseract *tess_obj) {
   tess_obj_ = tess_obj;
   lang_ = "";
@@ -53,59 +55,49 @@ CubeRecoContext::CubeRecoContext(Tesseract *tess_obj) {
 }
 
 CubeRecoContext::~CubeRecoContext() {
-  if (char_classifier_ != NULL) {
-    delete char_classifier_;
-    char_classifier_ = NULL;
-  }
+  delete char_classifier_;
+  char_classifier_ = NULL;
 
-  if (word_size_model_ != NULL) {
-    delete word_size_model_;
-    word_size_model_ = NULL;
-  }
+  delete word_size_model_;
+  word_size_model_ = NULL;
 
-  if (char_set_ != NULL) {
-    delete char_set_;
-    char_set_ = NULL;
-  }
+  delete char_set_;
+  char_set_ = NULL;
 
-  if (char_bigrams_ != NULL) {
-    delete char_bigrams_;
-    char_bigrams_ = NULL;
-  }
+  delete char_bigrams_;
+  char_bigrams_ = NULL;
 
-  if (word_unigrams_ != NULL) {
-    delete word_unigrams_;
-    word_unigrams_ = NULL;
-  }
+  delete word_unigrams_;
+  word_unigrams_ = NULL;
 
-  if (lang_mod_ != NULL) {
-    delete lang_mod_;
-    lang_mod_ = NULL;
-  }
+  delete lang_mod_;
+  lang_mod_ = NULL;
 
-  if (params_ != NULL) {
-    delete params_;
-    params_ = NULL;
-  }
+  delete params_;
+  params_ = NULL;
 }
 
-// Returns the path of the data files by looking up the TESSDATA_PREFIX
-// environment variable and appending a "tessdata" directory to it
+/**
+ * Returns the path of the data files by looking up the TESSDATA_PREFIX
+ * environment variable and appending a "tessdata" directory to it
+ */
 bool CubeRecoContext::GetDataFilePath(string *path) const {
   *path = tess_obj_->datadir.string();
   return true;
 }
 
-// The object initialization function that loads all the necessary
-// components of a RecoContext.  TessdataManager is used to load the
-// data from [lang].traineddata file.  If TESSDATA_CUBE_UNICHARSET
-// component is present, Cube will be instantiated with the unicharset
-// specified in this component and the corresponding dictionary
-// (TESSDATA_CUBE_SYSTEM_DAWG), and will map Cube's unicharset to
-// Tesseract's. Otherwise, TessdataManager will assume that Cube will
-// be using Tesseract's unicharset and dawgs, and will load the
-// unicharset from the TESSDATA_UNICHARSET component and will load the
-// dawgs from TESSDATA_*_DAWG components.
+/**
+ * The object initialization function that loads all the necessary
+ * components of a RecoContext.  TessdataManager is used to load the
+ * data from [lang].traineddata file.  If TESSDATA_CUBE_UNICHARSET
+ * component is present, Cube will be instantiated with the unicharset
+ * specified in this component and the corresponding dictionary
+ * (TESSDATA_CUBE_SYSTEM_DAWG), and will map Cube's unicharset to
+ * Tesseract's. Otherwise, TessdataManager will assume that Cube will
+ * be using Tesseract's unicharset and dawgs, and will load the
+ * unicharset from the TESSDATA_UNICHARSET component and will load the
+ * dawgs from TESSDATA_*_DAWG components.
+ */
 bool CubeRecoContext::Load(TessdataManager *tessdata_manager,
                            UNICHARSET *tess_unicharset) {
   ASSERT_HOST(tess_obj_ != NULL);
@@ -139,11 +131,6 @@ bool CubeRecoContext::Load(TessdataManager *tessdata_manager,
   lang_mod_ = new TessLangModel(lm_params, data_file_path,
                                 tess_obj_->getDict().load_system_dawg,
                                 tessdata_manager, this);
-  if (lang_mod_ == NULL) {
-    fprintf(stderr, "Cube ERROR (CubeRecoContext::Load): unable to create "
-            "TessLangModel\n");
-    return false;
-  }
 
   // Create the optional char bigrams object.
   char_bigrams_ = CharBigrams::Create(data_file_path, lang_);
@@ -178,17 +165,12 @@ bool CubeRecoContext::Load(TessdataManager *tessdata_manager,
   return true;
 }
 
-// Creates a CubeRecoContext object using a tesseract object
+/** Creates a CubeRecoContext object using a tesseract object */
 CubeRecoContext * CubeRecoContext::Create(Tesseract *tess_obj,
                                           TessdataManager *tessdata_manager,
                                           UNICHARSET *tess_unicharset) {
   // create the object
   CubeRecoContext *cntxt = new CubeRecoContext(tess_obj);
-  if (cntxt == NULL) {
-    fprintf(stderr, "Cube ERROR (CubeRecoContext::Create): unable to create "
-            "CubeRecoContext object\n");
-    return NULL;
-  }
   // load the necessary components
   if (cntxt->Load(tessdata_manager, tess_unicharset) == false) {
     fprintf(stderr, "Cube ERROR (CubeRecoContext::Create): unable to init "

@@ -76,24 +76,24 @@ enum TessdataType {
  * kTessdataFileSuffixes[i] indicates the file suffix for
  * tessdata of type i (from TessdataType enum).
  */
-static const char * const kTessdataFileSuffixes[] = {
-  kLangConfigFileSuffix,        // 0
-  kUnicharsetFileSuffix,        // 1
-  kAmbigsFileSuffix,            // 2
-  kBuiltInTemplatesFileSuffix,  // 3
-  kBuiltInCutoffsFileSuffix,    // 4
-  kNormProtoFileSuffix,         // 5
-  kPuncDawgFileSuffix,          // 6
-  kSystemDawgFileSuffix,        // 7
-  kNumberDawgFileSuffix,        // 8
-  kFreqDawgFileSuffix,          // 9
-  kFixedLengthDawgsFileSuffix,  // 10  // deprecated
-  kCubeUnicharsetFileSuffix,    // 11
-  kCubeSystemDawgFileSuffix,    // 12
-  kShapeTableFileSuffix,        // 13
-  kBigramDawgFileSuffix,        // 14
-  kUnambigDawgFileSuffix,       // 15
-  kParamsModelFileSuffix,       // 16
+static const char *const kTessdataFileSuffixes[] = {
+    kLangConfigFileSuffix,        // 0
+    kUnicharsetFileSuffix,        // 1
+    kAmbigsFileSuffix,            // 2
+    kBuiltInTemplatesFileSuffix,  // 3
+    kBuiltInCutoffsFileSuffix,    // 4
+    kNormProtoFileSuffix,         // 5
+    kPuncDawgFileSuffix,          // 6
+    kSystemDawgFileSuffix,        // 7
+    kNumberDawgFileSuffix,        // 8
+    kFreqDawgFileSuffix,          // 9
+    kFixedLengthDawgsFileSuffix,  // 10  // deprecated
+    kCubeUnicharsetFileSuffix,    // 11
+    kCubeSystemDawgFileSuffix,    // 12
+    kShapeTableFileSuffix,        // 13
+    kBigramDawgFileSuffix,        // 14
+    kUnambigDawgFileSuffix,       // 15
+    kParamsModelFileSuffix,       // 16
 };
 
 /**
@@ -101,23 +101,23 @@ static const char * const kTessdataFileSuffixes[] = {
  * of type i (from TessdataType enum) is text, and is binary otherwise.
  */
 static const bool kTessdataFileIsText[] = {
-  true,                         // 0
-  true,                         // 1
-  true,                         // 2
-  false,                        // 3
-  true,                         // 4
-  true,                         // 5
-  false,                        // 6
-  false,                        // 7
-  false,                        // 8
-  false,                        // 9
-  false,                        // 10  // deprecated
-  true,                         // 11
-  false,                        // 12
-  false,                        // 13
-  false,                        // 14
-  false,                        // 15
-  true,                         // 16
+    true,   // 0
+    true,   // 1
+    true,   // 2
+    false,  // 3
+    true,   // 4
+    true,   // 5
+    false,  // 6
+    false,  // 7
+    false,  // 8
+    false,  // 9
+    false,  // 10  // deprecated
+    true,   // 11
+    false,  // 12
+    false,  // 13
+    false,  // 14
+    false,  // 15
+    true,   // 16
 };
 
 /**
@@ -144,7 +144,7 @@ class TessdataManager {
 
   /**
    * Opens the given data file and reads the offset table.
-   * Returns true on success.
+   * @return true on success.
    */
   bool Init(const char *data_file_name, int debug_level);
 
@@ -199,8 +199,10 @@ class TessdataManager {
     return swap_;
   }
 
-  /** Writes the number of entries and the given offset table to output_file. */
-  static void WriteMetadata(inT64 *offset_table,
+  /** Writes the number of entries and the given offset table to output_file.
+   * Returns false on error.
+   */
+  static bool WriteMetadata(inT64 *offset_table,
                             const char *language_data_path_prefix,
                             FILE *output_file);
 
@@ -280,7 +282,7 @@ class TessdataManager {
    * same or smaller than TESSDATA_NUM_ENTRIES, but can never be larger,
    * since then it would be impossible to interpret the type of tessdata at
    * indices same and higher than TESSDATA_NUM_ENTRIES.
-   * This parameter is used to allow for backward compatiblity
+   * This parameter is used to allow for backward compatibility
    * when new tessdata types are introduced.
    */
   inT32 actual_tessdata_num_entries_;

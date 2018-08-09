@@ -50,7 +50,10 @@ bool TessdataManager::Init(const char *data_file_name, int debug_level) {
     ReverseN(&actual_tessdata_num_entries_,
              sizeof(actual_tessdata_num_entries_));
   }
-  ASSERT_HOST(actual_tessdata_num_entries_ <= TESSDATA_NUM_ENTRIES);
+  if (actual_tessdata_num_entries_ > TESSDATA_NUM_ENTRIES) {
+    // For forward compatibility, truncate to the number we can handle.
+    actual_tessdata_num_entries_ = TESSDATA_NUM_ENTRIES;
+  }
   fread(offset_table_, sizeof(inT64),
         actual_tessdata_num_entries_, data_file_);
   if (swap_) {
@@ -95,21 +98,30 @@ void TessdataManager::CopyFile(FILE *input_file, FILE *output_file,
   delete[] chunk;
 }
 
-void TessdataManager::WriteMetadata(inT64 *offset_table,
+bool TessdataManager::WriteMetadata(inT64 *offset_table,
                                     const char * language_data_path_prefix,
                                     FILE *output_file) {
-  fseek(output_file, 0, SEEK_SET);
   inT32 num_entries = TESSDATA_NUM_ENTRIES;
-  fwrite(&num_entries, sizeof(inT32), 1, output_file);
-  fwrite(offset_table, sizeof(inT64), TESSDATA_NUM_ENTRIES, output_file);
-  fclose(output_file);
-
-  tprintf("TessdataManager combined tesseract data files.\n");
-  for (int i = 0; i < TESSDATA_NUM_ENTRIES; ++i) {
-    tprintf("Offset for type %2d (%s%-22s) is %lld\n", i,
-            language_data_path_prefix, kTessdataFileSuffixes[i],
-            offset_table[i]);
+  bool result = true;
+  if (fseek(output_file, 0, SEEK_SET) != 0 ||
+      fwrite(&num_entries, sizeof(inT32), 1, output_file) != 1 ||
+      fwrite(offset_table, sizeof(inT64), TESSDATA_NUM_ENTRIES,
+             output_file) != TESSDATA_NUM_ENTRIES) {
+    fclose(output_file);
+    result = false;
+    tprintf("WriteMetadata failed in TessdataManager!\n");
+  } else if (fclose(output_file)) {
+    result = false;
+    tprintf("WriteMetadata failed to close file!\n");
+  } else {
+    tprintf("TessdataManager combined tesseract data files.\n");
+    for (int i = 0; i < TESSDATA_NUM_ENTRIES; ++i) {
+      tprintf("Offset for type %2d (%s%-22s) is %lld\n", i,
+              language_data_path_prefix, kTessdataFileSuffixes[i],
+              offset_table[i]);
+    }
   }
+  return result;
 }
 
 bool TessdataManager::CombineDataFiles(
@@ -124,8 +136,12 @@ bool TessdataManager::CombineDataFiles(
     return false;
   }
   // Leave some space for recording the offset_table.
-  fseek(output_file,
-        sizeof(inT32) + sizeof(inT64) * TESSDATA_NUM_ENTRIES, SEEK_SET);
+  if (fseek(output_file,
+            sizeof(inT32) + sizeof(inT64) * TESSDATA_NUM_ENTRIES, SEEK_SET)) {
+    tprintf("Error seeking %s\n", output_filename);
+    fclose(output_file);
+    return false;
+  }
 
   TessdataType type = TESSDATA_NUM_ENTRIES;
   bool text_file = false;
@@ -161,8 +177,7 @@ bool TessdataManager::CombineDataFiles(
     return false;
   }
 
-  WriteMetadata(offset_table, language_data_path_prefix, output_file);
-  return true;
+  return WriteMetadata(offset_table, language_data_path_prefix, output_file);
 }
 
 bool TessdataManager::OverwriteComponents(
@@ -185,8 +200,12 @@ bool TessdataManager::OverwriteComponents(
   }
 
   // Leave some space for recording the offset_table.
-  fseek(output_file,
-        sizeof(inT32) + sizeof(inT64) * TESSDATA_NUM_ENTRIES, SEEK_SET);
+  if (fseek(output_file,
+            sizeof(inT32) + sizeof(inT64) * TESSDATA_NUM_ENTRIES, SEEK_SET)) {
+    fclose(output_file);
+    tprintf("Error seeking %s\n", new_traineddata_filename);
+    return false;
+  }
 
   // Open the files with the new components.
   for (i = 0; i < num_new_components; ++i) {
@@ -212,8 +231,7 @@ bool TessdataManager::OverwriteComponents(
     }
   }
   const char *language_data_path_prefix = strchr(new_traineddata_filename, '.');
-  WriteMetadata(offset_table, language_data_path_prefix, output_file);
-  return true;
+  return WriteMetadata(offset_table, language_data_path_prefix, output_file);
 }
 
 bool TessdataManager::TessdataTypeFromFileSuffix(

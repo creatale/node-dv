@@ -194,16 +194,16 @@ NAN_MODULE_INIT(Image::Init)
     ctor->SetClassName(Nan::New("Image").ToLocalChecked());
     ctorInst->SetInternalFieldCount(1);
     
-	Nan::SetAccessor(ctorInst, Nan::New("width").ToLocalChecked(), GetWidth);
-	Nan::SetAccessor(ctorInst, Nan::New("height").ToLocalChecked(), GetHeight);
-	Nan::SetAccessor(ctorInst, Nan::New("depth").ToLocalChecked(), GetDepth);
-	
-	Nan::SetPrototypeMethod(ctor, "invert", Invert);
-	Nan::SetPrototypeMethod(ctor, "or", Or);
-	Nan::SetPrototypeMethod(ctor, "and", And);
-	Nan::SetPrototypeMethod(ctor, "xor", Xor);
-	Nan::SetPrototypeMethod(ctor, "add", Add);
-	Nan::SetPrototypeMethod(ctor, "subtract", Subtract);
+    Nan::SetAccessor(ctorInst, Nan::New("width").ToLocalChecked(), GetWidth);
+    Nan::SetAccessor(ctorInst, Nan::New("height").ToLocalChecked(), GetHeight);
+    Nan::SetAccessor(ctorInst, Nan::New("depth").ToLocalChecked(), GetDepth);
+    
+    Nan::SetPrototypeMethod(ctor, "invert", Invert);
+    Nan::SetPrototypeMethod(ctor, "or", Or);
+    Nan::SetPrototypeMethod(ctor, "and", And);
+    Nan::SetPrototypeMethod(ctor, "xor", Xor);
+    Nan::SetPrototypeMethod(ctor, "add", Add);
+    Nan::SetPrototypeMethod(ctor, "subtract", Subtract);
     Nan::SetPrototypeMethod(ctor, "convolve", Convolve);
     Nan::SetPrototypeMethod(ctor, "unsharp", Unsharp);
     Nan::SetPrototypeMethod(ctor, "rotate", Rotate);
@@ -238,20 +238,21 @@ NAN_MODULE_INIT(Image::Init)
     Nan::SetPrototypeMethod(ctor, "drawBox", DrawBox);
     Nan::SetPrototypeMethod(ctor, "drawImage", DrawImage);
     Nan::SetPrototypeMethod(ctor, "drawLine", DrawLine);
-	Nan::SetPrototypeMethod(ctor, "toBuffer", ToBuffer);
+    Nan::SetPrototypeMethod(ctor, "toBuffer", ToBuffer);
     
     constructor_template.Reset(ctor);
 
     Nan::Set(target, Nan::New("Image").ToLocalChecked(), Nan::GetFunction(ctor).ToLocalChecked());
 }
 
-Local<Object> Image::New(Pix *pix)
+Local<Object> Image::New(Pix *pix, int resolution)
 {
     Nan::EscapableHandleScope scope;
     Local<Object> instance = Nan::New(constructor_template)->GetFunction()->NewInstance();
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(instance);
     obj->pix_ = pix;
     if (obj->pix_) {
+        pixSetYRes(obj->pix_, resolution);
         Nan::AdjustExternalMemory(obj->size());
     }
     return scope.Escape(instance);
@@ -259,14 +260,14 @@ Local<Object> Image::New(Pix *pix)
 
 NAN_METHOD(Image::New)
 {
-	if (!info.IsConstructCall()) {
-	    // [NOTE] generic recursive call with `new`
-		std::vector<v8::Local<v8::Value>> args(info.Length());
-		for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];	    
-	    auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
-	    if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
-	    return;
-	}
+    if (!info.IsConstructCall()) {
+        // [NOTE] generic recursive call with `new`
+        std::vector<v8::Local<v8::Value>> args(info.Length());
+        for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];        
+        auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
+        if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
+        return;
+    }
 
     Pix *pix;
     if (info.Length() == 0) {
@@ -362,9 +363,9 @@ NAN_GETTER(Image::GetWidth)
 {
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (obj->pix_) {
-    	info.GetReturnValue().Set(Nan::New(obj->pix_->w));
+        info.GetReturnValue().Set(Nan::New(obj->pix_->w));
     } else {
-    	info.GetReturnValue().SetNull();
+        info.GetReturnValue().SetNull();
     }
 }
 
@@ -372,9 +373,9 @@ NAN_GETTER(Image::GetHeight)
 {
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (obj->pix_) {
-    	info.GetReturnValue().Set(Nan::New(obj->pix_->h));
+        info.GetReturnValue().Set(Nan::New(obj->pix_->h));
     } else {
-    	info.GetReturnValue().SetNull();
+        info.GetReturnValue().SetNull();
     }
 }
 
@@ -382,9 +383,32 @@ NAN_GETTER(Image::GetDepth)
 {
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
     if (obj->pix_) {
-    	info.GetReturnValue().Set(Nan::New(obj->pix_->d));
+        info.GetReturnValue().Set(Nan::New(obj->pix_->d));
     } else {
-    	info.GetReturnValue().SetNull();
+        info.GetReturnValue().SetNull();
+    }
+}
+
+NAN_GETTER(Image::GetResolution)
+{
+    Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (obj->pix_) {
+        info.GetReturnValue().Set(Nan::New(pixGetYRes(obj->pix_)));
+    } else {
+        info.GetReturnValue().SetNull();
+    }
+}
+
+NAN_SETTER(Image::SetResolution)
+{
+    Nan::HandleScope scope;
+    Image* obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
+    if (value->IsInt32()) {
+        pixSetYRes(obj->pix_, value->Int32Value());
+    } else if (value->IsNull()) {
+        pixSetYRes(obj->pix_, 300);
+    } else {
+        Nan::ThrowTypeError("value must be of type Int32");
     }
 }
 
@@ -1022,16 +1046,16 @@ NAN_METHOD(Image::LineSegments)
         
         if ((accuracy >= obj->pix_->w) || (accuracy >= obj->pix_->h)) {
             return Nan::ThrowError("LineSegments: Accuracy must be smaller than image");
-       	}
+           }
 
         cv::Mat img(pix8ToMat(obj->pix_));
         std::vector<LSEG> lSegs;
         std::vector<double> errors;
         
         try {
-        	LSWMS lswms(cv::Size(obj->pix_->w, obj->pix_->h), accuracy,
+            LSWMS lswms(cv::Size(obj->pix_->w, obj->pix_->h), accuracy,
                     maxLineSegments, false);
-			lswms.run(img, lSegs, errors);
+            lswms.run(img, lSegs, errors);
         } catch (const cv::Exception& e) {
             return Nan::ThrowError(e.what());
         }
@@ -1475,12 +1499,12 @@ NAN_METHOD(Image::ToBuffer)
         return Nan::ThrowError(msg.str().c_str());
     }
     if (formatInt == FORMAT_PNG) {
-    	info.GetReturnValue().Set(Nan::CopyBuffer(reinterpret_cast<char *>(&pngData[0]), pngData.size()).ToLocalChecked());
+        info.GetReturnValue().Set(Nan::CopyBuffer(reinterpret_cast<char *>(&pngData[0]), pngData.size()).ToLocalChecked());
     } else if (formatInt == FORMAT_JPG) {
-    	info.GetReturnValue().Set(Nan::CopyBuffer(jpgData, jpgDataSize).ToLocalChecked());
+        info.GetReturnValue().Set(Nan::CopyBuffer(jpgData, jpgDataSize).ToLocalChecked());
         free(jpgData);
     } else {
-    	info.GetReturnValue().Set(Nan::CopyBuffer(reinterpret_cast<char *>(&imgData[0]), imgData.size()).ToLocalChecked());
+        info.GetReturnValue().Set(Nan::CopyBuffer(reinterpret_cast<char *>(&imgData[0]), imgData.size()).ToLocalChecked());
     }
 }
 
@@ -1488,6 +1512,7 @@ Image::Image(Pix *pix)
     : pix_(pix)
 {
     if (pix_) {
+        pixSetYRes(pix_, 300);
         Nan::AdjustExternalMemory(size());
     }
 }

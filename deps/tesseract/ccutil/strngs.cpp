@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        strngs.c  (Formerly strings.c)
  * Description: STRING class functions.
- * Author:					Ray Smith
- * Created:					Fri Feb 15 09:13:30 GMT 1991
+ * Author:          Ray Smith
+ * Created:         Fri Feb 15 09:13:30 GMT 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +17,23 @@
  *
  **********************************************************************/
 
-#include          "helpers.h"
-#include          "tprintf.h"
-#include          "strngs.h"
-#include          "genericvector.h"
+#include "strngs.h"
 
 #include <assert.h>
+
+#include "genericvector.h"
+#include "helpers.h"
+#include "serialis.h"
+#include "tprintf.h"
+
+using tesseract::TFile;
+
 // Size of buffer needed to host the decimal representation of the maximum
 // possible length of an int (in 64 bits), being -<20 digits>.
 const int kMaxIntSize = 22;
 // Size of buffer needed to host the decimal representation of the maximum
-// possible length of a %.8g being -0.12345678e+999<nul> = 15.
-const int kMaxDoubleSize = 15;
+// possible length of a %.8g being -1.2345678e+999<nul> = 16.
+const int kMaxDoubleSize = 16;
 
 /**********************************************************************
  * STRING_HEADER provides metadata about the allocated buffer,
@@ -40,7 +45,7 @@ const int kMaxDoubleSize = 15;
  *
  * The collection of MACROS provide different implementations depending
  * on whether the string keeps track of its strlen or not so that this
- * feature can be added in later when consumers dont modifify the string
+ * feature can be added in later when consumers don't modify the string
  **********************************************************************/
 
 // Smallest string to allocate by default
@@ -123,15 +128,34 @@ STRING::STRING(const char* cstr) {
   assert(InvariantOk());
 }
 
+STRING::STRING(const char *data, int length) {
+  if (data == NULL) {
+    // Empty STRINGs contain just the "\0".
+    memcpy(AllocData(1, kMinCapacity), "", 1);
+  } else {
+    char* this_cstr = AllocData(length + 1, length + 1);
+    memcpy(this_cstr, data, length);
+    this_cstr[length] = '\0';
+  }
+}
+
 STRING::~STRING() {
   DiscardData();
 }
 
+// TODO(rays) Change all callers to use TFile and remove the old functions.
 // Writes to the given file. Returns false in case of error.
 bool STRING::Serialize(FILE* fp) const {
   inT32 len = length();
   if (fwrite(&len, sizeof(len), 1, fp) != 1) return false;
   if (static_cast<int>(fwrite(GetCStr(), 1, len, fp)) != len) return false;
+  return true;
+}
+// Writes to the given file. Returns false in case of error.
+bool STRING::Serialize(TFile* fp) const {
+  inT32 len = length();
+  if (fp->FWrite(&len, sizeof(len), 1) != 1) return false;
+  if (fp->FWrite(GetCStr(), 1, len) != len) return false;
   return true;
 }
 // Reads from the given file. Returns false in case of error.
@@ -144,6 +168,25 @@ bool STRING::DeSerialize(bool swap, FILE* fp) {
   truncate_at(len);
   if (static_cast<int>(fread(GetCStr(), 1, len, fp)) != len) return false;
   return true;
+}
+// Reads from the given file. Returns false in case of error.
+// If swap is true, assumes a big/little-endian swap is needed.
+bool STRING::DeSerialize(bool swap, TFile* fp) {
+  inT32 len;
+  if (fp->FRead(&len, sizeof(len), 1) != 1) return false;
+  if (swap)
+    ReverseN(&len, sizeof(len));
+  truncate_at(len);
+  if (fp->FRead(GetCStr(), 1, len) != len) return false;
+  return true;
+}
+
+// As DeSerialize, but only seeks past the data - hence a static method.
+bool STRING::SkipDeSerialize(bool swap, tesseract::TFile* fp) {
+  inT32 len;
+  if (fp->FRead(&len, sizeof(len), 1) != 1) return false;
+  if (swap) ReverseN(&len, sizeof(len));
+  return fp->FRead(NULL, 1, len) == len;
 }
 
 BOOL8 STRING::contains(const char c) const {
@@ -245,21 +288,20 @@ char& STRING::operator[](inT32 index) const {
 
 void STRING::split(const char c, GenericVector<STRING> *splited) {
   int start_index = 0;
-  for (int i = 0; i < length(); i++) {
+  int len = length();
+  for (int i = 0; i < len; i++) {
     if ((*this)[i] == c) {
       if (i != start_index) {
         (*this)[i] = '\0';
-        STRING tmp = GetCStr() + start_index;
-        splited->push_back(tmp);
+        splited->push_back(STRING(GetCStr() + start_index, i - start_index));
         (*this)[i] = c;
       }
       start_index = i + 1;
     }
   }
 
-  if (length() != start_index) {
-    STRING tmp = GetCStr() + start_index;
-    splited->push_back(tmp);
+  if (len != start_index) {
+    splited->push_back(STRING(GetCStr() + start_index, len - start_index));
   }
 }
 
@@ -305,7 +347,7 @@ STRING& STRING::operator=(const STRING& str) {
   const STRING_HEADER* str_header = str.GetHeader();
   int   str_used = str_header->used_;
 
-  GetHeader()->used_ = 0;  // clear since ensure doesnt need to copy data
+  GetHeader()->used_ = 0;  // clear since ensure doesn't need to copy data
   char* this_cstr = ensure_cstr(str_used);
   STRING_HEADER* this_header = GetHeader();
 
@@ -364,7 +406,7 @@ STRING & STRING::operator=(const char* cstr) {
   if (cstr) {
     int len = strlen(cstr) + 1;
 
-    this_header->used_ = 0;  // dont bother copying data if need to realloc
+    this_header->used_ = 0;  // don't bother copying data if need to realloc
     char* this_cstr = ensure_cstr(len);
     this_header = GetHeader();  // for realloc
     memcpy(this_cstr, cstr, len);
@@ -382,7 +424,7 @@ STRING & STRING::operator=(const char* cstr) {
 
 void STRING::assign(const char *cstr, int len) {
   STRING_HEADER* this_header = GetHeader();
-  this_header->used_ = 0;  // dont bother copying data if need to realloc
+  this_header->used_ = 0;  // don't bother copying data if need to realloc
   char* this_cstr = ensure_cstr(len + 1);  // +1 for '\0'
 
   this_header = GetHeader();  // for realloc

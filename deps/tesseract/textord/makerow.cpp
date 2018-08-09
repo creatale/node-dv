@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        makerow.cpp  (Formerly makerows.c)
  * Description: Code to arrange blobs into rows of text.
- * Author:		Ray Smith
- * Created:		Mon Sep 21 14:34:48 BST 1992
+ * Author:    Ray Smith
+ * Created:   Mon Sep 21 14:34:48 BST 1992
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -161,7 +161,8 @@ float MakeRowFromSubBlobs(TO_BLOCK* block, C_BLOB* blob, TO_ROW_IT* row_it) {
  * only a single blob, it makes 2 rows, in case the top-level blob
  * is a container of the real blobs to recognize.
  */
-float make_single_row(ICOORD page_tr, TO_BLOCK* block, TO_BLOCK_LIST* blocks) {
+float make_single_row(ICOORD page_tr, bool allow_sub_blobs,
+                      TO_BLOCK* block, TO_BLOCK_LIST* blocks) {
   BLOBNBOX_IT blob_it = &block->blobs;
   TO_ROW_IT row_it = block->get_rows();
 
@@ -169,11 +170,17 @@ float make_single_row(ICOORD page_tr, TO_BLOCK* block, TO_BLOCK_LIST* blocks) {
   blob_it.add_list_after(&block->small_blobs);
   blob_it.add_list_after(&block->noise_blobs);
   blob_it.add_list_after(&block->large_blobs);
-  if (block->blobs.singleton()) {
+  if (block->blobs.singleton() && allow_sub_blobs) {
     blob_it.move_to_first();
     float size = MakeRowFromSubBlobs(block, blob_it.data()->cblob(), &row_it);
     if (size > block->line_size)
       block->line_size = size;
+  } else if (block->blobs.empty()) {
+    // Make a fake blob.
+    C_BLOB* blob = C_BLOB::FakeBlob(block->block->bounding_box());
+    // The blobnbox owns the blob.
+    BLOBNBOX* bblob = new BLOBNBOX(blob);
+    blob_it.add_after_then_move(bblob);
   }
   MakeRowFromBlobs(block->line_size, &blob_it, &row_it);
   // Fit an LMS line to the rows.
@@ -500,8 +507,7 @@ void vigorous_noise_removal(TO_BLOCK* block) {
             continue;  // Looks OK.
         }
         // It might be noise so get rid of it.
-        if (blob->cblob() != NULL)
-          delete blob->cblob();
+        delete blob->cblob();
         delete b_it.extract();
       } else {
         prev = blob;
@@ -664,7 +670,7 @@ BOOL8 find_best_dropout_row(                    //find neighbours
                             TO_ROW_IT *row_it,  //current position
                             BOOL8 testing_on    //correct orientation
                            ) {
-  inT32 next_index;              //of neigbouring row
+  inT32 next_index;              // of neighbouring row
   inT32 row_offset;              //from current row
   inT32 abs_dist;                //absolute distance
   inT8 row_inc;                  //increment to row_index
@@ -783,8 +789,6 @@ void compute_line_occupation(                    //project blobs
   inT32 line_count;              //maxy-miny+1
   inT32 line_index;              //of scan line
   int index;                     //array index for daft compilers
-  float top, bottom;             //coords of blob
-  inT32 width;                   //of blob
   TO_ROW *row;                   //current row
   TO_ROW_IT row_it = block->get_rows ();
   BLOBNBOX *blob;                //current blob
@@ -806,24 +810,13 @@ void compute_line_occupation(                    //project blobs
       blob = blob_it.data ();
       blob_box = blob->bounding_box ();
       blob_box.rotate (rotation);//de-skew it
-      top = blob_box.top ();
-      bottom = blob_box.bottom ();
-      width =
-        (inT32) floor ((FLOAT32) (blob_box.right () - blob_box.left ()));
-      if ((inT32) floor (bottom) < min_y
-        || (inT32) floor (bottom) - min_y >= line_count)
-        fprintf (stderr,
-          "Bad y coord of bottom, " INT32FORMAT "(" INT32FORMAT ","
-          INT32FORMAT ")\n", (inT32) floor (bottom), min_y, max_y);
+      int32_t width = blob_box.right() - blob_box.left();
+      index = blob_box.bottom() - min_y;
+      ASSERT_HOST(index >= 0 && index < line_count);
                                  //count transitions
-      index = (inT32) floor (bottom) - min_y;
       deltas[index] += width;
-      if ((inT32) floor (top) < min_y
-        || (inT32) floor (top) - min_y >= line_count)
-        fprintf (stderr,
-          "Bad y coord of top, " INT32FORMAT "(" INT32FORMAT ","
-          INT32FORMAT ")\n", (inT32) floor (top), min_y, max_y);
-      index = (inT32) floor (top) - min_y;
+      index = blob_box.top() - min_y;
+      ASSERT_HOST(index >= 0 && index < line_count);
       deltas[index] -= width;
     }
   }
@@ -1779,7 +1772,7 @@ static int CountOverlaps(const TBOX& box, int min_height,
   BLOBNBOX_IT blob_it(blobs);
   for (blob_it.mark_cycle_pt(); !blob_it.cycled_list(); blob_it.forward()) {
     BLOBNBOX* blob = blob_it.data();
-    TBOX blob_box = blob->bounding_box();
+    const TBOX &blob_box = blob->bounding_box();
     if (blob_box.height() >= min_height && box.major_overlap(blob_box)) {
       ++overlaps;
     }
@@ -2667,14 +2660,16 @@ void mark_repeated_chars(TO_ROW *row) {
   if (!box_it.empty()) {
     do {
       BLOBNBOX* bblob = box_it.data();
-      int repeat_length = 0;
+      int repeat_length = 1;
       if (bblob->flow() == BTFT_LEADER &&
           !bblob->joined_to_prev() && bblob->cblob() != NULL) {
         BLOBNBOX_IT test_it(box_it);
-        for (test_it.forward(); !test_it.at_first(); test_it.forward()) {
+        for (test_it.forward(); !test_it.at_first();) {
           bblob = test_it.data();
           if (bblob->flow() != BTFT_LEADER)
             break;
+          test_it.forward();
+          bblob = test_it.data();
           if (bblob->joined_to_prev() || bblob->cblob() == NULL) {
             repeat_length = 0;
             break;
@@ -2688,11 +2683,9 @@ void mark_repeated_chars(TO_ROW *row) {
           bblob = box_it.data();
           bblob->set_repeated_set(num_repeated_sets);
         }
-        if (!box_it.at_first())
-          bblob->set_repeated_set(0);
      } else {
-        box_it.forward();
         bblob->set_repeated_set(0);
+        box_it.forward();
       }
     } while (!box_it.at_first());  // until all done
   }

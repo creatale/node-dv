@@ -35,7 +35,6 @@
 #include "cutil.h"
 #include "dict.h"
 #include "emalloc.h"
-#include "freelist.h"
 #include "helpers.h"
 #include "strngs.h"
 #include "tesscallback.h"
@@ -181,11 +180,12 @@ void Dawg::init(DawgType type, const STRING &lang,
   perm_ = perm;
   ASSERT_HOST(unicharset_size > 0);
   unicharset_size_ = unicharset_size;
-  // Set bit masks.
-  flag_start_bit_ = ceil(log(static_cast<double>(unicharset_size_)) / log(2.0));
+  // Set bit masks. We will use the value unicharset_size_ as a null char, so
+  // the actual number of unichars is unicharset_size_ + 1.
+  flag_start_bit_ = ceil(log(unicharset_size_ + 1.0) / log(2.0));
   next_node_start_bit_ = flag_start_bit_ + NUM_FLAG_BITS;
-  letter_mask_ = ~(~0 << flag_start_bit_);
-  next_node_mask_ = ~0 << (flag_start_bit_ + NUM_FLAG_BITS);
+  letter_mask_ = ~(~0ull << flag_start_bit_);
+  next_node_mask_ = ~0ull << (flag_start_bit_ + NUM_FLAG_BITS);
   flags_mask_ = ~(letter_mask_ | next_node_mask_);
 
   debug_level_ = debug_level;
@@ -196,7 +196,7 @@ void Dawg::init(DawgType type, const STRING &lang,
          F u n c t i o n s   f o r   S q u i s h e d    D a w g
 ----------------------------------------------------------------------*/
 
-SquishedDawg::~SquishedDawg() { memfree(edges_); }
+SquishedDawg::~SquishedDawg() { delete[] edges_; }
 
 EDGE_REF SquishedDawg::edge_char_of(NODE_REF node,
                                     UNICHAR_ID unichar_id,
@@ -338,7 +338,7 @@ void SquishedDawg::read_squished_dawg(FILE *file,
   ASSERT_HOST(num_edges_ > 0);  // DAWG should not be empty
   Dawg::init(type, lang, perm, unicharset_size, debug_level);
 
-  edges_ = (EDGE_ARRAY) memalloc(sizeof(EDGE_RECORD) * num_edges_);
+  edges_ = new EDGE_RECORD[num_edges_];
   fread(&edges_[0], sizeof(EDGE_RECORD), num_edges_, file);
   EDGE_REF edge;
   if (swap) {

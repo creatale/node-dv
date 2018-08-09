@@ -26,7 +26,7 @@
  **********************************************************************/
 
 /***********************************************************************
- *							CLIST::internal_deep_clear
+ *              CLIST::internal_deep_clear
  *
  *  Used by the "deep_clear" member function of derived list
  *  classes to destroy all the elements on the list.
@@ -43,11 +43,6 @@ void (*zapper) (void *)) {       //ptr to zapper functn
   CLIST_LINK *ptr;
   CLIST_LINK *next;
 
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::internal_deep_clear", ABORT, NULL);
-  #endif
-
   if (!empty ()) {
     ptr = last->next;            //set to first
     last->next = NULL;           //break circle
@@ -61,9 +56,8 @@ void (*zapper) (void *)) {       //ptr to zapper functn
   }
 }
 
-
 /***********************************************************************
- *							CLIST::shallow_clear
+ *              CLIST::shallow_clear
  *
  *  Used by the destructor and the "shallow_clear" member function of derived
  *  list classes to destroy the list.
@@ -74,11 +68,6 @@ void (*zapper) (void *)) {       //ptr to zapper functn
 void CLIST::shallow_clear() {  //destroy all links
   CLIST_LINK *ptr;
   CLIST_LINK *next;
-
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::shallow_clear", ABORT, NULL);
-  #endif
 
   if (!empty ()) {
     ptr = last->next;            //set to first
@@ -93,7 +82,7 @@ void CLIST::shallow_clear() {  //destroy all links
 }
 
 /***********************************************************************
- *							CLIST::assign_to_sublist
+ *              CLIST::assign_to_sublist
  *
  *  The list is set to a sublist of another list.  "This" list must be empty
  *  before this function is invoked.  The two iterators passed must refer to
@@ -111,20 +100,14 @@ void CLIST::assign_to_sublist(                           //to this list
   const ERRCODE LIST_NOT_EMPTY =
     "Destination list must be empty before extracting a sublist";
 
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::assign_to_sublist", ABORT, NULL);
-  #endif
-
   if (!empty ())
     LIST_NOT_EMPTY.error ("CLIST.assign_to_sublist", ABORT, NULL);
 
   last = start_it->extract_sublist (end_it);
 }
 
-
 /***********************************************************************
- *							CLIST::length
+ *              CLIST::length
  *
  *  Return count of elements on list
  **********************************************************************/
@@ -133,19 +116,13 @@ inT32 CLIST::length() const {  //count elements
   CLIST_ITERATOR it(const_cast<CLIST*>(this));
   inT32 count = 0;
 
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::length", ABORT, NULL);
-  #endif
-
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward())
     count++;
   return count;
 }
 
-
 /***********************************************************************
- *							CLIST::sort
+ *              CLIST::sort
  *
  *  Sort elements on list
  **********************************************************************/
@@ -159,11 +136,6 @@ const void *, const void *)) {
   void **base;                   //ptr array to sort
   void **current;
   inT32 i;
-
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::sort", ABORT, NULL);
-  #endif
 
   /* Allocate an array of pointers, one per list element */
   count = length ();
@@ -190,7 +162,7 @@ const void *, const void *)) {
 
 // Assuming list has been sorted already, insert new_data to
 // keep the list sorted according to the same comparison function.
-// Comparision function is the same as used by sort, i.e. uses double
+// Comparison function is the same as used by sort, i.e. uses double
 // indirection. Time is O(1) to add to beginning or end.
 // Time is linear to add pre-sorted items to an empty list.
 // If unique, then don't add duplicate entries.
@@ -264,7 +236,7 @@ void CLIST::set_subtract(int comparator(const void*, const void*),
  **********************************************************************/
 
 /***********************************************************************
- *							CLIST_ITERATOR::forward
+ *              CLIST_ITERATOR::forward
  *
  *  Move the iterator to the next element of the list.
  *  REMEMBER: ALL LISTS ARE CIRCULAR.
@@ -272,8 +244,6 @@ void CLIST::set_subtract(int comparator(const void*, const void*),
 
 void *CLIST_ITERATOR::forward() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST_ITERATOR::forward", ABORT, NULL);
   if (!list)
     NO_LIST.error ("CLIST_ITERATOR::forward", ABORT, NULL);
   #endif
@@ -303,9 +273,8 @@ void *CLIST_ITERATOR::forward() {
   return current->data;
 }
 
-
 /***********************************************************************
- *							CLIST_ITERATOR::data_relative
+ *              CLIST_ITERATOR::data_relative
  *
  *  Return the data pointer to the element "offset" elements from current.
  *  "offset" must not be less than -1.
@@ -317,8 +286,6 @@ void *CLIST_ITERATOR::data_relative(                //get data + or - ...
   CLIST_LINK *ptr;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST_ITERATOR::data_relative", ABORT, NULL);
   if (!list)
     NO_LIST.error ("CLIST_ITERATOR::data_relative", ABORT, NULL);
   if (list->empty ())
@@ -341,9 +308,8 @@ void *CLIST_ITERATOR::data_relative(                //get data + or - ...
   return ptr->data;
 }
 
-
 /***********************************************************************
- *							CLIST_ITERATOR::move_to_last()
+ *              CLIST_ITERATOR::move_to_last()
  *
  *  Move current so that it is set to the end of the list.
  *  Return data just in case anyone wants it.
@@ -352,8 +318,6 @@ void *CLIST_ITERATOR::data_relative(                //get data + or - ...
 
 void *CLIST_ITERATOR::move_to_last() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST_ITERATOR::move_to_last", ABORT, NULL);
   if (!list)
     NO_LIST.error ("CLIST_ITERATOR::move_to_last", ABORT, NULL);
   #endif
@@ -367,9 +331,8 @@ void *CLIST_ITERATOR::move_to_last() {
     return current->data;
 }
 
-
 /***********************************************************************
- *							CLIST_ITERATOR::exchange()
+ *              CLIST_ITERATOR::exchange()
  *
  *  Given another iterator, whose current element is a different element on
  *  the same list list OR an element of another list, exchange the two current
@@ -386,8 +349,6 @@ void CLIST_ITERATOR::exchange(                             //positions of 2 link
   CLIST_LINK *old_current;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST_ITERATOR::exchange", ABORT, NULL);
   if (!list)
     NO_LIST.error ("CLIST_ITERATOR::exchange", ABORT, NULL);
   if (!other_it)
@@ -467,9 +428,8 @@ void CLIST_ITERATOR::exchange(                             //positions of 2 link
   other_it->current = old_current;
 }
 
-
 /***********************************************************************
- *							CLIST_ITERATOR::extract_sublist()
+ *              CLIST_ITERATOR::extract_sublist()
  *
  *  This is a private member, used only by CLIST::assign_to_sublist.
  *  Given another iterator for the same list, extract the links from THIS to
@@ -490,8 +450,6 @@ CLIST_LINK *CLIST_ITERATOR::extract_sublist(                             //from 
   const ERRCODE DONT_EXTRACT_DELETED =
     "Can't extract a sublist marked by deleted points";
 
-  if (!this)
-    NULL_OBJECT.error ("CLIST_ITERATOR::extract_sublist", ABORT, NULL);
   if (!other_it)
     BAD_PARAMETER.error ("CLIST_ITERATOR::extract_sublist", ABORT,
       "other_it NULL");
@@ -513,7 +471,7 @@ CLIST_LINK *CLIST_ITERATOR::extract_sublist(                             //from 
 
   temp_it.mark_cycle_pt ();
   do {                           //walk sublist
-    if (temp_it.cycled_list ())  //cant find end pt
+    if (temp_it.cycled_list())   // can't find end pt
       BAD_SUBLIST.error ("CLIST_ITERATOR.extract_sublist", ABORT, NULL);
 
     if (temp_it.at_last ()) {

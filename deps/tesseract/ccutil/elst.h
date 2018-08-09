@@ -67,7 +67,7 @@ The implementation of lists is very careful about space and speed overheads.
 This is why many embedded lists are provided. The same concerns mean that
 in-line type coercion is done, rather than use virtual functions.  This is
 cumbersome in that each data type to be listed requires its own iterator and
-list class - though macros can gererate these.  It also prevents heterogenous
+list class - though macros can gererate these.  It also prevents heterogeneous
 lists.
 **********************************************************************/
 
@@ -94,13 +94,12 @@ class DLLSYM ELIST_LINK
     }
     //constructor
 
-    ELIST_LINK(                       //copy constructor
-               const ELIST_LINK &) {  //dont copy link
+    ELIST_LINK(const ELIST_LINK &) {  // don't copy link.
       next = NULL;
     }
 
-    void operator= (             //dont copy links
-    const ELIST_LINK &) {
+    void operator=(  // don't copy links
+        const ELIST_LINK &) {
       next = NULL;
     }
 };
@@ -159,7 +158,7 @@ class DLLSYM ELIST
 
     // Assuming list has been sorted already, insert new_link to
     // keep the list sorted according to the same comparison function.
-    // Comparision function is the same as used by sort, i.e. uses double
+    // Comparison function is the same as used by sort, i.e. uses double
     // indirection. Time is O(1) to add to beginning or end.
     // Time is linear to add pre-sorted items to an empty list.
     // If unique is set to true and comparator() returns 0 (an entry with the
@@ -210,8 +209,7 @@ class DLLSYM ELIST_ITERATOR
       list = NULL;
     }                            //unassigned list
 
-    ELIST_ITERATOR(  //constructor
-                   ELIST *list_to_iterate);
+    explicit ELIST_ITERATOR(ELIST *list_to_iterate);
 
     void set_to_list(  //change list
                      ELIST *list_to_iterate);
@@ -275,8 +273,8 @@ class DLLSYM ELIST_ITERATOR
 
     bool cycled_list();  //Completed a cycle?
 
-    void add_to_end(                        //add at end &
-                    ELIST_LINK *new_link);  //dont move
+    void add_to_end(            // add at end &
+        ELIST_LINK *new_link);  // don't move
 
     void exchange(                            //positions of 2 links
                   ELIST_ITERATOR *other_it);  //other iterator
@@ -299,8 +297,6 @@ class DLLSYM ELIST_ITERATOR
 inline void ELIST_ITERATOR::set_to_list(  //change list
                                         ELIST *list_to_iterate) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::set_to_list", ABORT, NULL);
   if (!list_to_iterate)
     BAD_PARAMETER.error ("ELIST_ITERATOR::set_to_list", ABORT,
       "list_to_iterate is NULL");
@@ -338,8 +334,6 @@ inline ELIST_ITERATOR::ELIST_ITERATOR(ELIST *list_to_iterate) {
 inline void ELIST_ITERATOR::add_after_then_move(  // element to add
                                                 ELIST_LINK *new_element) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::add_after_then_move", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::add_after_then_move", ABORT, NULL);
   if (!new_element)
@@ -385,8 +379,6 @@ inline void ELIST_ITERATOR::add_after_then_move(  // element to add
 inline void ELIST_ITERATOR::add_after_stay_put(  // element to add
                                                ELIST_LINK *new_element) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::add_after_stay_put", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::add_after_stay_put", ABORT, NULL);
   if (!new_element)
@@ -435,8 +427,6 @@ inline void ELIST_ITERATOR::add_after_stay_put(  // element to add
 inline void ELIST_ITERATOR::add_before_then_move(  // element to add
                                                  ELIST_LINK *new_element) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::add_before_then_move", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::add_before_then_move", ABORT, NULL);
   if (!new_element)
@@ -468,19 +458,16 @@ inline void ELIST_ITERATOR::add_before_then_move(  // element to add
   current = new_element;
 }
 
-
 /***********************************************************************
  *                          ELIST_ITERATOR::add_before_stay_put
  *
- *  Add a new element to the list before the current element but dont move the
+ *  Add a new element to the list before the current element but don't move the
  *  iterator to the new element.
  **********************************************************************/
 
 inline void ELIST_ITERATOR::add_before_stay_put(  // element to add
                                                 ELIST_LINK *new_element) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::add_before_stay_put", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::add_before_stay_put", ABORT, NULL);
   if (!new_element)
@@ -513,18 +500,16 @@ inline void ELIST_ITERATOR::add_before_stay_put(  // element to add
   }
 }
 
-
 /***********************************************************************
  *                          ELIST_ITERATOR::add_list_after
  *
- *  Insert another list to this list after the current element but dont move the
+ *  Insert another list to this list after the current element but don't move
+ *the
  *  iterator.
  **********************************************************************/
 
 inline void ELIST_ITERATOR::add_list_after(ELIST *list_to_add) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::add_list_after", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::add_list_after", ABORT, NULL);
   if (!list_to_add)
@@ -573,8 +558,6 @@ inline void ELIST_ITERATOR::add_list_after(ELIST *list_to_add) {
 
 inline void ELIST_ITERATOR::add_list_before(ELIST *list_to_add) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::add_list_before", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::add_list_before", ABORT, NULL);
   if (!list_to_add)
@@ -623,8 +606,6 @@ inline ELIST_LINK *ELIST_ITERATOR::extract() {
   ELIST_LINK *extracted_link;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::extract", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::extract", ABORT, NULL);
   if (!current)                  //list empty or
@@ -664,8 +645,6 @@ inline ELIST_LINK *ELIST_ITERATOR::extract() {
 
 inline ELIST_LINK *ELIST_ITERATOR::move_to_first() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::move_to_first", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::move_to_first", ABORT, NULL);
   #endif
@@ -690,8 +669,6 @@ inline ELIST_LINK *ELIST_ITERATOR::move_to_first() {
 
 inline void ELIST_ITERATOR::mark_cycle_pt() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::mark_cycle_pt", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::mark_cycle_pt", ABORT, NULL);
   #endif
@@ -713,8 +690,6 @@ inline void ELIST_ITERATOR::mark_cycle_pt() {
 
 inline bool ELIST_ITERATOR::at_first() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::at_first", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::at_first", ABORT, NULL);
   #endif
@@ -735,8 +710,6 @@ inline bool ELIST_ITERATOR::at_first() {
 
 inline bool ELIST_ITERATOR::at_last() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::at_last", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::at_last", ABORT, NULL);
   #endif
@@ -757,8 +730,6 @@ inline bool ELIST_ITERATOR::at_last() {
 
 inline bool ELIST_ITERATOR::cycled_list() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::cycled_list", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::cycled_list", ABORT, NULL);
   #endif
@@ -777,8 +748,6 @@ inline bool ELIST_ITERATOR::cycled_list() {
 
 inline inT32 ELIST_ITERATOR::length() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::length", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::length", ABORT, NULL);
   #endif
@@ -799,8 +768,6 @@ ELIST_ITERATOR::sort (           //sort elements
 int comparator (                 //comparison routine
 const void *, const void *)) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::sort", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::sort", ABORT, NULL);
   #endif
@@ -823,8 +790,6 @@ const void *, const void *)) {
 inline void ELIST_ITERATOR::add_to_end(  // element to add
                                        ELIST_LINK *new_element) {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::add_to_end", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::add_to_end", ABORT, NULL);
   if (!new_element)
@@ -870,7 +835,7 @@ Replace <parm> with "<parm>".  <parm> may be an arbitrary number of tokens
 CLASSNAME is assumed to be the name of a class which has a baseclass of
 ELIST_LINK.
 
-NOTE:  Because we dont use virtual functions in the list code, the list code
+NOTE:  Because we don't use virtual functions in the list code, the list code
 will NOT work correctly for classes derived from this.
 
 The macros generate:
@@ -893,95 +858,99 @@ ELISTIZEH is a concatenation of 3 fragments ELISTIZEH_A, ELISTIZEH_B and
 ELISTIZEH_C.
 ***********************************************************************/
 
-#define ELISTIZEH_A(CLASSNAME)                                               \
-                                                                             \
+#define ELISTIZEH_A(CLASSNAME)                                                \
+                                                                              \
 extern DLLSYM void CLASSNAME##_zapper(ELIST_LINK* link);
 
-#define ELISTIZEH_B(CLASSNAME)                                               \
-                                                                             \
-/***********************************************************************        \
-*                           CLASS - CLASSNAME##_LIST                                                                    \
-*                                                                                                       \
-*                           List class for class CLASSNAME                                                          \
-*                                                                                                       \
-**********************************************************************/         \
-                                                                                                        \
-class DLLSYM                CLASSNAME##_LIST : public ELIST                         \
-{                                                                                                       \
-public:                                                                                             \
-                            CLASSNAME##_LIST():ELIST() {}\
-                                                        /* constructor */       \
-                                                                                                        \
-                            CLASSNAME##_LIST(           /* dont construct */ \
-    const CLASSNAME##_LIST&)                            /*by initial assign*/\
-    { DONT_CONSTRUCT_LIST_BY_COPY.error( QUOTE_IT( CLASSNAME##_LIST ),      \
-                                                        ABORT, NULL ); }                            \
-                                                                                                        \
-void                        clear()                     /* delete elements */\
-    { ELIST::internal_clear( &CLASSNAME##_zapper ); }                               \
-                                                                                                        \
-                                    ~CLASSNAME##_LIST() /* destructor */        \
-    { clear(); }                                                                                \
-\
-/* Become a deep copy of src_list*/ \
-void deep_copy(const CLASSNAME##_LIST* src_list, \
-               CLASSNAME* (*copier)(const CLASSNAME*)); \
-\
-void                        operator=(                  /* prevent assign */    \
-    const CLASSNAME##_LIST&)                                                                \
-    { DONT_ASSIGN_LISTS.error( QUOTE_IT( CLASSNAME##_LIST ),                        \
-                                            ABORT, NULL ); }
+#define ELISTIZEH_B(CLASSNAME)                                                \
+                                                                              \
+/***********************************************************************      \
+*                           CLASS - CLASSNAME##_LIST                          \
+*                                                                             \
+*                           List class for class CLASSNAME                    \
+*                                                                             \
+**********************************************************************/       \
+                                                                              \
+class DLLSYM CLASSNAME##_LIST : public ELIST {                                \
+ public:                                                                      \
+  CLASSNAME##_LIST():ELIST() {}                                               \
+                                                                              \
+  void clear()  {                                        /* delete elements */\
+    ELIST::internal_clear(&CLASSNAME##_zapper);                               \
+  }                                                                           \
+                                                                              \
+  ~CLASSNAME##_LIST() {                                                       \
+    clear();                                                                  \
+   }                                                                          \
+                                                                              \
+  /* Become a deep copy of src_list*/                                         \
+  void deep_copy(const CLASSNAME##_LIST* src_list,                            \
+                 CLASSNAME* (*copier)(const CLASSNAME*));                     \
+                                                                              \
+private:                                                                      \
+ /* Prevent assign and copy construction. */                                  \
+ CLASSNAME##_LIST(const CLASSNAME##_LIST&) {                                  \
+   DONT_CONSTRUCT_LIST_BY_COPY.error(QUOTE_IT(CLASSNAME##_LIST), ABORT, NULL);\
+ }                                                                            \
+ void operator=(const CLASSNAME##_LIST&) {                                    \
+   DONT_ASSIGN_LISTS.error(QUOTE_IT(CLASSNAME##_LIST), ABORT, NULL );         \
+ }                                                                            \
 
-#define ELISTIZEH_C( CLASSNAME )                                                        \
-};                                                                                                      \
-                                                                                                        \
-                                                                                                        \
-                                                                                                        \
-/***********************************************************************        \
-*                           CLASS - CLASSNAME##_IT                                                                      \
-*                                                                                                       \
-*                           Iterator class for class CLASSNAME##_LIST                                           \
-*                                                                                                       \
-*  Note: We don't need to coerce pointers to member functions input             \
-*  parameters as these are automatically converted to the type of the base      \
-*  type. ("A ptr to a class may be converted to a pointer to a public base      \
-*  class of that class")                                                                        \
-**********************************************************************/         \
-                                                                                                        \
-class DLLSYM                CLASSNAME##_IT : public ELIST_ITERATOR                  \
-{                                                                                                       \
-public:                                                                                             \
-                                CLASSNAME##_IT():ELIST_ITERATOR(){}                     \
-                                                                                                        \
-                                CLASSNAME##_IT(                                             \
-CLASSNAME##_LIST*           list):ELIST_ITERATOR(list){}                                \
-                                                                                                        \
-    CLASSNAME*          data()                                                          \
-        { return (CLASSNAME*) ELIST_ITERATOR::data(); }                             \
-                                                                                                        \
-    CLASSNAME*          data_relative(                                                  \
-    inT8                    offset)                                                         \
-        { return (CLASSNAME*) ELIST_ITERATOR::data_relative( offset ); }        \
-                                                                                                        \
-    CLASSNAME*          forward()                                                       \
-        { return (CLASSNAME*) ELIST_ITERATOR::forward(); }                          \
-                                                                                                        \
-    CLASSNAME*          extract()                                                       \
-        { return (CLASSNAME*) ELIST_ITERATOR::extract(); }                          \
-                                                                                                        \
-    CLASSNAME*          move_to_first()                                             \
-        { return (CLASSNAME*) ELIST_ITERATOR::move_to_first(); }                    \
-                                                                                                        \
-    CLASSNAME*          move_to_last()                                                  \
-        { return (CLASSNAME*) ELIST_ITERATOR::move_to_last(); }                 \
+#define ELISTIZEH_C( CLASSNAME )                                              \
+};                                                                            \
+                                                                              \
+                                                                              \
+                                                                              \
+/***********************************************************************      \
+*                           CLASS - CLASSNAME##_IT                            \
+*                                                                             \
+*                           Iterator class for class CLASSNAME##_LIST         \
+*                                                                             \
+*  Note: We don't need to coerce pointers to member functions input           \
+*  parameters as these are automatically converted to the type of the base    \
+*  type. ("A ptr to a class may be converted to a pointer to a public base    \
+*  class of that class")                                                      \
+**********************************************************************/       \
+                                                                              \
+class DLLSYM CLASSNAME##_IT : public ELIST_ITERATOR {                         \
+ public:                                                                      \
+  CLASSNAME##_IT():ELIST_ITERATOR(){}                                         \
+                                                                              \
+  /* TODO(rays) This constructor should be explicit, but that means changing  \
+     hundreds of incorrect initializations of iterators that use = over () */ \
+  CLASSNAME##_IT(CLASSNAME##_LIST* list) : ELIST_ITERATOR(list) {}            \
+                                                                              \
+  CLASSNAME* data() {                                                         \
+    return reinterpret_cast<CLASSNAME*>(ELIST_ITERATOR::data());              \
+  }                                                                           \
+                                                                              \
+  CLASSNAME* data_relative(inT8 offset) {                                     \
+    return reinterpret_cast<CLASSNAME*>(ELIST_ITERATOR::data_relative(offset));\
+  }                                                                           \
+                                                                              \
+  CLASSNAME* forward() {                                                      \
+    return reinterpret_cast<CLASSNAME*>(ELIST_ITERATOR::forward());           \
+  }                                                                           \
+                                                                              \
+  CLASSNAME* extract() {                                                      \
+    return reinterpret_cast<CLASSNAME*>(ELIST_ITERATOR::extract());           \
+  }                                                                           \
+                                                                              \
+  CLASSNAME* move_to_first() {                                                \
+    return reinterpret_cast<CLASSNAME*>(ELIST_ITERATOR::move_to_first());     \
+  }                                                                           \
+                                                                              \
+  CLASSNAME* move_to_last() {                                                 \
+    return reinterpret_cast<CLASSNAME*>(ELIST_ITERATOR::move_to_last());      \
+  }                                                                           \
 };
 
-#define ELISTIZEH( CLASSNAME )                                                      \
-                                                                                                        \
-ELISTIZEH_A( CLASSNAME )                                                                        \
-                                                                                                        \
-ELISTIZEH_B( CLASSNAME )                                                                        \
-                                                                                                        \
+#define ELISTIZEH( CLASSNAME )                                                \
+                                                                              \
+ELISTIZEH_A( CLASSNAME )                                                      \
+                                                                              \
+ELISTIZEH_B( CLASSNAME )                                                      \
+                                                                              \
 ELISTIZEH_C( CLASSNAME )
 
 
@@ -989,30 +958,29 @@ ELISTIZEH_C( CLASSNAME )
   ELISTIZE( CLASSNAME ) MACRO
 ***********************************************************************/
 
-#define ELISTIZE(CLASSNAME)                                                 \
-                                                                            \
-/***********************************************************************    \
-*                           CLASSNAME##_zapper                              \
-*                                                                           \
-*  A function which can delete a CLASSNAME element.  This is passed to the  \
-*  generic clear list member function so that when a list is cleared the    \
-*  elements on the list are properly destroyed from the base class, even    \
-*  though we dont use a virtual destructor function.                        \
-**********************************************************************/     \
-                                                                            \
-DLLSYM void CLASSNAME##_zapper(ELIST_LINK* link) {                          \
-  delete reinterpret_cast<CLASSNAME*>(link);                                \
-}                                                                           \
-                                                                            \
-/* Become a deep copy of src_list*/                                         \
-void CLASSNAME##_LIST::deep_copy(const CLASSNAME##_LIST* src_list,          \
-               CLASSNAME* (*copier)(const CLASSNAME*)) {                    \
-                                                                            \
-  CLASSNAME##_IT from_it(const_cast<CLASSNAME##_LIST*>(src_list));          \
-  CLASSNAME##_IT to_it(this);                                               \
-                                                                            \
-  for (from_it.mark_cycle_pt(); !from_it.cycled_list(); from_it.forward())  \
-    to_it.add_after_then_move((*copier)(from_it.data()));                   \
-}
+#define ELISTIZE(CLASSNAME)                                                   \
+                                                                              \
+  /***********************************************************************    \
+  *                           CLASSNAME##_zapper                              \
+  *                                                                           \
+  *  A function which can delete a CLASSNAME element.  This is passed to the  \
+  *  generic clear list member function so that when a list is cleared the    \
+  *  elements on the list are properly destroyed from the base class, even    \
+  *  though we don't use a virtual destructor function.                       \
+  **********************************************************************/     \
+                                                                              \
+  DLLSYM void CLASSNAME##_zapper(ELIST_LINK *link) {                          \
+    delete reinterpret_cast<CLASSNAME *>(link);                               \
+  }                                                                           \
+                                                                              \
+  /* Become a deep copy of src_list*/                                         \
+  void CLASSNAME##_LIST::deep_copy(const CLASSNAME##_LIST *src_list,          \
+                                   CLASSNAME *(*copier)(const CLASSNAME *)) { \
+    CLASSNAME##_IT from_it(const_cast<CLASSNAME##_LIST *>(src_list));         \
+    CLASSNAME##_IT to_it(this);                                               \
+                                                                              \
+    for (from_it.mark_cycle_pt(); !from_it.cycled_list(); from_it.forward())  \
+      to_it.add_after_then_move((*copier)(from_it.data()));                   \
+  }
 
 #endif

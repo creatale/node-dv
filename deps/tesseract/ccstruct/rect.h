@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        rect.h  (Formerly box.h)
  * Description: Bounding box class definition.
- * Author:					Phil Cheatle
- * Created:					Wed Oct 16 15:18:45 BST 1991
+ * Author:          Phil Cheatle
+ * Created:         Wed Oct 16 15:18:45 BST 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,6 +77,12 @@ class DLLSYM TBOX  {  // bounding box
     }
     void set_right(int x) {
       top_right.set_x(x);
+    }
+    int x_middle() const {
+      return (bot_left.x() + top_right.x()) / 2;
+    }
+    int y_middle() const {
+      return (bot_left.y() + top_right.y()) / 2;
     }
 
     const ICOORD &botleft() const {  // access function
@@ -301,9 +307,9 @@ class DLLSYM TBOX  {  // bounding box
  *
  **********************************************************************/
 
-inline TBOX::TBOX(               // construtor
-                const FCOORD pt  // floating centre
-               ) {
+inline TBOX::TBOX(   // constructor
+    const FCOORD pt  // floating centre
+    ) {
   bot_left = ICOORD ((inT16) floor (pt.x ()), (inT16) floor (pt.y ()));
   top_right = ICOORD ((inT16) ceil (pt.x ()), (inT16) ceil (pt.y ()));
 }

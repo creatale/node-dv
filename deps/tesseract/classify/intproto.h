@@ -52,7 +52,7 @@ class FCOORD;
 #define NUM_CP_BUCKETS    24
 #define CLASSES_PER_CP    32
 #define NUM_BITS_PER_CLASS  2
-#define CLASS_PRUNER_CLASS_MASK (~(~0 << NUM_BITS_PER_CLASS))
+#define CLASS_PRUNER_CLASS_MASK (~(~0u << NUM_BITS_PER_CLASS))
 #define CLASSES_PER_CP_WERD (CLASSES_PER_CP / NUM_BITS_PER_CLASS)
 #define PROTOS_PER_PP_WERD  BITS_PER_WERD
 #define BITS_PER_CP_VECTOR  (CLASSES_PER_CP * NUM_BITS_PER_CLASS)
@@ -218,9 +218,10 @@ void AddProtoToClassPruner(PROTO Proto,
 void AddProtoToProtoPruner(PROTO Proto, int ProtoId,
                            INT_CLASS Class, bool debug);
 
-int BucketFor(FLOAT32 Param, FLOAT32 Offset, int NumBuckets);
+uinT8 Bucket8For(FLOAT32 param, FLOAT32 offset, int num_buckets);
+uinT16 Bucket16For(FLOAT32 param, FLOAT32 offset, int num_buckets);
 
-int CircBucketFor(FLOAT32 Param, FLOAT32 Offset, int NumBuckets);
+uinT8 CircBucketFor(FLOAT32 param, FLOAT32 offset, int num_buckets);
 
 void UpdateMatchDisplay();
 

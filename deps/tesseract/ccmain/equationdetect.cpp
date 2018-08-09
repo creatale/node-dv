@@ -20,6 +20,7 @@
 #ifdef _MSC_VER
 #pragma warning(disable:4244)  // Conversion warnings
 #include <mathfix.h>
+#include <windows.h>
 #endif
 
 #ifdef __MINGW32__
@@ -108,30 +109,21 @@ EquationDetect::EquationDetect(const char* equ_datapath,
   if (equ_name == NULL) {
     equ_name = default_name;
   }
-  equ_tesseract_ = lang_tesseract_ = NULL;
+  lang_tesseract_ = NULL;
   resolution_ = 0;
   page_count_ = 0;
 
-  // Construct equ_tesseract_.
-  equ_tesseract_ = new Tesseract();
-  if (equ_tesseract_->init_tesseract(equ_datapath, equ_name,
-                                     OEM_TESSERACT_ONLY)) {
+  if (equ_tesseract_.init_tesseract(equ_datapath, equ_name,
+                                    OEM_TESSERACT_ONLY)) {
     tprintf("Warning: equation region detection requested,"
             " but %s failed to load from %s\n", equ_name, equ_datapath);
-    delete equ_tesseract_;
-    equ_tesseract_ = NULL;
   }
 
   cps_super_bbox_ = NULL;
 }
 
 EquationDetect::~EquationDetect() {
-  if (equ_tesseract_) {
-    delete (equ_tesseract_);
-  }
-  if (cps_super_bbox_) {
-    delete(cps_super_bbox_);
-  }
+  delete(cps_super_bbox_);
 }
 
 void EquationDetect::SetLangTesseract(Tesseract* lang_tesseract) {
@@ -186,7 +178,7 @@ void EquationDetect::IdentifySpecialText(
   normed_blob->Normalize(NULL, NULL, NULL, x_orig, y_orig, scaling, scaling,
                          0.0f, static_cast<float>(kBlnBaselineOffset),
                          false, NULL);
-  equ_tesseract_->AdaptiveClassifier(normed_blob, &ratings_equ);
+  equ_tesseract_.AdaptiveClassifier(normed_blob, &ratings_equ);
   lang_tesseract_->AdaptiveClassifier(normed_blob, &ratings_lang);
   delete normed_blob;
   delete tblob;
@@ -272,8 +264,8 @@ BlobSpecialTextType EquationDetect::EstimateTypeForUnichar(
 
 void EquationDetect::IdentifySpecialText() {
   // Set configuration for Tesseract::AdaptiveClassifier.
-  equ_tesseract_->tess_cn_matching.set_value(true);  // turn it on
-  equ_tesseract_->tess_bn_matching.set_value(false);
+  equ_tesseract_.tess_cn_matching.set_value(true);  // turn it on
+  equ_tesseract_.tess_bn_matching.set_value(false);
 
   // Set the multiplier to zero for lang_tesseract_ to improve the accuracy.
   int classify_class_pruner = lang_tesseract_->classify_class_pruner_multiplier;
@@ -372,8 +364,8 @@ void EquationDetect::IdentifyBlobsToSkip(ColPartition* part) {
 
 int EquationDetect::FindEquationParts(
     ColPartitionGrid* part_grid, ColPartitionSet** best_columns) {
-  if (!equ_tesseract_ || !lang_tesseract_) {
-    tprintf("Warning: equ_tesseract_/lang_tesseract_ is NULL!\n");
+  if (!lang_tesseract_) {
+    tprintf("Warning: lang_tesseract_ is NULL!\n");
     return -1;
   }
   if (!part_grid || !best_columns) {
@@ -624,10 +616,6 @@ void EquationDetect::IdentifySeedParts() {
 }
 
 float EquationDetect::ComputeForegroundDensity(const TBOX& tbox) {
-#if LIBLEPT_MINOR_VERSION < 69 && LIBLEPT_MAJOR_VERSION <= 1
-  // This will disable the detector because no seed will be identified.
-  return 1.0f;
-#else
   Pix *pix_bi = lang_tesseract_->pix_binary();
   int pix_height = pixGetHeight(pix_bi);
   Box* box = boxCreate(tbox.left(), pix_height - tbox.top(),
@@ -639,7 +627,6 @@ float EquationDetect::ComputeForegroundDensity(const TBOX& tbox) {
   boxDestroy(&box);
 
   return fract;
-#endif
 }
 
 bool EquationDetect::CheckSeedFgDensity(const float density_th,

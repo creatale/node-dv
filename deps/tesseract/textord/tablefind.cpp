@@ -114,11 +114,6 @@ const int kLargeTableRowCount = 6;
 // Minimum number of rows in a table
 const int kMinRowsInTable = 3;
 
-// The number of "whitespace blobs" that should appear between the
-// ColPartition's bounding box and the column tab stops to the left/right
-// when looking for center justified tab stops.
-const double kRequiredFullJustifiedSpacing = 4.0;
-
 // The amount of padding (multiplied by global_median_xheight_ during use)
 // that is vertically added to the search adjacent leader search during
 // ColPartition marking.
@@ -555,7 +550,7 @@ void TableFinder::GroupColumnBlocks(ColSegment_LIST* new_blocks,
   // iterate through the source list
   for (src_it.mark_cycle_pt(); !src_it.cycled_list(); src_it.forward()) {
     ColSegment* src_seg = src_it.data();
-    TBOX src_box = src_seg->bounding_box();
+    const TBOX& src_box = src_seg->bounding_box();
     bool match_found = false;
     // iterate through the destination list to find a matching column block
     for (dest_it.mark_cycle_pt(); !dest_it.cycled_list(); dest_it.forward()) {
@@ -943,7 +938,7 @@ bool TableFinder::HasWideOrNoInterWordGap(ColPartition* part) const {
     return true;
 
   // return true if the maximum gap found is smaller than the minimum allowed
-  // max_gap in a text partition. This indicates that there is no signficant
+  // max_gap in a text partition. This indicates that there is no significant
   // space in the partition, hence it is likely a single word.
   return largest_partition_gap_found < min_gap;
 }
@@ -954,7 +949,7 @@ bool TableFinder::HasWideOrNoInterWordGap(ColPartition* part) const {
 // Note that this includes overlapping leaders. However, it does not
 // include leaders in different columns on the page.
 // Possible false-positive will include lists, such as a table of contents.
-// As these arise, the agressive nature of this search may need to be
+// As these arise, the aggressive nature of this search may need to be
 // trimmed down.
 bool TableFinder::HasLeaderAdjacent(const ColPartition& part) {
   if (part.flow() == BTFT_LEADER)
@@ -974,12 +969,12 @@ bool TableFinder::HasLeaderAdjacent(const ColPartition& part) {
     hsearch.StartSideSearch(x, bottom, top);
     ColPartition* leader = NULL;
     while ((leader = hsearch.NextSideSearch(right_to_left)) != NULL) {
-      // This should not happen, they are in different grids.
-      ASSERT_HOST(&part != leader);
       // The leader could be a horizontal ruling in the grid.
       // Make sure it is actually a leader.
       if (leader->flow() != BTFT_LEADER)
         continue;
+      // This should not happen, they are in different grids.
+      ASSERT_HOST(&part != leader);
       // Make sure the leader shares a page column with the partition,
       // otherwise we are spreading across columns.
       if (!part.IsInSameColumnAs(*leader))
@@ -1347,7 +1342,7 @@ void TableFinder::GetTableRegions(ColSegment_LIST* table_columns,
   // create a bool array to hold projection on y-axis
   bool* table_region = new bool[page_height];
   while ((part = gsearch.NextFullSearch()) != NULL) {
-    TBOX part_box = part->bounding_box();
+    const TBOX& part_box = part->bounding_box();
     // reset the projection array
     for (int i = 0; i < page_height; i++) {
       table_region[i] = false;
@@ -1979,7 +1974,7 @@ void TableFinder::DisplayColPartitionConnections(
 
     ColPartition* upper_part = part->nearest_neighbor_above();
     if (upper_part) {
-      TBOX upper_box = upper_part->bounding_box();
+      const TBOX& upper_box = upper_part->bounding_box();
       int mid_x = (left_x + right_x) / 2;
       int mid_y = (top_y + bottom_y) / 2;
       int other_x = (upper_box.left() + upper_box.right()) / 2;
@@ -1990,7 +1985,7 @@ void TableFinder::DisplayColPartitionConnections(
     }
     ColPartition* lower_part = part->nearest_neighbor_below();
     if (lower_part) {
-      TBOX lower_box = lower_part->bounding_box();
+      const TBOX& lower_box = lower_part->bounding_box();
       int mid_x = (left_x + right_x) / 2;
       int mid_y = (top_y + bottom_y) / 2;
       int other_x = (lower_box.left() + lower_box.right()) / 2;
@@ -2103,7 +2098,7 @@ void TableFinder::MakeTableBlocks(ColPartitionGrid* grid,
   table_search.StartFullSearch();
   ColSegment* table;
   while ((table = table_search.NextFullSearch()) != NULL) {
-    TBOX table_box = table->bounding_box();
+    const TBOX& table_box = table->bounding_box();
     // Start a rect search on table_box
     GridSearch<ColPartition, ColPartition_CLIST, ColPartition_C_IT>
         rectsearch(grid);

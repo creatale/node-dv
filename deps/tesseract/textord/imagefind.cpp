@@ -67,11 +67,21 @@ Pix* ImageFind::FindImages(Pix* pix) {
   if (pixGetWidth(pix) < kMinImageFindSize ||
       pixGetHeight(pix) < kMinImageFindSize)
     return pixCreate(pixGetWidth(pix), pixGetHeight(pix), 1);
+
   // Reduce by factor 2.
   Pix *pixr = pixReduceRankBinaryCascade(pix, 1, 0, 0, 0);
   pixDisplayWrite(pixr, textord_tabfind_show_images);
 
   // Get the halftone mask directly from Leptonica.
+  //
+  // Leptonica will print an error message and return NULL if we call
+  // pixGenHalftoneMask(pixr, NULL, ...) with too small image, so we
+  // want to bypass that.
+  if (pixGetWidth(pixr) < kMinImageFindSize ||
+      pixGetHeight(pixr) < kMinImageFindSize) {
+    pixDestroy(&pixr);
+    return pixCreate(pixGetWidth(pix), pixGetHeight(pix), 1);
+  }
   l_int32 ht_found = 0;
   Pix *pixht2 = pixGenHalftoneMask(pixr, NULL, &ht_found,
                                    textord_tabfind_show_images);
@@ -648,7 +658,7 @@ static void CutChunkFromParts(const TBOX& box, const TBOX& im_box,
     TBOX part_box = part->bounding_box();
     if (part_box.overlap(box)) {
       // This part must be cut and replaced with the remains. There are
-      // upto 4 pieces to be made. Start with the first one and use
+      // up to 4 pieces to be made. Start with the first one and use
       // add_before_stay_put. For each piece if it has no black pixels
       // left, just don't make the box.
       // Above box.
@@ -1105,7 +1115,7 @@ static bool TestWeakIntersectedPart(const TBOX& im_box,
                                     ColPartition* part) {
   if (part->flow() < BTFT_STRONG_CHAIN) {
     // A weak partition intersects the box.
-    TBOX part_box = part->bounding_box();
+    const TBOX& part_box = part->bounding_box();
     if (im_box.contains(part_box)) {
       int area = part_box.area();
       int intersect_area = IntersectArea(part_box, part_list);
@@ -1170,7 +1180,7 @@ static bool ScanForOverlappingText(ColPartitionGrid* part_grid, TBOX* box) {
         part->flow() == BTFT_STRONG_CHAIN) {
       // Text intersects the box.
       any_text_in_padded_rect = true;
-      TBOX part_box = part->bounding_box();
+      const TBOX& part_box = part->bounding_box();
       if (box->overlap(part_box)) {
         return true;
       }

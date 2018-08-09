@@ -25,11 +25,29 @@
 #include "host.h"
 #include "unichar.h"
 
+#include <stdint.h>
+
 template <typename T> class UnicityTable;
 
 namespace tesseract {
 
 class BitVector;
+
+// Simple struct to hold a font and a score. The scores come from the low-level
+// integer matcher, so they are in the uinT16 range. Fonts are an index to
+// fontinfo_table.
+// These get copied around a lot, so best to keep them small.
+struct ScoredFont {
+  ScoredFont() : fontinfo_id(-1), score(0) {}
+  ScoredFont(int font_id, uinT16 classifier_score)
+      : fontinfo_id(font_id), score(classifier_score) {}
+
+  // Index into fontinfo table, but inside the classifier, may be a shapetable
+  // index.
+  inT32 fontinfo_id;
+  // Raw score from the low-level classifier.
+  uinT16 score;
+};
 
 // Struct for information about spacing between characters in a particular font.
 struct FontSpacingInfo {
@@ -119,8 +137,8 @@ struct FontInfo {
 // the FontInfo in the FontSet structure, it's better to share FontInfos among
 // FontSets (Classify::fontinfo_table_).
 struct FontSet {
-  int           size;
-  int*          configs;  // FontInfo ids
+  int32_t       size;
+  int32_t*      configs;  // FontInfo ids
 };
 
 // Class that adds a bit of functionality on top of GenericVector to
@@ -140,11 +158,11 @@ class FontInfoTable : public GenericVector<FontInfo> {
 
   // Returns true if the given set of fonts includes one with the same
   // properties as font_id.
-  bool SetContainsFontProperties(int font_id,
-                                 const GenericVector<int>& font_set) const;
+  bool SetContainsFontProperties(
+      int font_id, const GenericVector<ScoredFont>& font_set) const;
   // Returns true if the given set of fonts includes multiple properties.
   bool SetContainsMultipleFontProperties(
-      const GenericVector<int>& font_set) const;
+      const GenericVector<ScoredFont>& font_set) const;
 
   // Moves any non-empty FontSpacingInfo entries from other to this.
   void MoveSpacingInfoFrom(FontInfoTable* other);

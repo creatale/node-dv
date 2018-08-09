@@ -39,8 +39,8 @@ CubeClassifier::CubeClassifier(tesseract::Tesseract* tesseract)
 CubeClassifier::~CubeClassifier() {
 }
 
-// Classifies the given [training] sample, writing to results.
-// See ShapeClassifier for a full description.
+/// Classifies the given [training] sample, writing to results.
+/// See ShapeClassifier for a full description.
 int CubeClassifier::UnicharClassifySample(
     const TrainingSample& sample, Pix* page_pix, int debug,
     UNICHAR_ID keep_this, GenericVector<UnicharRating>* results) {
@@ -54,9 +54,9 @@ int CubeClassifier::UnicharClassifySample(
       pixGetHeight(page_pix) - char_box.top(),
       char_box.width(), char_box.height());
   CharAltList* alt_list = cube_obj->RecognizeChar();
-  alt_list->Sort();
-  CharSet* char_set = cube_cntxt_->CharacterSet();
   if (alt_list != NULL) {
+    alt_list->Sort();
+    CharSet* char_set = cube_cntxt_->CharacterSet();
     for (int i = 0; i < alt_list->AltCount(); ++i) {
       // Convert cube representation to a shape_id.
       int alt_id = alt_list->Alt(i);
@@ -70,7 +70,7 @@ int CubeClassifier::UnicharClassifySample(
   return results->size();
 }
 
-// Provides access to the ShapeTable that this classifier works with.
+/** Provides access to the ShapeTable that this classifier works with. */
 const ShapeTable* CubeClassifier::GetShapeTable() const {
   return &shape_table_;
 }
@@ -84,8 +84,8 @@ CubeTessClassifier::~CubeTessClassifier() {
   delete pruner_;
 }
 
-// Classifies the given [training] sample, writing to results.
-// See ShapeClassifier for a full description.
+/// Classifies the given [training] sample, writing to results.
+/// See ShapeClassifier for a full description.
 int CubeTessClassifier::UnicharClassifySample(
     const TrainingSample& sample, Pix* page_pix, int debug,
     UNICHAR_ID keep_this, GenericVector<UnicharRating>* results) {
@@ -123,7 +123,7 @@ int CubeTessClassifier::UnicharClassifySample(
   return results->size();
 }
 
-// Provides access to the ShapeTable that this classifier works with.
+/** Provides access to the ShapeTable that this classifier works with. */
 const ShapeTable* CubeTessClassifier::GetShapeTable() const {
   return &shape_table_;
 }

@@ -24,7 +24,7 @@
 #include "helpers.h"
 #include "universalambigs.h"
 
-#ifdef _WIN32
+#if defined _WIN32
 #ifndef __GNUC__
 #define strtok_r strtok_s
 #else

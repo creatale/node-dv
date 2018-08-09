@@ -37,14 +37,14 @@
 #include "scrollview.h"
 
 #ifdef _MSC_VER
-#pragma warning(disable:4786)  // Don't give stupid warnings for stl
-#pragma warning(disable:4018)  // signed/unsigned warnings
-#pragma warning(disable:4530)  // exception warnings
+#pragma warning(disable : 4786)  // Don't give irrelevant warnings for stl
+#pragma warning(disable : 4018)  // signed/unsigned warnings
+#pragma warning(disable : 4530)  // exception warnings
 #endif
 
 const int kSvPort = 8461;
 const int kMaxMsgSize = 4096;
-const int kMaxIntPairSize = 45;  // Holds %d,%d, for upto 64 bit.
+const int kMaxIntPairSize = 45;  // Holds %d,%d, for up to 64 bit.
 
 #include "svutil.h"
 
@@ -342,7 +342,7 @@ void* ScrollView::StartEventHandler(void* a) {
         k = i;
       }
     }
-    // If we didnt find anything we had an old alarm and just sleep again.
+    // If we didn't find anything we had an old alarm and just sleep again.
     if (new_event != NULL) {
       sv->event_table_[k] = NULL;
       sv->mutex_->Unlock();
@@ -775,6 +775,7 @@ void ScrollView::Image(struct Pix* image, int x_pos, int y_pos) {
   size_t size;
   pixWriteMem(&data, &size, image, IFF_PNG);
   int base64_len = (size + 2) / 3 * 4;
+  y_pos = TranslateYCoordinate(y_pos);
   SendMsg("readImage(%d,%d,%d)", x_pos, y_pos, base64_len);
   // Base64 encode the data.
   const char kBase64Table[64] = {
@@ -793,7 +794,7 @@ void ScrollView::Image(struct Pix* image, int x_pos, int y_pos) {
   int remainder = 0;
   int bits_left = 0;
   int code_len = 0;
-  for (int i = 0; i < size; ++i) {
+  for (size_t i = 0; i < size; ++i) {
     int code = (data[i] >> (bits_left + 2)) | remainder;
     base64[code_len++] = kBase64Table[code & 63];
     bits_left += 2;

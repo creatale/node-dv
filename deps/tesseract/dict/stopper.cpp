@@ -1,10 +1,10 @@
 /******************************************************************************
- **	Filename:    stopper.c
- **	Purpose:     Stopping criteria for word classifier.
- **	Author:      Dan Johnson
- **	History:     Mon Apr 29 14:56:49 1991, DSJ, Created.
+ ** Filename:    stopper.c
+ ** Purpose:     Stopping criteria for word classifier.
+ ** Author:      Dan Johnson
+ ** History:     Mon Apr 29 14:56:49 1991, DSJ, Created.
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -41,10 +41,9 @@
 #pragma warning(disable:4800)  // int/bool warnings
 #endif
 
-using tesseract::ScriptPos;
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
               Private Code
-----------------------------------------------------------------------------**/
+----------------------------------------------------------------------------*/
 
 namespace tesseract {
 
@@ -192,8 +191,7 @@ bool Dict::NoDangerousAmbig(WERD_CHOICE *best_choice,
         BLOB_CHOICE_IT lst_it(lst);
         // TODO(rays/antonova) Put real xheights and y shifts here.
         lst_it.add_to_end(new BLOB_CHOICE(best_choice->unichar_id(i),
-                                          0.0, 0.0, -1, -1, -1, 0, 1, 0,
-                                          BCC_AMBIG));
+                                          0.0, 0.0, -1, 0, 1, 0, BCC_AMBIG));
         ambig_blob_choices.push_back(lst);
       }
     }
@@ -278,7 +276,7 @@ bool Dict::NoDangerousAmbig(WERD_CHOICE *best_choice,
               BLOB_CHOICE_IT bc_it(ambig_blob_choices[i+tmp_index]);
               bc_it.add_to_end(new BLOB_CHOICE(
                   ambig_spec->correct_fragments[tmp_index], -1.0, 0.0,
-                  -1, -1, -1, 0, 1, 0, BCC_AMBIG));
+                  -1, 0, 1, 0, BCC_AMBIG));
             }
           }
           spec_it.forward();

@@ -23,9 +23,9 @@ public:
     static bool HasInstance(v8::Handle<v8::Value> val);
     static Pix *Pixels(v8::Local<v8::Object> obj);
 
-	static NAN_MODULE_INIT(Init);
+    static NAN_MODULE_INIT(Init);
 
-    static v8::Local<v8::Object> New(Pix *pix);
+    static v8::Local<v8::Object> New(Pix *pix, int resolution = 300);
 
 private:
     static NAN_METHOD(New);
@@ -34,6 +34,8 @@ private:
     static NAN_GETTER(GetWidth);
     static NAN_GETTER(GetHeight);
     static NAN_GETTER(GetDepth);
+    static NAN_GETTER(GetResolution);
+    static NAN_SETTER(SetResolution);
 
     // Methods.
     static NAN_METHOD(Invert);

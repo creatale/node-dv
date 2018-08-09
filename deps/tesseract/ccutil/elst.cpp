@@ -26,7 +26,7 @@
  **********************************************************************/
 
 /***********************************************************************
- *							ELIST::internal_clear
+ *              ELIST::internal_clear
  *
  *  Used by the destructor and the "clear" member function of derived list
  *  classes to destroy all the elements on the list.
@@ -44,11 +44,6 @@ void (*zapper) (ELIST_LINK *)) {
   ELIST_LINK *ptr;
   ELIST_LINK *next;
 
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::internal_clear", ABORT, NULL);
-  #endif
-
   if (!empty ()) {
     ptr = last->next;            //set to first
     last->next = NULL;           //break circle
@@ -62,7 +57,7 @@ void (*zapper) (ELIST_LINK *)) {
 }
 
 /***********************************************************************
- *							ELIST::assign_to_sublist
+ *              ELIST::assign_to_sublist
  *
  *  The list is set to a sublist of another list.  "This" list must be empty
  *  before this function is invoked.  The two iterators passed must refer to
@@ -80,20 +75,14 @@ void ELIST::assign_to_sublist(                           //to this list
   const ERRCODE LIST_NOT_EMPTY =
     "Destination list must be empty before extracting a sublist";
 
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::assign_to_sublist", ABORT, NULL);
-  #endif
-
   if (!empty ())
     LIST_NOT_EMPTY.error ("ELIST.assign_to_sublist", ABORT, NULL);
 
   last = start_it->extract_sublist (end_it);
 }
 
-
 /***********************************************************************
- *							ELIST::length
+ *              ELIST::length
  *
  *  Return count of elements on list
  **********************************************************************/
@@ -102,22 +91,16 @@ inT32 ELIST::length() const {  // count elements
   ELIST_ITERATOR it(const_cast<ELIST*>(this));
   inT32 count = 0;
 
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::length", ABORT, NULL);
-  #endif
-
   for (it.mark_cycle_pt (); !it.cycled_list (); it.forward ())
     count++;
   return count;
 }
 
-
 /***********************************************************************
- *							ELIST::sort
+ *              ELIST::sort
  *
  *  Sort elements on list
- *  NB If you dont like the const declarations in the comparator, coerce yours:
+ *  NB If you don't like the const declarations in the comparator, coerce yours:
  *   ( int (*)(const void *, const void *)
  **********************************************************************/
 
@@ -130,11 +113,6 @@ const void *, const void *)) {
   ELIST_LINK **base;             //ptr array to sort
   ELIST_LINK **current;
   inT32 i;
-
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::sort", ABORT, NULL);
-  #endif
 
   /* Allocate an array of pointers, one per list element */
   count = length ();
@@ -161,7 +139,7 @@ const void *, const void *)) {
 
 // Assuming list has been sorted already, insert new_link to
 // keep the list sorted according to the same comparison function.
-// Comparision function is the same as used by sort, i.e. uses double
+// Comparison function is the same as used by sort, i.e. uses double
 // indirection. Time is O(1) to add to beginning or end.
 // Time is linear to add pre-sorted items to an empty list.
 // If unique is set to true and comparator() returns 0 (an entry with the
@@ -207,7 +185,7 @@ ELIST_LINK *ELIST::add_sorted_and_find(
  **********************************************************************/
 
 /***********************************************************************
- *							ELIST_ITERATOR::forward
+ *              ELIST_ITERATOR::forward
  *
  *  Move the iterator to the next element of the list.
  *  REMEMBER: ALL LISTS ARE CIRCULAR.
@@ -215,8 +193,6 @@ ELIST_LINK *ELIST::add_sorted_and_find(
 
 ELIST_LINK *ELIST_ITERATOR::forward() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::forward", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::forward", ABORT, NULL);
   #endif
@@ -246,9 +222,8 @@ ELIST_LINK *ELIST_ITERATOR::forward() {
   return current;
 }
 
-
 /***********************************************************************
- *							ELIST_ITERATOR::data_relative
+ *              ELIST_ITERATOR::data_relative
  *
  *  Return the data pointer to the element "offset" elements from current.
  *  "offset" must not be less than -1.
@@ -260,8 +235,6 @@ ELIST_LINK *ELIST_ITERATOR::data_relative(                //get data + or - ...
   ELIST_LINK *ptr;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::data_relative", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::data_relative", ABORT, NULL);
   if (list->empty ())
@@ -284,9 +257,8 @@ ELIST_LINK *ELIST_ITERATOR::data_relative(                //get data + or - ...
   return ptr;
 }
 
-
 /***********************************************************************
- *							ELIST_ITERATOR::move_to_last()
+ *              ELIST_ITERATOR::move_to_last()
  *
  *  Move current so that it is set to the end of the list.
  *  Return data just in case anyone wants it.
@@ -295,8 +267,6 @@ ELIST_LINK *ELIST_ITERATOR::data_relative(                //get data + or - ...
 
 ELIST_LINK *ELIST_ITERATOR::move_to_last() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::move_to_last", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::move_to_last", ABORT, NULL);
   #endif
@@ -307,9 +277,8 @@ ELIST_LINK *ELIST_ITERATOR::move_to_last() {
   return current;
 }
 
-
 /***********************************************************************
- *							ELIST_ITERATOR::exchange()
+ *              ELIST_ITERATOR::exchange()
  *
  *  Given another iterator, whose current element is a different element on
  *  the same list list OR an element of another list, exchange the two current
@@ -326,8 +295,6 @@ void ELIST_ITERATOR::exchange(                             //positions of 2 link
   ELIST_LINK *old_current;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::exchange", ABORT, NULL);
   if (!list)
     NO_LIST.error ("ELIST_ITERATOR::exchange", ABORT, NULL);
   if (!other_it)
@@ -407,9 +374,8 @@ void ELIST_ITERATOR::exchange(                             //positions of 2 link
   other_it->current = old_current;
 }
 
-
 /***********************************************************************
- *							ELIST_ITERATOR::extract_sublist()
+ *              ELIST_ITERATOR::extract_sublist()
  *
  *  This is a private member, used only by ELIST::assign_to_sublist.
  *  Given another iterator for the same list, extract the links from THIS to
@@ -432,8 +398,6 @@ ELIST_LINK *ELIST_ITERATOR::extract_sublist(                             //from 
   ELIST_LINK *end_of_new_list;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST_ITERATOR::extract_sublist", ABORT, NULL);
   if (!other_it)
     BAD_PARAMETER.error ("ELIST_ITERATOR::extract_sublist", ABORT,
       "other_it NULL");
@@ -455,7 +419,7 @@ ELIST_LINK *ELIST_ITERATOR::extract_sublist(                             //from 
 
   temp_it.mark_cycle_pt ();
   do {                           //walk sublist
-    if (temp_it.cycled_list ())  //cant find end pt
+    if (temp_it.cycled_list())   // can't find end pt
       BAD_SUBLIST.error ("ELIST_ITERATOR.extract_sublist", ABORT, NULL);
 
     if (temp_it.at_last ()) {

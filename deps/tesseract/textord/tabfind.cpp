@@ -45,8 +45,6 @@ const int kMinColumnWidth = 200;
 const double kMinFractionalLinesInColumn = 0.125;
 // Fraction of height used as alignment tolerance for aligned tabs.
 const double kAlignedFraction = 0.03125;
-// Minimum gutter width in absolute inch (multiplied by resolution)
-const double kMinGutterWidthAbsolute = 0.02;
 // Maximum gutter width (in absolute inch) that we care about
 const double kMaxGutterWidthAbsolute = 2.00;
 // Multiplier of gridsize for min gutter width of TT_MAYBE_RAGGED blobs.
@@ -54,36 +52,15 @@ const int kRaggedGutterMultiple = 5;
 // Min aspect ratio of tall objects to be considered a separator line.
 // (These will be ignored in searching the gutter for obstructions.)
 const double kLineFragmentAspectRatio = 10.0;
-// Multiplier of new y positions in running average for skew estimation.
-const double kSmoothFactor = 0.25;
-// Min coverage for a good baseline between vectors
-const double kMinBaselineCoverage = 0.5;
-// Minimum overlap fraction when scanning text lines for column widths.
-const double kCharVerticalOverlapFraction = 0.375;
-// Maximum horizontal gap allowed when scanning for column widths
-const double kMaxHorizontalGap = 3.0;
-// Maximum upper quartile error allowed on a baseline fit as a fraction
-// of height.
-const double kMaxBaselineError = 0.4375;
 // Min number of points to accept after evaluation.
 const int kMinEvaluatedTabs = 3;
-// Minimum aspect ratio of a textline to make a good textline blob with a
-// single blob.
-const int kMaxTextLineBlobRatio = 5;
-// Minimum aspect ratio of a textline to make a good textline blob with
-// multiple blobs. Target ratio varies according to number of blobs.
-const int kMinTextLineBlobRatio = 3;
-// Fraction of box area covered by image to make a blob image.
-const double kMinImageArea = 0.5;
-// Upto 30 degrees is allowed for rotations of diacritic blobs.
+// Up to 30 degrees is allowed for rotations of diacritic blobs.
 // Keep this value slightly larger than kCosSmallAngle in blobbox.cpp
 // so that the assert there never fails.
 const double kCosMaxSkewAngle = 0.866025;
 
 BOOL_VAR(textord_tabfind_show_initialtabs, false, "Show tab candidates");
 BOOL_VAR(textord_tabfind_show_finaltabs, false, "Show tab vectors");
-double_VAR(textord_tabfind_aligned_gap_fraction, 0.75,
-           "Fraction of height used as a minimum gap for aligned blobs.");
 
 TabFind::TabFind(int gridsize, const ICOORD& bleft, const ICOORD& tright,
                  TabVector_LIST* vlines, int vertical_x, int vertical_y,
@@ -252,7 +229,7 @@ void TabFind::GutterWidthAndNeighbourGap(int tab_x, int mean_height,
                                        bbox->flow() == BTFT_TEXT_ON_IMAGE, 0.0,
                                        *gutter_width, box.top(), box.bottom());
   if (gutter_bbox != NULL) {
-    TBOX gutter_box = gutter_bbox->bounding_box();
+    const TBOX& gutter_box = gutter_bbox->bounding_box();
     *gutter_width = left ? tab_x - gutter_box.right()
                         : gutter_box.left() - tab_x;
   }
@@ -284,7 +261,7 @@ void TabFind::GutterWidthAndNeighbourGap(int tab_x, int mean_height,
   int neighbour_edge = left ? RightEdgeForBox(box, true, false)
                             : LeftEdgeForBox(box, true, false);
   if (neighbour != NULL) {
-    TBOX n_box = neighbour->bounding_box();
+    const TBOX& n_box = neighbour->bounding_box();
     if (debug) {
       tprintf("Found neighbour:");
       n_box.print();
@@ -420,7 +397,7 @@ bool TabFind::CommonWidth(int width) {
   ICOORDELT_IT it(&column_widths_);
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
     ICOORDELT* w = it.data();
-    if (NearlyEqual<int>(width, w->x(), 1))
+    if (w->x() - 1 <= width && width <= w->y() + 1)
       return true;
   }
   return false;
@@ -446,10 +423,12 @@ bool TabFind::VeryDifferentSizes(int size1, int size2) {
 bool TabFind::FindTabVectors(TabVector_LIST* hlines,
                              BLOBNBOX_LIST* image_blobs, TO_BLOCK* block,
                              int min_gutter_width,
+                             double tabfind_aligned_gap_fraction,
                              ColPartitionGrid* part_grid,
                              FCOORD* deskew, FCOORD* reskew) {
   ScrollView* tab_win = FindInitialTabVectors(image_blobs, min_gutter_width,
-                                                  block);
+                                              tabfind_aligned_gap_fraction,
+                                              block);
   ComputeColumnWidths(tab_win, part_grid);
   TabVector::MergeSimilarTabVectors(vertical_skew_, &vectors_, this);
   SortVectors();
@@ -540,6 +519,7 @@ ScrollView* TabFind::DisplayTabVectors(ScrollView* tab_win) {
 // is mostly of vertical alignment.
 ScrollView* TabFind::FindInitialTabVectors(BLOBNBOX_LIST* image_blobs,
                                            int min_gutter_width,
+                                           double tabfind_aligned_gap_fraction,
                                            TO_BLOCK* block) {
   if (textord_tabfind_show_initialtabs) {
     ScrollView* line_win = MakeWindow(0, 0, "VerticalLines");
@@ -549,7 +529,8 @@ ScrollView* TabFind::FindInitialTabVectors(BLOBNBOX_LIST* image_blobs,
   if (image_blobs != NULL)
     InsertBlobsToGrid(true, false, image_blobs, this);
   InsertBlobsToGrid(true, false, &block->blobs, this);
-  ScrollView* initial_win = FindTabBoxes(min_gutter_width);
+  ScrollView* initial_win = FindTabBoxes(min_gutter_width,
+                                         tabfind_aligned_gap_fraction);
   FindAllTabVectors(min_gutter_width);
 
   TabVector::MergeSimilarTabVectors(vertical_skew_, &vectors_, this);
@@ -581,7 +562,8 @@ static void DisplayBoxVector(const GenericVector<BLOBNBOX*>& boxes,
 
 // For each box in the grid, decide whether it is a candidate tab-stop,
 // and if so add it to the left/right tab boxes.
-ScrollView* TabFind::FindTabBoxes(int min_gutter_width) {
+ScrollView* TabFind::FindTabBoxes(int min_gutter_width,
+                                  double tabfind_aligned_gap_fraction) {
   left_tab_boxes_.clear();
   right_tab_boxes_.clear();
   // For every bbox in the grid, determine whether it uses a tab on an edge.
@@ -589,7 +571,7 @@ ScrollView* TabFind::FindTabBoxes(int min_gutter_width) {
   gsearch.StartFullSearch();
   BLOBNBOX* bbox;
   while ((bbox = gsearch.NextFullSearch()) != NULL) {
-    if (TestBoxForTabs(bbox, min_gutter_width)) {
+    if (TestBoxForTabs(bbox, min_gutter_width, tabfind_aligned_gap_fraction)) {
       // If it is any kind of tab, insert it into the vectors.
       if (bbox->left_tab_type() != TT_NONE)
         left_tab_boxes_.push_back(bbox);
@@ -616,7 +598,8 @@ ScrollView* TabFind::FindTabBoxes(int min_gutter_width) {
   return tab_win;
 }
 
-bool TabFind::TestBoxForTabs(BLOBNBOX* bbox, int min_gutter_width) {
+bool TabFind::TestBoxForTabs(BLOBNBOX* bbox, int min_gutter_width,
+                             double tabfind_aligned_gap_fraction) {
   GridSearch<BLOBNBOX, BLOBNBOX_CLIST, BLOBNBOX_C_IT> radsearch(this);
   TBOX box = bbox->bounding_box();
   // If there are separator lines, get the column edges.
@@ -642,7 +625,7 @@ bool TabFind::TestBoxForTabs(BLOBNBOX* bbox, int min_gutter_width) {
   // increased under the assumption that column partition is always larger
   // than line spacing.
   int min_spacing =
-      static_cast<int>(height * textord_tabfind_aligned_gap_fraction);
+      static_cast<int>(height * tabfind_aligned_gap_fraction);
   if (min_gutter_width > min_spacing)
     min_spacing = min_gutter_width;
   int min_ragged_gutter = kRaggedGutterMultiple * gridsize();
@@ -989,9 +972,16 @@ void TabFind::ComputeColumnWidths(ScrollView* tab_win,
     col_widths.print();
   // Now make a list of column widths.
   MakeColumnWidths(col_widths_size, &col_widths);
+  // Turn the column width into a range.
+  ApplyPartitionsToColumnWidths(part_grid, NULL);
 }
 
-// Find column width and pair-up tab vectors with existing ColPartitions.
+// Finds column width and:
+//   if col_widths is not null (pass1):
+//     pair-up tab vectors with existing ColPartitions and accumulate widths.
+//   else (pass2):
+//     find the largest real partition width for each recorded column width,
+//     to be used as the minimum acceptable width.
 void TabFind::ApplyPartitionsToColumnWidths(ColPartitionGrid* part_grid,
                                             STATS* col_widths) {
   // For every ColPartition in the part_grid, add partners to the tabvectors
@@ -1015,13 +1005,27 @@ void TabFind::ApplyPartitionsToColumnWidths(ColPartitionGrid* part_grid,
     if (right_vector == NULL || right_vector->IsLeftTab())
       continue;
 
-    AddPartnerVector(left_blob, right_blob, left_vector, right_vector);
     int line_left = left_vector->XAtY(left_blob->bounding_box().bottom());
     int line_right = right_vector->XAtY(right_blob->bounding_box().bottom());
     // Add to STATS of measurements if the width is significant.
     int width = line_right - line_left;
-    if (width >= kMinColumnWidth)
-      col_widths->add(width / kColumnWidthFactor, 1);
+    if (col_widths != NULL) {
+      AddPartnerVector(left_blob, right_blob, left_vector, right_vector);
+      if (width >= kMinColumnWidth)
+        col_widths->add(width / kColumnWidthFactor, 1);
+    } else {
+      width /= kColumnWidthFactor;
+      ICOORDELT_IT it(&column_widths_);
+      for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
+        ICOORDELT* w = it.data();
+        if (NearlyEqual<int>(width, w->y(), 1)) {
+          int true_width = part->bounding_box().width() / kColumnWidthFactor;
+          if (true_width <= w->y() && true_width > w->x())
+            w->set_x(true_width);
+          break;
+        }
+      }
+    }
   }
 }
 
@@ -1052,7 +1056,7 @@ void TabFind::MakeColumnWidths(int col_widths_size, STATS* col_widths) {
     }
     if (col_count > kMinLinesInColumn &&
         col_count > kMinFractionalLinesInColumn * total_col_count) {
-      ICOORDELT* w = new ICOORDELT(width, col_count);
+      ICOORDELT* w = new ICOORDELT(0, width);
       w_it.add_after_then_move(w);
       if (textord_debug_tabfind)
         tprintf("Column of width %d has %d = %.2f%% lines\n",

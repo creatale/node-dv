@@ -435,7 +435,7 @@ bool TabVector::SimilarTo(const ICOORD& vertical,
     vsearch.StartVerticalSearch(left, right, top_y);
     BLOBNBOX* blob;
     while ((blob = vsearch.NextVerticalSearch(true)) != NULL) {
-      TBOX box = blob->bounding_box();
+      const TBOX& box = blob->bounding_box();
       if (box.top() > bottom_y)
         return true;  // Nothing found.
       if (box.bottom() < top_y)
@@ -523,16 +523,12 @@ const char* kAlignmentNames[] = {
 
 // Print basic information about this tab vector.
 void TabVector::Print(const char* prefix) {
-  if (this == NULL) {
-    tprintf("%s <null>\n", prefix);
-  } else {
-    tprintf("%s %s (%d,%d)->(%d,%d) w=%d s=%d, sort key=%d, boxes=%d,"
-            " partners=%d\n",
-            prefix, kAlignmentNames[alignment_],
-            startpt_.x(), startpt_.y(), endpt_.x(), endpt_.y(),
-            mean_width_, percent_score_, sort_key_,
-            boxes_.length(), partners_.length());
-  }
+  tprintf(
+      "%s %s (%d,%d)->(%d,%d) w=%d s=%d, sort key=%d, boxes=%d,"
+      " partners=%d\n",
+      prefix, kAlignmentNames[alignment_], startpt_.x(), startpt_.y(),
+      endpt_.x(), endpt_.y(), mean_width_, percent_score_, sort_key_,
+      boxes_.length(), partners_.length());
 }
 
 // Print basic information about this tab vector and every box in it.
@@ -732,7 +728,7 @@ void TabVector::Evaluate(const ICOORD& vertical, TabFind* finder) {
                   gutter_width, median_gutter);
         }
         it.extract();
-        ++num_deleted_boxes = true;
+        ++num_deleted_boxes;
       }
     }
   }
@@ -810,7 +806,7 @@ bool TabVector::Fit(ICOORD vertical, bool force_parallel) {
     // Fit a line to all the boxes in the list.
     for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
       BLOBNBOX* bbox = it.data();
-      TBOX box = bbox->bounding_box();
+      const TBOX& box = bbox->bounding_box();
       int x1 = IsRightTab() ? box.right() : box.left();
       ICOORD boxpt(x1, box.bottom());
       linepoints.Add(boxpt);
@@ -835,7 +831,7 @@ bool TabVector::Fit(ICOORD vertical, bool force_parallel) {
   int width_count = 0;
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
     BLOBNBOX* bbox = it.data();
-    TBOX box = bbox->bounding_box();
+    const TBOX& box = bbox->bounding_box();
     mean_width_ += box.width();
     ++width_count;
     int x1 = IsRightTab() ? box.right() : box.left();
@@ -926,6 +922,7 @@ TabVector* TabVector::VerticalTextlinePartner() {
     total_widths += box.width();
     prev_bbox = bbox;
   }
+  if (num_unmatched + num_matched == 0) return NULL;
   double avg_width = total_widths * 1.0 / (num_unmatched + num_matched);
   double max_gap = textord_tabvector_vertical_gap_fraction * avg_width;
   int min_box_match = static_cast<int>((num_matched + num_unmatched) *

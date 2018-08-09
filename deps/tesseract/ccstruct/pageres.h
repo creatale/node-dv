@@ -1,7 +1,7 @@
 /**********************************************************************
  * File:        pageres.h  (Formerly page_res.h)
  * Description: Results classes used by control.c
- * Author:		Phil Cheatle
+ * Author:    Phil Cheatle
  * Created:     Tue Sep 22 08:42:49 BST 1992
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
@@ -82,7 +82,8 @@ class PAGE_RES {                 // page result
 
   PAGE_RES() { Init(); }  // empty constructor
 
-  PAGE_RES(BLOCK_LIST *block_list,   // real blocks
+  PAGE_RES(bool merge_similar_words,
+           BLOCK_LIST *block_list,   // real blocks
            WERD_CHOICE **prev_word_best_choice_ptr);
 
   ~PAGE_RES () {               // destructor
@@ -111,7 +112,7 @@ class BLOCK_RES:public ELIST_LINK {
   BLOCK_RES() {
   }                            // empty constructor
 
-  BLOCK_RES(BLOCK *the_block);  // real block
+  BLOCK_RES(bool merge_similar_words, BLOCK *the_block);  // real block
 
   ~BLOCK_RES () {              // destructor
   }
@@ -132,7 +133,7 @@ class ROW_RES:public ELIST_LINK {
   ROW_RES() {
   }                            // empty constructor
 
-  ROW_RES(ROW *the_row);  // real row
+  ROW_RES(bool merge_similar_words, ROW *the_row);  // real row
 
   ~ROW_RES() {                // destructor
   }
@@ -279,7 +280,8 @@ class WERD_RES : public ELIST_LINK {
   BOOL8 tess_accepted;          // Tess thinks its ok?
   BOOL8 tess_would_adapt;       // Tess would adapt?
   BOOL8 done;                   // ready for output?
-  bool small_caps;             // word appears to be small caps
+  bool small_caps;              // word appears to be small caps
+  bool odd_size;                // word is bigger than line or leader dots.
   inT8 italic;
   inT8 bold;
   // The fontinfos are pointers to data owned by the classifier.
@@ -292,6 +294,10 @@ class WERD_RES : public ELIST_LINK {
   CRUNCH_MODE unlv_crunch_mode;
   float x_height;              // post match estimate
   float caps_height;           // post match estimate
+  float baseline_shift;        // post match estimate.
+  // Certainty score for the spaces either side of this word (LSTM mode).
+  // MIN this value with the actual word certainty.
+  float space_certainty;
 
   /*
     To deal with fuzzy spaces we need to be able to combine "words" to form
@@ -312,8 +318,6 @@ class WERD_RES : public ELIST_LINK {
   BOOL8 combination;           //of two fuzzy gap wds
   BOOL8 part_of_combo;         //part of a combo
   BOOL8 reject_spaces;         //Reject spacing?
-  // FontInfo ids for each unichar in best_choice.
-  GenericVector<inT8> best_choice_fontinfo_ids;
 
   WERD_RES() {
     InitNonPointers();
@@ -326,7 +330,7 @@ class WERD_RES : public ELIST_LINK {
   }
   // Deep copies everything except the ratings MATRIX.
   // To get that use deep_copy below.
-  WERD_RES(const WERD_RES &source) {
+  WERD_RES(const WERD_RES& source) : ELIST_LINK(source) {
     InitPointers();
     *this = source;            // see operator=
   }
@@ -338,7 +342,7 @@ class WERD_RES : public ELIST_LINK {
   // This matters for mirrorable characters such as parentheses.  We recognize
   // characters purely based on their shape on the page, and by default produce
   // the corresponding unicode for a left-to-right context.
-  const char* const BestUTF8(int blob_index, bool in_rtl_context) const {
+  const char* BestUTF8(int blob_index, bool in_rtl_context) const {
     if (blob_index < 0 || best_choice == NULL ||
         blob_index >= best_choice->length())
       return NULL;
@@ -351,7 +355,7 @@ class WERD_RES : public ELIST_LINK {
     return uch_set->id_to_unichar_ext(id);
   }
   // Returns the UTF-8 string for the given blob index in the raw_choice word.
-  const char* const RawUTF8(int blob_index) const {
+  const char* RawUTF8(int blob_index) const {
     if (blob_index < 0 || blob_index >= raw_choice->length())
       return NULL;
     UNICHAR_ID id = raw_choice->unichar_id(blob_index);
@@ -486,6 +490,9 @@ class WERD_RES : public ELIST_LINK {
   // the word_to_debug.
   void DebugWordChoices(bool debug, const char* word_to_debug);
 
+  // Prints the top choice along with the accepted/done flags.
+  void DebugTopChoice(const char* msg) const;
+
   // Removes from best_choices all choices which are not within a reasonable
   // range of the best choice.
   void FilterWordChoices(int debug_level);
@@ -586,7 +593,7 @@ class WERD_RES : public ELIST_LINK {
 
   // Creates a WERD_CHOICE for the word using the top choices from the leading
   // diagonal of the ratings matrix.
-  void FakeWordFromRatings();
+  void FakeWordFromRatings(PermuterType permuter);
 
   // Copies the best_choice strings to the correct_text for adaption/training.
   void BestChoiceToCorrectText();
@@ -626,7 +633,7 @@ class WERD_RES : public ELIST_LINK {
   static WERD_RES* deep_copy(const WERD_RES* src) {
     WERD_RES* result = new WERD_RES(*src);
     // That didn't copy the ratings, but we want a copy if there is one to
-    // begin width.
+    // begin with.
     if (src->ratings != NULL)
       result->ratings = src->ratings->DeepCopy();
     return result;
@@ -694,8 +701,17 @@ class PAGE_RES_IT {
   // the resulting WERD_RES is returned for further setup with best_choice etc.
   WERD_RES* InsertSimpleCloneWord(const WERD_RES& clone_res, WERD* new_word);
 
+  // Replaces the current WERD/WERD_RES with the given words. The given words
+  // contain fake blobs that indicate the position of the characters. These are
+  // replaced with real blobs from the current word as much as possible.
+  void ReplaceCurrentWord(tesseract::PointerVector<WERD_RES>* words);
+
   // Deletes the current WERD_RES and its underlying WERD.
   void DeleteCurrentWord();
+
+  // Makes the current word a fuzzy space if not already fuzzy. Updates
+  // corresponding part of combo if required.
+  void MakeCurrentWordFuzzy();
 
   WERD_RES *forward() {  // Get next word.
     return internal_forward(false, false);
@@ -736,9 +752,9 @@ class PAGE_RES_IT {
     return next_block_res;
   }
   void rej_stat_word();  // for page/block/row
+  void ResetWordIterator();
 
  private:
-  void ResetWordIterator();
   WERD_RES *internal_forward(bool new_block, bool empty_ok);
 
   WERD_RES * prev_word_res;    // previous word

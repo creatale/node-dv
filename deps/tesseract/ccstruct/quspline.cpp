@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        quspline.cpp  (Formerly qspline.c)
  * Description: Code for the QSPLINE class.
- * Author:	Ray Smith
- * Created:	Tue Oct 08 17:16:12 BST 1991
+ * Author:  Ray Smith
+ * Created: Tue Oct 08 17:16:12 BST 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,8 +71,8 @@ int xpts[],                      //points to fit
 int ypts[], int pointcount,      //no of pts
 int degree                       //fit required
 ) {
-  register int pointindex;       /*no along text line */
-  register int segment;          /*segment no */
+  int pointindex;                /*no along text line */
+  int segment;                   /*segment no */
   inT32 *ptcounts;               //no in each segment
   QLSQ qlsq;                     /*accumulator */
 
@@ -308,7 +308,7 @@ void QSPLINE::extrapolate(                  //linear extrapolation
                           int xmin,         //new left edge
                           int xmax          //new right edge
                          ) {
-  register int segment;          /*current segment of spline */
+  int segment;                   /*current segment of spline */
   int dest_segment;              //dest index
   int *xstarts;                  //new boundaries
   QUAD_COEFFS *quads;            //new ones

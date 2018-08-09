@@ -50,8 +50,10 @@ WordUnigrams::~WordUnigrams() {
   }
 }
 
-// Load the word-list and unigrams from file and create an object
-// The word list is assumed to be sorted in lexicographic order.
+/**
+ * Load the word-list and unigrams from file and create an object
+ * The word list is assumed to be sorted in lexicographic order.
+ */
 WordUnigrams *WordUnigrams::Create(const string &data_file_path,
                                    const string &lang) {
   string file_name;
@@ -74,32 +76,13 @@ WordUnigrams *WordUnigrams::Create(const string &data_file_path,
 
   // allocate memory
   WordUnigrams *word_unigrams_obj = new WordUnigrams();
-  if (word_unigrams_obj == NULL) {
-    fprintf(stderr, "Cube ERROR (WordUnigrams::Create): could not create "
-            "word unigrams object.\n");
-    return NULL;
-  }
 
   int full_len = str.length();
   int word_cnt = str_vec.size() / 2;
   word_unigrams_obj->words_ = new char*[word_cnt];
   word_unigrams_obj->costs_ = new int[word_cnt];
 
-  if (word_unigrams_obj->words_ == NULL ||
-      word_unigrams_obj->costs_ == NULL) {
-    fprintf(stderr, "Cube ERROR (WordUnigrams::Create): error allocating "
-            "word unigram fields.\n");
-    delete word_unigrams_obj;
-    return NULL;
-  }
-
   word_unigrams_obj->words_[0] = new char[full_len];
-  if (word_unigrams_obj->words_[0] == NULL) {
-    fprintf(stderr, "Cube ERROR (WordUnigrams::Create): error allocating "
-            "word unigram fields.\n");
-    delete word_unigrams_obj;
-    return NULL;
-  }
 
   // construct sorted list of words and costs
   word_unigrams_obj->word_cnt_ = 0;
@@ -143,10 +126,12 @@ WordUnigrams *WordUnigrams::Create(const string &data_file_path,
   return word_unigrams_obj;
 }
 
-// Split input into space-separated tokens, strip trailing punctuation
-// from each, determine case properties, call UTF-8 flavor of cost
-// function on each word, and aggregate all into single mean word
-// cost.
+/**
+ * Split input into space-separated tokens, strip trailing punctuation
+ * from each, determine case properties, call UTF-8 flavor of cost
+ * function on each word, and aggregate all into single mean word
+ * cost.
+ */
 int WordUnigrams::Cost(const char_32 *key_str32,
                        LangModel *lang_mod,
                        CharSet *char_set) const {
@@ -159,7 +144,7 @@ int WordUnigrams::Cost(const char_32 *key_str32,
   CubeUtils::SplitStringUsing(key_str, " \t", &words);
 
   // no words => no cost
-  if (words.size() <= 0) {
+  if (words.empty()) {
     return 0;
   }
 
@@ -239,7 +224,9 @@ int WordUnigrams::Cost(const char_32 *key_str32,
   return static_cast<int>(cost / static_cast<double>(words.size()));
 }
 
-// Search for UTF-8 string using binary search of sorted words_ array.
+/**
+ * Search for UTF-8 string using binary search of sorted words_ array.
+ */
 int WordUnigrams::CostInternal(const char *key_str) const {
   if (strlen(key_str) == 0)
     return not_in_list_cost_;

@@ -48,7 +48,6 @@ typedef CHAR_DESC_STRUCT *CHAR_DESC;
 struct FEATURE_DEFS_STRUCT {
   inT32 NumFeatureTypes;
   const FEATURE_DESC_STRUCT* FeatureDesc[NUM_FEATURE_TYPES];
-  const FEATURE_EXT_STRUCT* FeatureExtractors[NUM_FEATURE_TYPES];
   int FeatureEnabled[NUM_FEATURE_TYPES];
 };
 typedef FEATURE_DEFS_STRUCT *FEATURE_DEFS;
@@ -56,7 +55,7 @@ typedef FEATURE_DEFS_STRUCT *FEATURE_DEFS;
 /*----------------------------------------------------------------------
     Generic functions for manipulating character descriptions
 ----------------------------------------------------------------------*/
-void InitFeatureDefs(FEATURE_DEFS_STRUCT *featuredefs);
+void TESS_API InitFeatureDefs(FEATURE_DEFS_STRUCT *featuredefs);
 
 void FreeCharDescription(CHAR_DESC CharDesc);
 
@@ -65,20 +64,20 @@ CHAR_DESC NewCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs);
 bool ValidCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
                           CHAR_DESC CharDesc);
 
-void WriteCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                          FILE *File, CHAR_DESC CharDesc);
+void WriteCharDescription(const FEATURE_DEFS_STRUCT& FeatureDefs,
+                          CHAR_DESC CharDesc, STRING* str);
 
-CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
+CHAR_DESC TESS_API ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
                               FILE *File);
 
-int ShortNameToFeatureType(const FEATURE_DEFS_STRUCT &FeatureDefs,
+int TESS_API ShortNameToFeatureType(const FEATURE_DEFS_STRUCT &FeatureDefs,
                            const char *ShortName);
 
 /**----------------------------------------------------------------------------
         Global Data Definitions and Declarations
 ----------------------------------------------------------------------------**/
 extern const FEATURE_DESC_STRUCT MicroFeatureDesc;
-extern const FEATURE_DESC_STRUCT PicoFeatDesc;
+extern TESS_API const FEATURE_DESC_STRUCT PicoFeatDesc;
 extern const FEATURE_DESC_STRUCT CharNormDesc;
 extern const FEATURE_DESC_STRUCT OutlineFeatDesc;
 extern const FEATURE_DESC_STRUCT IntFeatDesc;

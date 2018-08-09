@@ -38,6 +38,8 @@
 #include "shapetable.h"
 #include "svmnode.h"
 
+#include "scanutils.h"
+
 namespace tesseract {
 
 // Constants controlling clustering. With a low kMinClusteredShapes and a high
@@ -212,10 +214,14 @@ void MasterTrainer::AddSample(bool verification, const char* unichar,
 // Must be called after ReadTrainingSamples, as the current number of images
 // is used as an offset for page numbers in the samples.
 void MasterTrainer::LoadPageImages(const char* filename) {
+  size_t offset = 0;
   int page;
   Pix* pix;
-  for (page = 0; (pix = pixReadTiff(filename, page)) != NULL; ++page) {
+  for (page = 0; ; page++) {
+    pix = pixReadFromMultipageTiff(filename, &offset);
+    if (!pix) break;
     page_images_.push_back(pix);
+    if (!offset) break;
   }
   tprintf("Loaded %d page images from %s\n", page, filename);
 }
@@ -360,9 +366,11 @@ bool MasterTrainer::LoadFontInfo(const char* filename) {
     fontinfo.name = font_name;
     fontinfo.properties = 0;
     fontinfo.universal_id = 0;
-    if (fscanf(fp, "%1024s %i %i %i %i %i\n", font_name,
-               &italic, &bold, &fixed, &serif, &fraktur) != 6)
+    if (tfscanf(fp, "%1024s %i %i %i %i %i\n", font_name, &italic, &bold,
+                &fixed, &serif, &fraktur) != 6) {
+      delete[] font_name;
       continue;
+    }
     fontinfo.properties =
         (italic << 0) +
         (bold << 1) +
@@ -371,6 +379,8 @@ bool MasterTrainer::LoadFontInfo(const char* filename) {
         (fraktur << 4);
     if (!fontinfo_table_.contains(fontinfo)) {
       fontinfo_table_.push_back(fontinfo);
+    } else {
+      delete[] font_name;
     }
   }
   fclose(fp);
@@ -397,7 +407,7 @@ bool MasterTrainer::LoadXHeights(const char* filename) {
   int total_xheight = 0;
   int xheight_count = 0;
   while (!feof(f)) {
-    if (fscanf(f, "%1023s %d\n", buffer, &xht) != 2)
+    if (tfscanf(f, "%1023s %d\n", buffer, &xht) != 2)
       continue;
     buffer[1023] = '\0';
     fontinfo.name = buffer;
@@ -441,13 +451,13 @@ bool MasterTrainer::AddSpacingInfo(const char *filename) {
   char uch[UNICHAR_LEN];
   char kerned_uch[UNICHAR_LEN];
   int x_gap, x_gap_before, x_gap_after, num_kerned;
-  ASSERT_HOST(fscanf(fontinfo_file, "%d\n", &num_unichars) == 1);
+  ASSERT_HOST(tfscanf(fontinfo_file, "%d\n", &num_unichars) == 1);
   FontInfo *fi = &fontinfo_table_.get(fontinfo_id);
   fi->init_spacing(unicharset_.size());
   FontSpacingInfo *spacing = NULL;
   for (int l = 0; l < num_unichars; ++l) {
-    if (fscanf(fontinfo_file, "%s %d %d %d",
-               uch, &x_gap_before, &x_gap_after, &num_kerned) != 4) {
+    if (tfscanf(fontinfo_file, "%s %d %d %d",
+                uch, &x_gap_before, &x_gap_after, &num_kerned) != 4) {
       tprintf("Bad format of font spacing file %s\n", filename);
       fclose(fontinfo_file);
       return false;
@@ -459,7 +469,7 @@ bool MasterTrainer::AddSpacingInfo(const char *filename) {
       spacing->x_gap_after = static_cast<inT16>(x_gap_after * scale);
     }
     for (int k = 0; k < num_kerned; ++k) {
-      if (fscanf(fontinfo_file, "%s %d", kerned_uch, &x_gap) != 2) {
+      if (tfscanf(fontinfo_file, "%s %d", kerned_uch, &x_gap) != 2) {
         tprintf("Bad format of font spacing file %s\n", filename);
         fclose(fontinfo_file);
         delete spacing;
@@ -633,6 +643,7 @@ void MasterTrainer::WriteInttempAndPFFMTable(const UNICHARSET& unicharset,
   }
   fclose(fp);
   free_int_templates(int_templates);
+  delete classify;
 }
 
 // Generate debug output relating to the canonical distance between the
@@ -874,6 +885,7 @@ void MasterTrainer::ReplaceFragmentedSamples() {
       if (good_ch != INVALID_UNICHAR_ID)
         good_junk[good_ch] = true;  // We want this one.
     }
+    delete frag;
   }
 #endif
   // For now just use all the junk that was from natural fragments.
@@ -888,6 +900,7 @@ void MasterTrainer::ReplaceFragmentedSamples() {
       junk_samples_.extract_sample(s);
       samples_.AddSample(frag_set.id_to_unichar(junk_id), sample);
     }
+    delete frag;
   }
   junk_samples_.DeleteDeadSamples();
   junk_samples_.OrganizeByFontAndClass();

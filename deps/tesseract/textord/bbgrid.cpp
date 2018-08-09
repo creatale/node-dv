@@ -154,7 +154,7 @@ IntGrid* IntGrid::NeighbourhoodSum() const {
 }
 
 // Returns true if more than half the area of the rect is covered by grid
-// cells that are over the theshold.
+// cells that are over the threshold.
 bool IntGrid::RectMostlyOverThreshold(const TBOX& rect, int threshold) const {
   int min_x, min_y, max_x, max_y;
   GridCoords(rect.left(), rect.bottom(), &min_x, &min_y);
@@ -231,7 +231,7 @@ Pix* GridReducedPix(const TBOX& box, int gridsize,
 // Note that the Pix is used upside-down, with (0, 0) being the bottom-left.
 Pix* TraceOutlineOnReducedPix(C_OUTLINE* outline, int gridsize,
                               ICOORD bleft, int* left, int* bottom) {
-  TBOX box = outline->bounding_box();
+  const TBOX& box = outline->bounding_box();
   Pix* pix = GridReducedPix(box, gridsize, bleft, left, bottom);
   int wpl = pixGetWpl(pix);
   l_uint32* data = pixGetData(pix);
@@ -257,7 +257,7 @@ Pix* TraceOutlineOnReducedPix(C_OUTLINE* outline, int gridsize,
 // As TraceOutlineOnReducedPix above, but on a BLOCK instead of a C_OUTLINE.
 Pix* TraceBlockOnReducedPix(BLOCK* block, int gridsize,
                             ICOORD bleft, int* left, int* bottom) {
-  TBOX box = block->bounding_box();
+  const TBOX& box = block->bounding_box();
   Pix* pix = GridReducedPix(box, gridsize, bleft, left, bottom);
   int wpl = pixGetWpl(pix);
   l_uint32* data = pixGetData(pix);

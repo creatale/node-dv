@@ -129,7 +129,9 @@ class LanguageModel {
       const LMConsistencyInfo &consistency_info) {
     if (dawg_info != NULL) {
       return ComputeAdjustment(consistency_info.NumInconsistentCase(),
-                               language_model_penalty_case);
+                               language_model_penalty_case) +
+          (consistency_info.inconsistent_script ?
+             language_model_penalty_script : 0.0f);
     }
     return (ComputeAdjustment(consistency_info.NumInconsistentPunc(),
                               language_model_penalty_punc) +
@@ -359,7 +361,7 @@ class LanguageModel {
 
   // Temporary DawgArgs struct that is re-used across different words to
   // avoid dynamic memory re-allocation (should be cleared before each use).
-  DawgArgs *dawg_args_;
+  DawgArgs dawg_args_;
   // Scaling for recovering blob outline length from rating and certainty.
   float rating_cert_scale_;
 
@@ -390,8 +392,8 @@ class LanguageModel {
   STRING prev_word_str_;
   int prev_word_unichar_step_len_;
   // Active dawg vector.
-  DawgPositionVector *very_beginning_active_dawgs_;  // includes continuation
-  DawgPositionVector *beginning_active_dawgs_;
+  DawgPositionVector very_beginning_active_dawgs_;  // includes continuation
+  DawgPositionVector beginning_active_dawgs_;
   // Set to true if acceptable choice was discovered.
   // Note: it would be nice to use this to terminate the search once an
   // acceptable choices is found. However we do not do that and once an

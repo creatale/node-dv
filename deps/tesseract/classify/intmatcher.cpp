@@ -26,6 +26,8 @@
                           Include Files and Type Defines
 ----------------------------------------------------------------------------*/
 #include "intmatcher.h"
+
+#include "fontinfo.h"
 #include "intproto.h"
 #include "callcpp.h"
 #include "scrollview.h"
@@ -36,6 +38,9 @@
 #include "shapetable.h"
 #include <math.h>
 
+using tesseract::ScoredFont;
+using tesseract::UnicharRating;
+
 /*----------------------------------------------------------------------------
                     Global Data Definitions and Declarations
 ----------------------------------------------------------------------------*/
@@ -45,58 +50,51 @@
 const float IntegerMatcher::kSEExponentialMultiplier = 0.0;
 const float IntegerMatcher::kSimilarityCenter = 0.0075;
 
-static const uinT8 offset_table[256] = {
-  255, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0
-};
+#define offset_table_entries                                                   \
+  255, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, \
+      0, 1, 0, 2, 0, 1, 0, 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4,  \
+      0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 6, 0, 1, 0, 2, 0, 1, 0, 3,  \
+      0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5,  \
+      0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3,  \
+      0, 1, 0, 2, 0, 1, 0, 7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4,  \
+      0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5, 0, 1, 0, 2, 0, 1, 0, 3,  \
+      0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 6,  \
+      0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3,  \
+      0, 1, 0, 2, 0, 1, 0, 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4,  \
+      0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0
 
-static const uinT8 next_table[256] = {
-  0, 0, 0, 0x2, 0, 0x4, 0x4, 0x6, 0, 0x8, 0x8, 0x0a, 0x08, 0x0c, 0x0c, 0x0e,
-  0, 0x10, 0x10, 0x12, 0x10, 0x14, 0x14, 0x16, 0x10, 0x18, 0x18, 0x1a, 0x18,
-  0x1c, 0x1c, 0x1e,
-  0, 0x20, 0x20, 0x22, 0x20, 0x24, 0x24, 0x26, 0x20, 0x28, 0x28, 0x2a, 0x28,
-  0x2c, 0x2c, 0x2e,
-  0x20, 0x30, 0x30, 0x32, 0x30, 0x34, 0x34, 0x36, 0x30, 0x38, 0x38, 0x3a,
-  0x38, 0x3c, 0x3c, 0x3e,
-  0, 0x40, 0x40, 0x42, 0x40, 0x44, 0x44, 0x46, 0x40, 0x48, 0x48, 0x4a, 0x48,
-  0x4c, 0x4c, 0x4e,
-  0x40, 0x50, 0x50, 0x52, 0x50, 0x54, 0x54, 0x56, 0x50, 0x58, 0x58, 0x5a,
-  0x58, 0x5c, 0x5c, 0x5e,
-  0x40, 0x60, 0x60, 0x62, 0x60, 0x64, 0x64, 0x66, 0x60, 0x68, 0x68, 0x6a,
-  0x68, 0x6c, 0x6c, 0x6e,
-  0x60, 0x70, 0x70, 0x72, 0x70, 0x74, 0x74, 0x76, 0x70, 0x78, 0x78, 0x7a,
-  0x78, 0x7c, 0x7c, 0x7e,
-  0, 0x80, 0x80, 0x82, 0x80, 0x84, 0x84, 0x86, 0x80, 0x88, 0x88, 0x8a, 0x88,
-  0x8c, 0x8c, 0x8e,
-  0x80, 0x90, 0x90, 0x92, 0x90, 0x94, 0x94, 0x96, 0x90, 0x98, 0x98, 0x9a,
-  0x98, 0x9c, 0x9c, 0x9e,
-  0x80, 0xa0, 0xa0, 0xa2, 0xa0, 0xa4, 0xa4, 0xa6, 0xa0, 0xa8, 0xa8, 0xaa,
-  0xa8, 0xac, 0xac, 0xae,
-  0xa0, 0xb0, 0xb0, 0xb2, 0xb0, 0xb4, 0xb4, 0xb6, 0xb0, 0xb8, 0xb8, 0xba,
-  0xb8, 0xbc, 0xbc, 0xbe,
-  0x80, 0xc0, 0xc0, 0xc2, 0xc0, 0xc4, 0xc4, 0xc6, 0xc0, 0xc8, 0xc8, 0xca,
-  0xc8, 0xcc, 0xcc, 0xce,
-  0xc0, 0xd0, 0xd0, 0xd2, 0xd0, 0xd4, 0xd4, 0xd6, 0xd0, 0xd8, 0xd8, 0xda,
-  0xd8, 0xdc, 0xdc, 0xde,
-  0xc0, 0xe0, 0xe0, 0xe2, 0xe0, 0xe4, 0xe4, 0xe6, 0xe0, 0xe8, 0xe8, 0xea,
-  0xe8, 0xec, 0xec, 0xee,
-  0xe0, 0xf0, 0xf0, 0xf2, 0xf0, 0xf4, 0xf4, 0xf6, 0xf0, 0xf8, 0xf8, 0xfa,
-  0xf8, 0xfc, 0xfc, 0xfe
-};
+#define INTMATCHER_OFFSET_TABLE_SIZE 256
+
+#define next_table_entries                                                    \
+  0, 0, 0, 0x2, 0, 0x4, 0x4, 0x6, 0, 0x8, 0x8, 0x0a, 0x08, 0x0c, 0x0c, 0x0e,  \
+      0, 0x10, 0x10, 0x12, 0x10, 0x14, 0x14, 0x16, 0x10, 0x18, 0x18, 0x1a,    \
+      0x18, 0x1c, 0x1c, 0x1e, 0, 0x20, 0x20, 0x22, 0x20, 0x24, 0x24, 0x26,    \
+      0x20, 0x28, 0x28, 0x2a, 0x28, 0x2c, 0x2c, 0x2e, 0x20, 0x30, 0x30, 0x32, \
+      0x30, 0x34, 0x34, 0x36, 0x30, 0x38, 0x38, 0x3a, 0x38, 0x3c, 0x3c, 0x3e, \
+      0, 0x40, 0x40, 0x42, 0x40, 0x44, 0x44, 0x46, 0x40, 0x48, 0x48, 0x4a,    \
+      0x48, 0x4c, 0x4c, 0x4e, 0x40, 0x50, 0x50, 0x52, 0x50, 0x54, 0x54, 0x56, \
+      0x50, 0x58, 0x58, 0x5a, 0x58, 0x5c, 0x5c, 0x5e, 0x40, 0x60, 0x60, 0x62, \
+      0x60, 0x64, 0x64, 0x66, 0x60, 0x68, 0x68, 0x6a, 0x68, 0x6c, 0x6c, 0x6e, \
+      0x60, 0x70, 0x70, 0x72, 0x70, 0x74, 0x74, 0x76, 0x70, 0x78, 0x78, 0x7a, \
+      0x78, 0x7c, 0x7c, 0x7e, 0, 0x80, 0x80, 0x82, 0x80, 0x84, 0x84, 0x86,    \
+      0x80, 0x88, 0x88, 0x8a, 0x88, 0x8c, 0x8c, 0x8e, 0x80, 0x90, 0x90, 0x92, \
+      0x90, 0x94, 0x94, 0x96, 0x90, 0x98, 0x98, 0x9a, 0x98, 0x9c, 0x9c, 0x9e, \
+      0x80, 0xa0, 0xa0, 0xa2, 0xa0, 0xa4, 0xa4, 0xa6, 0xa0, 0xa8, 0xa8, 0xaa, \
+      0xa8, 0xac, 0xac, 0xae, 0xa0, 0xb0, 0xb0, 0xb2, 0xb0, 0xb4, 0xb4, 0xb6, \
+      0xb0, 0xb8, 0xb8, 0xba, 0xb8, 0xbc, 0xbc, 0xbe, 0x80, 0xc0, 0xc0, 0xc2, \
+      0xc0, 0xc4, 0xc4, 0xc6, 0xc0, 0xc8, 0xc8, 0xca, 0xc8, 0xcc, 0xcc, 0xce, \
+      0xc0, 0xd0, 0xd0, 0xd2, 0xd0, 0xd4, 0xd4, 0xd6, 0xd0, 0xd8, 0xd8, 0xda, \
+      0xd8, 0xdc, 0xdc, 0xde, 0xc0, 0xe0, 0xe0, 0xe2, 0xe0, 0xe4, 0xe4, 0xe6, \
+      0xe0, 0xe8, 0xe8, 0xea, 0xe8, 0xec, 0xec, 0xee, 0xe0, 0xf0, 0xf0, 0xf2, \
+      0xf0, 0xf4, 0xf4, 0xf6, 0xf0, 0xf8, 0xf8, 0xfa, 0xf8, 0xfc, 0xfc, 0xfe
+
+// See http://b/19318793 (#6) for a complete discussion.  Merging arrays
+// offset_table and next_table helps improve performance of PIE code.
+static const uinT8 data_table[512] = {offset_table_entries, next_table_entries};
+
+static const uinT8* const offset_table = &data_table[0];
+static const uinT8* const next_table =
+    &data_table[INTMATCHER_OFFSET_TABLE_SIZE];
 
 namespace tesseract {
 
@@ -137,8 +135,8 @@ class ClassPruner {
     delete []sort_index_;
   }
 
-  // Computes the scores for every class in the character set, by summing the
-  // weights for each feature and stores the sums internally in class_count_.
+  /// Computes the scores for every class in the character set, by summing the
+  /// weights for each feature and stores the sums internally in class_count_.
   void ComputeScores(const INT_TEMPLATES_STRUCT* int_templates,
                      int num_features, const INT_FEATURE_STRUCT* features) {
     num_features_ = num_features;
@@ -205,11 +203,11 @@ class ClassPruner {
     }
   }
 
-  // Adjusts the scores according to the number of expected features. Used
-  // in lieu of a constant bias, this penalizes classes that expect more
-  // features than there are present. Thus an actual c will score higher for c
-  // than e, even though almost all the features match e as well as c, because
-  // e expects more features to be present.
+  /// Adjusts the scores according to the number of expected features. Used
+  /// in lieu of a constant bias, this penalizes classes that expect more
+  /// features than there are present. Thus an actual c will score higher for c
+  /// than e, even though almost all the features match e as well as c, because
+  /// e expects more features to be present.
   void AdjustForExpectedNumFeatures(const uinT16* expected_num_features,
                                     int cutoff_strength) {
     for (int class_id = 0; class_id < max_classes_; ++class_id) {
@@ -221,8 +219,8 @@ class ClassPruner {
     }
   }
 
-  // Zeros the scores for classes disabled in the unicharset.
-  // Implements the black-list to recognize a subset of the character set.
+  /// Zeros the scores for classes disabled in the unicharset.
+  /// Implements the black-list to recognize a subset of the character set.
   void DisableDisabledClasses(const UNICHARSET& unicharset) {
     for (int class_id = 0; class_id < max_classes_; ++class_id) {
       if (!unicharset.get_enabled(class_id))
@@ -230,7 +228,7 @@ class ClassPruner {
     }
   }
 
-  // Zeros the scores of fragments.
+  /** Zeros the scores of fragments. */
   void DisableFragments(const UNICHARSET& unicharset) {
     for (int class_id = 0; class_id < max_classes_; ++class_id) {
       // Do not include character fragments in the class pruner
@@ -241,10 +239,10 @@ class ClassPruner {
     }
   }
 
-  // Normalizes the counts for xheight, putting the normalized result in
-  // norm_count_. Applies a simple subtractive penalty for incorrect vertical
-  // position provided by the normalization_factors array, indexed by
-  // character class, and scaled by the norm_multiplier.
+  /// Normalizes the counts for xheight, putting the normalized result in
+  /// norm_count_. Applies a simple subtractive penalty for incorrect vertical
+  /// position provided by the normalization_factors array, indexed by
+  /// character class, and scaled by the norm_multiplier.
   void NormalizeForXheight(int norm_multiplier,
                            const uinT8* normalization_factors) {
     for (int class_id = 0; class_id < max_classes_; class_id++) {
@@ -253,18 +251,18 @@ class ClassPruner {
     }
   }
 
-  // The nop normalization copies the class_count_ array to norm_count_.
+  /** The nop normalization copies the class_count_ array to norm_count_. */
   void NoNormalization() {
     for (int class_id = 0; class_id < max_classes_; class_id++) {
       norm_count_[class_id] = class_count_[class_id];
     }
   }
 
-  // Prunes the classes using <the maximum count> * pruning_factor/256 as a
-  // threshold for keeping classes. If max_of_non_fragments, then ignore
-  // fragments in computing the maximum count.
-  void PruneAndSort(int pruning_factor, bool max_of_non_fragments,
-                    const UNICHARSET& unicharset) {
+  /// Prunes the classes using &lt;the maximum count> * pruning_factor/256 as a
+  /// threshold for keeping classes. If max_of_non_fragments, then ignore
+  /// fragments in computing the maximum count.
+  void PruneAndSort(int pruning_factor, int keep_this,
+                    bool max_of_non_fragments, const UNICHARSET& unicharset) {
     int max_count = 0;
     for (int c = 0; c < max_classes_; ++c) {
       if (norm_count_[c] > max_count &&
@@ -284,7 +282,8 @@ class ClassPruner {
       pruning_threshold_ = 1;
     num_classes_ = 0;
     for (int class_id = 0; class_id < max_classes_; class_id++) {
-      if (norm_count_[class_id] >= pruning_threshold_) {
+      if (norm_count_[class_id] >= pruning_threshold_ ||
+          class_id == keep_this) {
           ++num_classes_;
         sort_index_[num_classes_] = class_id;
         sort_key_[num_classes_] = norm_count_[class_id];
@@ -296,7 +295,8 @@ class ClassPruner {
       HeapSort(num_classes_, sort_key_, sort_index_);
   }
 
-  // Prints debug info on the class pruner matches for the pruned classes only.
+  /** Prints debug info on the class pruner matches for the pruned classes only.
+   */
   void DebugMatch(const Classify& classify,
                   const INT_TEMPLATES_STRUCT* int_templates,
                   const INT_FEATURE_STRUCT* features) const {
@@ -333,7 +333,7 @@ class ClassPruner {
     }
   }
 
-  // Prints a summary of the pruner result.
+  /** Prints a summary of the pruner result. */
   void SummarizeResult(const Classify& classify,
                        const INT_TEMPLATES_STRUCT* int_templates,
                        const uinT16* expected_num_features,
@@ -355,8 +355,8 @@ class ClassPruner {
     }
   }
 
-  // Copies the pruned, sorted classes into the output results and returns
-  // the number of classes.
+  /// Copies the pruned, sorted classes into the output results and returns
+  /// the number of classes.
   int SetupResults(GenericVector<CP_RESULT_STRUCT>* results) const {
     CP_RESULT_STRUCT empty;
     results->init_to_size(num_classes_, empty);
@@ -369,57 +369,52 @@ class ClassPruner {
   }
 
  private:
-  // Array[rounded_classes_] of initial counts for each class.
+  /** Array[rounded_classes_] of initial counts for each class. */
   int *class_count_;
-  // Array[rounded_classes_] of modified counts for each class after normalizing
-  // for expected number of features, disabled classes, fragments, and xheights.
+  /// Array[rounded_classes_] of modified counts for each class after
+  /// normalizing for expected number of features, disabled classes, fragments,
+  /// and xheights.
   int *norm_count_;
-  // Array[rounded_classes_ +1] of pruned counts that gets sorted
+  /** Array[rounded_classes_ +1] of pruned counts that gets sorted */
   int *sort_key_;
-  // Array[rounded_classes_ +1] of classes corresponding to sort_key_.
+  /** Array[rounded_classes_ +1] of classes corresponding to sort_key_. */
   int *sort_index_;
-  // Number of classes in this class pruner.
+  /** Number of classes in this class pruner. */
   int max_classes_;
-  // Rounded up number of classes used for array sizes.
+  /** Rounded up number of classes used for array sizes. */
   int rounded_classes_;
-  // Threshold count applied to prune classes.
+  /** Threshold count applied to prune classes. */
   int pruning_threshold_;
-  // The number of features used to compute the scores.
+  /** The number of features used to compute the scores. */
   int num_features_;
-  // Final number of pruned classes.
+  /** Final number of pruned classes. */
   int num_classes_;
 };
 
 /*----------------------------------------------------------------------------
               Public Code
 ----------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
-// Runs the class pruner from int_templates on the given features, returning
-// the number of classes output in results.
-//    int_templates          Class pruner tables
-//    num_features           Number of features in blob
-//    features               Array of features
-//    normalization_factors  Array of fudge factors from blob
-//                           normalization process (by CLASS_INDEX)
-//    expected_num_features  Array of expected number of features
-//                           for each class (by CLASS_INDEX)
-//    results                Sorted Array of pruned classes. Must be an array
-//                           of size at least int_templates->NumClasses.
+/**
+ * Runs the class pruner from int_templates on the given features, returning
+ * the number of classes output in results.
+ * @param int_templates          Class pruner tables
+ * @param num_features           Number of features in blob
+ * @param features               Array of features
+ * @param normalization_factors  Array of fudge factors from blob
+ *                               normalization process (by CLASS_INDEX)
+ * @param expected_num_features  Array of expected number of features
+ *                               for each class (by CLASS_INDEX)
+ * @param results                Sorted Array of pruned classes. Must be an
+ *                               array of size at least
+ *                               int_templates->NumClasses.
+ * @param keep_this
+ */
 int Classify::PruneClasses(const INT_TEMPLATES_STRUCT* int_templates,
-                           int num_features,
+                           int num_features, int keep_this,
                            const INT_FEATURE_STRUCT* features,
                            const uinT8* normalization_factors,
                            const uinT16* expected_num_features,
                            GenericVector<CP_RESULT_STRUCT>* results) {
-/*
- **  Operation:
- **    Prunes the classes using a modified fast match table.
- **    Returns a sorted list of classes along with the number
- **      of pruned classes in that list.
- **  Return: Number of pruned classes.
- **  Exceptions: none
- **  History: Tue Feb 19 10:24:24 MST 1991, RWM, Created.
- */
   ClassPruner pruner(int_templates->NumClasses);
   // Compute initial match scores for all classes.
   pruner.ComputeScores(int_templates, num_features, features);
@@ -441,7 +436,7 @@ int Classify::PruneClasses(const INT_TEMPLATES_STRUCT* int_templates,
     pruner.NoNormalization();
   }
   // Do the actual pruning and sort the short-list.
-  pruner.PruneAndSort(classify_class_pruner_threshold,
+  pruner.PruneAndSort(classify_class_pruner_threshold, keep_this,
                       shape_table_ == NULL, unicharset);
 
   if (classify_debug_level > 2) {
@@ -458,38 +453,34 @@ int Classify::PruneClasses(const INT_TEMPLATES_STRUCT* int_templates,
 
 }  // namespace tesseract
 
-/*---------------------------------------------------------------------------*/
+/**
+ * IntegerMatcher returns the best configuration and rating
+ * for a single class.  The class matched against is determined
+ * by the uniqueness of the ClassTemplate parameter.  The
+ * best rating and its associated configuration are returned.
+ *
+ * Globals:
+ * - local_matcher_multiplier_ Normalization factor multiplier
+ * param ClassTemplate Prototypes & tables for a class
+ * param BlobLength Length of unormalized blob
+ * param NumFeatures Number of features in blob
+ * param Features Array of features
+ * param NormalizationFactor Fudge factor from blob normalization process
+ * param Result Class rating & configuration: (0.0 -> 1.0), 0=bad, 1=good
+ * param Debug Debugger flag: 1=debugger on
+ * @return none
+ * @note Exceptions: none
+ * @note History: Tue Feb 19 16:36:23 MST 1991, RWM, Created.
+ */
 void IntegerMatcher::Match(INT_CLASS ClassTemplate,
                            BIT_VECTOR ProtoMask,
                            BIT_VECTOR ConfigMask,
                            inT16 NumFeatures,
                            const INT_FEATURE_STRUCT* Features,
-                           INT_RESULT Result,
+                           UnicharRating* Result,
                            int AdaptFeatureThreshold,
                            int Debug,
                            bool SeparateDebugWindows) {
-/*
- **      Parameters:
- **              ClassTemplate             Prototypes & tables for a class
- **              BlobLength                Length of unormalized blob
- **              NumFeatures               Number of features in blob
- **              Features                  Array of features
- **              NormalizationFactor       Fudge factor from blob
- **                                        normalization process
- **              Result                    Class rating & configuration:
- **                                        (0.0 -> 1.0), 0=good, 1=bad
- **              Debug                     Debugger flag: 1=debugger on
- **      Globals:
- **              local_matcher_multiplier_    Normalization factor multiplier
- **      Operation:
- **              IntegerMatcher returns the best configuration and rating
- **              for a single class.  The class matched against is determined
- **              by the uniqueness of the ClassTemplate parameter.  The
- **              best rating and its associated configuration are returned.
- **      Return:
- **      Exceptions: none
- **      History: Tue Feb 19 16:36:23 MST 1991, RWM, Created.
- */
   ScratchEvidence *tables = new ScratchEvidence();
   int Feature;
   int BestMatch;
@@ -498,7 +489,7 @@ void IntegerMatcher::Match(INT_CLASS ClassTemplate,
     cprintf ("Integer Matcher -------------------------------------------\n");
 
   tables->Clear(ClassTemplate);
-  Result->FeatureMisses = 0;
+  Result->feature_misses = 0;
 
   for (Feature = 0; Feature < NumFeatures; Feature++) {
     int csum = UpdateTablesForFeature(ClassTemplate, ProtoMask, ConfigMask,
@@ -506,7 +497,7 @@ void IntegerMatcher::Match(INT_CLASS ClassTemplate,
                                       tables, Debug);
     // Count features that were missed over all configs.
     if (csum == 0)
-      Result->FeatureMisses++;
+      ++Result->feature_misses;
   }
 
 #ifndef GRAPHICS_DISABLED
@@ -534,7 +525,7 @@ void IntegerMatcher::Match(INT_CLASS ClassTemplate,
 
 #ifndef GRAPHICS_DISABLED
   if (PrintMatchSummaryOn(Debug))
-    DebugBestMatch(BestMatch, Result);
+    Result->Print();
 
   if (MatchDebuggingOn(Debug))
     cprintf("Match Complete --------------------------------------------\n");
@@ -543,8 +534,26 @@ void IntegerMatcher::Match(INT_CLASS ClassTemplate,
   delete tables;
 }
 
-
-/*---------------------------------------------------------------------------*/
+/**
+ * FindGoodProtos finds all protos whose normalized proto-evidence
+ * exceed classify_adapt_proto_thresh.  The list is ordered by increasing
+ * proto id number.
+ *
+ * Globals:
+ * - local_matcher_multiplier_    Normalization factor multiplier
+ * param ClassTemplate Prototypes & tables for a class
+ * param ProtoMask AND Mask for proto word
+ * param ConfigMask AND Mask for config word
+ * param BlobLength Length of unormalized blob
+ * param NumFeatures Number of features in blob
+ * param Features Array of features
+ * param ProtoArray Array of good protos
+ * param AdaptProtoThreshold Threshold for good protos
+ * param Debug Debugger flag: 1=debugger on
+ * @return Number of good protos in ProtoArray.
+ * @note Exceptions: none
+ * @note History: Tue Mar 12 17:09:26 MST 1991, RWM, Created
+ */
 int IntegerMatcher::FindGoodProtos(
     INT_CLASS ClassTemplate,
     BIT_VECTOR ProtoMask,
@@ -555,28 +564,6 @@ int IntegerMatcher::FindGoodProtos(
     PROTO_ID *ProtoArray,
     int AdaptProtoThreshold,
     int Debug) {
-/*
- **      Parameters:
- **              ClassTemplate             Prototypes & tables for a class
- **              ProtoMask                 AND Mask for proto word
- **              ConfigMask                AND Mask for config word
- **              BlobLength                Length of unormalized blob
- **              NumFeatures               Number of features in blob
- **              Features                  Array of features
- **              ProtoArray                Array of good protos
- **              AdaptProtoThreshold       Threshold for good protos
- **              Debug                     Debugger flag: 1=debugger on
- **      Globals:
- **              local_matcher_multiplier_    Normalization factor multiplier
- **      Operation:
- **              FindGoodProtos finds all protos whose normalized proto-evidence
- **              exceed classify_adapt_proto_thresh.  The list is ordered by increasing
- **              proto id number.
- **      Return:
- **              Number of good protos in ProtoArray.
- **      Exceptions: none
- **      History: Tue Mar 12 17:09:26 MST 1991, RWM, Created
- */
   ScratchEvidence *tables = new ScratchEvidence();
   int NumGoodProtos = 0;
 
@@ -622,8 +609,21 @@ int IntegerMatcher::FindGoodProtos(
   return NumGoodProtos;
 }
 
-
-/*---------------------------------------------------------------------------*/
+/**
+ * FindBadFeatures finds all features with maximum feature-evidence <
+ * AdaptFeatureThresh. The list is ordered by increasing feature number.
+ * @param ClassTemplate Prototypes & tables for a class
+ * @param ProtoMask AND Mask for proto word
+ * @param ConfigMask AND Mask for config word
+ * @param BlobLength Length of unormalized blob
+ * @param NumFeatures Number of features in blob
+ * @param Features Array of features
+ * @param FeatureArray Array of bad features
+ * @param AdaptFeatureThreshold Threshold for bad features
+ * @param Debug Debugger flag: 1=debugger on
+ * @return Number of bad features in FeatureArray.
+ * @note History: Tue Mar 12 17:09:26 MST 1991, RWM, Created
+ */
 int IntegerMatcher::FindBadFeatures(
     INT_CLASS ClassTemplate,
     BIT_VECTOR ProtoMask,
@@ -634,24 +634,6 @@ int IntegerMatcher::FindBadFeatures(
     FEATURE_ID *FeatureArray,
     int AdaptFeatureThreshold,
     int Debug) {
-/*
- **  Parameters:
- **      ClassTemplate             Prototypes & tables for a class
- **      ProtoMask                 AND Mask for proto word
- **      ConfigMask                AND Mask for config word
- **      BlobLength                Length of unormalized blob
- **      NumFeatures               Number of features in blob
- **      Features                  Array of features
- **      FeatureArray              Array of bad features
- **      AdaptFeatureThreshold     Threshold for bad features
- **      Debug                     Debugger flag: 1=debugger on
- **  Operation:
- **      FindBadFeatures finds all features with maximum feature-evidence <
- **      AdaptFeatureThresh. The list is ordered by increasing feature number.
- **  Return:
- **      Number of bad features in FeatureArray.
- **  History: Tue Mar 12 17:09:26 MST 1991, RWM, Created
- */
   ScratchEvidence *tables = new ScratchEvidence();
   int NumBadFeatures = 0;
 
@@ -694,7 +676,6 @@ int IntegerMatcher::FindBadFeatures(
 }
 
 
-/*---------------------------------------------------------------------------*/
 void IntegerMatcher::Init(tesseract::IntParam *classify_debug_level) {
   classify_debug_level_ = classify_debug_level;
 
@@ -722,10 +703,9 @@ void IntegerMatcher::Init(tesseract::IntParam *classify_debug_level) {
   evidence_mult_mask_ = ((1 << kIntEvidenceTruncBits) - 1);
 }
 
-
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
               Private Code
-----------------------------------------------------------------------------**/
+----------------------------------------------------------------------------*/
 void ScratchEvidence::Clear(const INT_CLASS class_template) {
   memset(sum_feature_evidence_, 0,
          class_template->NumConfigs * sizeof(sum_feature_evidence_[0]));
@@ -738,23 +718,17 @@ void ScratchEvidence::ClearFeatureEvidence(const INT_CLASS class_template) {
          class_template->NumConfigs * sizeof(feature_evidence_[0]));
 }
 
-
-
-/*---------------------------------------------------------------------------*/
+/**
+ * Print debugging information for Configuations
+ * @return none
+ * @note Exceptions: none
+ * @note History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
 void IMDebugConfiguration(int FeatureNum,
                           uinT16 ActualProtoNum,
                           uinT8 Evidence,
                           BIT_VECTOR ConfigMask,
                           uinT32 ConfigWord) {
-/*
- **      Parameters:
- **      Globals:
- **      Operation:
- **              Print debugging information for Configuations
- **      Return:
- **      Exceptions: none
- **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
- */
   cprintf ("F = %3d, P = %3d, E = %3d, Configs = ",
     FeatureNum, (int) ActualProtoNum, (int) Evidence);
   while (ConfigWord) {
@@ -767,20 +741,15 @@ void IMDebugConfiguration(int FeatureNum,
   cprintf ("\n");
 }
 
-
-/*---------------------------------------------------------------------------*/
+/**
+ * Print debugging information for Configuations
+ * @return none
+ * @note Exceptions: none
+ * @note History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
 void IMDebugConfigurationSum(int FeatureNum,
                              uinT8 *FeatureEvidence,
                              inT32 ConfigCount) {
-/*
- **      Parameters:
- **      Globals:
- **      Operation:
- **              Print debugging information for Configuations
- **      Return:
- **      Exceptions: none
- **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
- */
   cprintf("F=%3d, C=", FeatureNum);
   for (int ConfigNum = 0; ConfigNum < ConfigCount; ConfigNum++) {
     cprintf("%4d", FeatureEvidence[ConfigNum]);
@@ -788,9 +757,17 @@ void IMDebugConfigurationSum(int FeatureNum,
   cprintf("\n");
 }
 
-
-
-/*---------------------------------------------------------------------------*/
+/**
+ * For the given feature: prune protos, compute evidence,
+ * update Feature Evidence, Proto Evidence, and Sum of Feature
+ * Evidence tables.
+ * @param ClassTemplate Prototypes & tables for a class
+ * @param FeatureNum Current feature number (for DEBUG only)
+ * @param Feature Pointer to a feature struct
+ * @param tables Evidence tables
+ * @param Debug Debugger flag: 1=debugger on
+ * @return none
+ */
 int IntegerMatcher::UpdateTablesForFeature(
     INT_CLASS ClassTemplate,
     BIT_VECTOR ProtoMask,
@@ -799,23 +776,10 @@ int IntegerMatcher::UpdateTablesForFeature(
     const INT_FEATURE_STRUCT* Feature,
     ScratchEvidence *tables,
     int Debug) {
-/*
- **  Parameters:
- **      ClassTemplate         Prototypes & tables for a class
- **      FeatureNum            Current feature number (for DEBUG only)
- **      Feature               Pointer to a feature struct
- **      tables                Evidence tables
- **      Debug                 Debugger flag: 1=debugger on
- **  Operation:
- **       For the given feature: prune protos, compute evidence,
- **       update Feature Evidence, Proto Evidence, and Sum of Feature
- **       Evidence tables.
- **  Return:
- */
-  register uinT32 ConfigWord;
-  register uinT32 ProtoWord;
-  register uinT32 ProtoNum;
-  register uinT32 ActualProtoNum;
+  uinT32 ConfigWord;
+  uinT32 ProtoWord;
+  uinT32 ProtoNum;
+  uinT32 ActualProtoNum;
   uinT8 proto_byte;
   inT32 proto_word_offset;
   inT32 proto_offset;
@@ -829,14 +793,14 @@ int IntegerMatcher::UpdateTablesForFeature(
   uinT32 XFeatureAddress;
   uinT32 YFeatureAddress;
   uinT32 ThetaFeatureAddress;
-  register uinT8 *UINT8Pointer;
-  register int ProtoIndex;
+  uinT8* UINT8Pointer;
+  int ProtoIndex;
   uinT8 Temp;
-  register int *IntPointer;
+  int* IntPointer;
   int ConfigNum;
-  register inT32 M3;
-  register inT32 A3;
-  register uinT32 A4;
+  inT32 M3;
+  inT32 A3;
+  uinT32 A4;
 
   tables->ClearFeatureEvidence(ClassTemplate);
 
@@ -950,8 +914,12 @@ int IntegerMatcher::UpdateTablesForFeature(
   return SumOverConfigs;
 }
 
-
-/*---------------------------------------------------------------------------*/
+/**
+ * Print debugging information for Configuations
+ * @return none
+ * @note Exceptions: none
+ * @note History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
 #ifndef GRAPHICS_DISABLED
 void IntegerMatcher::DebugFeatureProtoError(
     INT_CLASS ClassTemplate,
@@ -960,15 +928,6 @@ void IntegerMatcher::DebugFeatureProtoError(
     const ScratchEvidence& tables,
     inT16 NumFeatures,
     int Debug) {
-/*
- **      Parameters:
- **      Globals:
- **      Operation:
- **              Print debugging information for Configuations
- **      Return:
- **      Exceptions: none
- **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
- */
   FLOAT32 ProtoConfigs[MAX_NUM_CONFIGS];
   int ConfigNum;
   uinT32 ConfigWord;
@@ -1077,8 +1036,6 @@ void IntegerMatcher::DebugFeatureProtoError(
 
 }
 
-
-/*---------------------------------------------------------------------------*/
 void IntegerMatcher::DisplayProtoDebugInfo(
     INT_CLASS ClassTemplate,
     BIT_VECTOR ProtoMask,
@@ -1120,7 +1077,6 @@ void IntegerMatcher::DisplayProtoDebugInfo(
 }
 
 
-/*---------------------------------------------------------------------------*/
 void IntegerMatcher::DisplayFeatureDebugInfo(
     INT_CLASS ClassTemplate,
     BIT_VECTOR ProtoMask,
@@ -1166,8 +1122,9 @@ void IntegerMatcher::DisplayFeatureDebugInfo(
 }
 #endif
 
-/*---------------------------------------------------------------------------*/
-// Add sum of Proto Evidences into Sum Of Feature Evidence Array
+/**
+ * Add sum of Proto Evidences into Sum Of Feature Evidence Array
+ */
 void ScratchEvidence::UpdateSumOfProtoEvidences(
     INT_CLASS ClassTemplate, BIT_VECTOR ConfigMask, inT16 NumFeatures) {
 
@@ -1205,11 +1162,10 @@ void ScratchEvidence::UpdateSumOfProtoEvidences(
   }
 }
 
-
-
-/*---------------------------------------------------------------------------*/
-// Normalize Sum of Proto and Feature Evidence by dividing by the sum of
-// the Feature Lengths and the Proto Lengths for each configuration.
+/**
+ * Normalize Sum of Proto and Feature Evidence by dividing by the sum of
+ * the Feature Lengths and the Proto Lengths for each configuration.
+ */
 void ScratchEvidence::NormalizeSums(
     INT_CLASS ClassTemplate, inT16 NumFeatures, inT32 used_features) {
 
@@ -1219,56 +1175,44 @@ void ScratchEvidence::NormalizeSums(
   }
 }
 
-
-/*---------------------------------------------------------------------------*/
-int IntegerMatcher::FindBestMatch(
-    INT_CLASS ClassTemplate,
-    const ScratchEvidence &tables,
-    INT_RESULT Result) {
-/*
- **      Parameters:
- **      Globals:
- **      Operation:
- **              Find the best match for the current class and update the Result
- **              with the configuration and match rating.
- **      Return:
- **              The best normalized sum of evidences
- **      Exceptions: none
- **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+/**
+ * Find the best match for the current class and update the Result
+ * with the configuration and match rating.
+ * @return The best normalized sum of evidences
+ * @note Exceptions: none
+ * @note History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
  */
-  int BestMatch = 0;
-  int Best2Match = 0;
-  Result->Config = 0;
-  Result->Config2 = 0;
+int IntegerMatcher::FindBestMatch(
+    INT_CLASS class_template,
+    const ScratchEvidence &tables,
+    UnicharRating* result) {
+  int best_match = 0;
+  result->config = 0;
+  result->fonts.truncate(0);
+  result->fonts.reserve(class_template->NumConfigs);
 
   /* Find best match */
-  for (int ConfigNum = 0; ConfigNum < ClassTemplate->NumConfigs; ConfigNum++) {
-    int rating = tables.sum_feature_evidence_[ConfigNum];
+  for (int c = 0; c < class_template->NumConfigs; ++c) {
+    int rating = tables.sum_feature_evidence_[c];
     if (*classify_debug_level_ > 2)
-      cprintf("Config %d, rating=%d\n", ConfigNum, rating);
-    if (rating > BestMatch) {
-      if (BestMatch > 0) {
-        Result->Config2 = Result->Config;
-        Best2Match = BestMatch;
-      } else {
-        Result->Config2 = ConfigNum;
-      }
-      Result->Config = ConfigNum;
-      BestMatch = rating;
-    } else if (rating > Best2Match) {
-      Result->Config2 = ConfigNum;
-      Best2Match = rating;
+      tprintf("Config %d, rating=%d\n", c, rating);
+    if (rating > best_match) {
+      result->config = c;
+      best_match = rating;
     }
+    result->fonts.push_back(ScoredFont(c, rating));
   }
 
-  /* Compute Certainty Rating */
-  Result->Rating = (65536.0 - BestMatch) / 65536.0;
+  // Compute confidence on a Probability scale.
+  result->rating = best_match / 65536.0f;
 
-  return BestMatch;
+  return best_match;
 }
 
-// Applies the CN normalization factor to the given rating and returns
-// the modified rating.
+/**
+ * Applies the CN normalization factor to the given rating and returns
+ * the modified rating.
+ */
 float IntegerMatcher::ApplyCNCorrection(float rating, int blob_length,
                                         int normalization_factor,
                                         int matcher_multiplier) {
@@ -1277,35 +1221,20 @@ float IntegerMatcher::ApplyCNCorrection(float rating, int blob_length,
       (blob_length + matcher_multiplier);
 }
 
-/*---------------------------------------------------------------------------*/
-#ifndef GRAPHICS_DISABLED
-// Print debug information about the best match for the current class.
-void IntegerMatcher::DebugBestMatch(
-    int BestMatch, INT_RESULT Result) {
-  tprintf("Rating = %5.1f%%  Best Config = %3d, Distance = %5.1f\n",
-          100.0 * Result->Rating, Result->Config,
-          100.0 * (65536.0 - BestMatch) / 65536.0);
-}
-#endif
-
-/*---------------------------------------------------------------------------*/
+/**
+ * Sort Key array in ascending order using heap sort
+ * algorithm.  Also sort Index array that is tied to
+ * the key array.
+ * @param n Number of elements to sort
+ * @param ra     Key array [1..n]
+ * @param rb     Index array [1..n]
+ * @return none
+ * @note Exceptions: none
+ * @note History: Tue Feb 19 10:24:24 MST 1991, RWM, Created.
+ */
 void
 HeapSort (int n, register int ra[], register int rb[]) {
-/*
- **      Parameters:
- **              n      Number of elements to sort
- **              ra     Key array [1..n]
- **              rb     Index array [1..n]
- **      Globals:
- **      Operation:
- **              Sort Key array in ascending order using heap sort
- **              algorithm.  Also sort Index array that is tied to
- **              the key array.
- **      Return:
- **      Exceptions: none
- **      History: Tue Feb 19 10:24:24 MST 1991, RWM, Created.
- */
-  register int i, rra, rrb;
+  int i, rra, rrb;
   int l, j, ir;
 
   l = (n >> 1) + 1;

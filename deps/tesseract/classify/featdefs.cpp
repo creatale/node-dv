@@ -1,10 +1,10 @@
 /******************************************************************************
- **	Filename:    featdefs.c
- **	Purpose:     Definitions of currently defined feature types.
- **	Author:      Dan Johnson
- **	History:     Mon May 21 10:26:21 1990, DSJ, Created.
+ ** Filename:    featdefs.c
+ ** Purpose:     Definitions of currently defined feature types.
+ ** Author:      Dan Johnson
+ ** History:     Mon May 21 10:26:21 1990, DSJ, Created.
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -178,7 +178,7 @@ CHAR_DESC NewCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs) {
 
 /*---------------------------------------------------------------------------*/
 /**
- * Write a textual representation of CharDesc to File.
+ * Appends a textual representation of CharDesc to str.
  * The format used is to write out the number of feature
  * sets which will be written followed by a representation of
  * each feature set.
@@ -187,18 +187,15 @@ CHAR_DESC NewCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs) {
  * by a description of the feature set.  Feature sets which are
  * not present are not written.
  *
- * Globals: 
- * - none
- *
  * @param FeatureDefs    definitions of feature types/extractors
- * @param File		open text file to write CharDesc to
- * @param CharDesc	character description to write to File
+ * @param str            string to append CharDesc to
+ * @param CharDesc       character description to write to File
  *
  * @note Exceptions: none
  * @note History: Wed May 23 17:21:18 1990, DSJ, Created.
  */
-void WriteCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                          FILE *File, CHAR_DESC CharDesc) {
+void WriteCharDescription(const FEATURE_DEFS_STRUCT& FeatureDefs,
+                          CHAR_DESC CharDesc, STRING* str) {
   int Type;
   int NumSetsToWrite = 0;
 
@@ -206,11 +203,14 @@ void WriteCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
     if (CharDesc->FeatureSets[Type])
       NumSetsToWrite++;
 
-  fprintf (File, " %d\n", NumSetsToWrite);
-  for (Type = 0; Type < CharDesc->NumFeatureSets; Type++)
-  if (CharDesc->FeatureSets[Type]) {
-    fprintf (File, "%s ", (FeatureDefs.FeatureDesc[Type])->ShortName);
-    WriteFeatureSet (File, CharDesc->FeatureSets[Type]);
+  str->add_str_int(" ", NumSetsToWrite);
+  *str += "\n";
+  for (Type = 0; Type < CharDesc->NumFeatureSets; Type++) {
+    if (CharDesc->FeatureSets[Type]) {
+      *str += FeatureDefs.FeatureDesc[Type]->ShortName;
+      *str += " ";
+      WriteFeatureSet(CharDesc->FeatureSets[Type], str);
+    }
   }
 }                                /* WriteCharDescription */
 
@@ -231,6 +231,8 @@ bool ValidCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
             anything_written = true;
         }
       }
+    } else {
+      return false;
     }
   }
   return anything_written && well_formed;
@@ -265,13 +267,13 @@ CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
   CHAR_DESC CharDesc;
   int Type;
 
-  if (fscanf (File, "%d", &NumSetsToRead) != 1 ||
+  if (tfscanf(File, "%d", &NumSetsToRead) != 1 ||
     NumSetsToRead < 0 || NumSetsToRead > FeatureDefs.NumFeatureTypes)
     DoError (ILLEGAL_NUM_SETS, "Illegal number of feature sets");
 
   CharDesc = NewCharDescription(FeatureDefs);
   for (; NumSetsToRead > 0; NumSetsToRead--) {
-    fscanf (File, "%s", ShortName);
+    tfscanf(File, "%s", ShortName);
     Type = ShortNameToFeatureType(FeatureDefs, ShortName);
     CharDesc->FeatureSets[Type] =
       ReadFeatureSet (File, FeatureDefs.FeatureDesc[Type]);
@@ -283,17 +285,17 @@ CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
 
 /*---------------------------------------------------------------------------*/
 /**
- * Search thru all features currently defined and return
+ * Search through all features currently defined and return
  * the feature type for the feature with the specified short
  * name.  Trap an error if the specified name is not found.
  *
- * Globals: 
+ * Globals:
  * - none
  *
  * @param FeatureDefs    definitions of feature types/extractors
  * @param ShortName short name of a feature type
  * @return Feature type which corresponds to ShortName.
- * @note Exceptions: 
+ * @note Exceptions:
  * - ILLEGAL_SHORT_NAME
  * @note History: Wed May 23 15:36:05 1990, DSJ, Created.
  */

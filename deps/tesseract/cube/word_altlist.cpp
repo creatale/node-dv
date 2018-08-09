@@ -37,17 +37,14 @@ WordAltList::~WordAltList() {
   }
 }
 
-// insert an alternate word with the specified cost and tag
+/**
+ * insert an alternate word with the specified cost and tag
+ */
 bool WordAltList::Insert(char_32 *word_str, int cost, void *tag) {
   if (word_alt_ == NULL || alt_cost_ == NULL) {
     word_alt_ = new char_32*[max_alt_];
     alt_cost_ = new int[max_alt_];
     alt_tag_ = new void *[max_alt_];
-
-    if (word_alt_ == NULL || alt_cost_ == NULL || alt_tag_ == NULL) {
-      return false;
-    }
-
     memset(alt_tag_, 0, max_alt_ * sizeof(*alt_tag_));
   } else {
     // check if alt already exists
@@ -67,9 +64,6 @@ bool WordAltList::Insert(char_32 *word_str, int cost, void *tag) {
   int len = CubeUtils::StrLen(word_str);
 
   word_alt_[alt_cnt_] = new char_32[len + 1];
-  if (word_alt_[alt_cnt_] == NULL) {
-    return false;
-  }
 
   if (len > 0) {
     memcpy(word_alt_[alt_cnt_], word_str, len * sizeof(*word_str));
@@ -84,7 +78,9 @@ bool WordAltList::Insert(char_32 *word_str, int cost, void *tag) {
   return true;
 }
 
-// sort the alternate in descending order based on the cost
+/**
+ * sort the alternate in descending order based on the cost
+ */
 void WordAltList::Sort() {
   for (int alt_idx = 0; alt_idx < alt_cnt_; alt_idx++) {
     for (int alt = alt_idx + 1; alt < alt_cnt_; alt++) {

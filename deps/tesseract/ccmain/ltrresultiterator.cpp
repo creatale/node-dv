@@ -145,6 +145,14 @@ float LTRResultIterator::Confidence(PageIteratorLevel level) const {
   return 0.0f;
 }
 
+void LTRResultIterator::RowAttributes(float* row_height, float* descenders,
+                                      float* ascenders) const {
+  *row_height = it_->row()->row->x_height() + it_->row()->row->ascenders() -
+                it_->row()->row->descenders();
+  *descenders = it_->row()->row->descenders();
+  *ascenders = it_->row()->row->ascenders();
+}
+
 // Returns the font attributes of the current word. If iterating at a higher
 // level object than words, eg textlines, then this will return the
 // attributes of the first word in that textline.
@@ -356,7 +364,7 @@ bool ChoiceIterator::Next() {
 }
 
 // Returns the null terminated UTF-8 encoded text string for the current
-// choice. Use delete [] to free after use.
+// choice. Do NOT use delete [] to free after use.
 const char* ChoiceIterator::GetUTF8Text() const {
   if (choice_it_ == NULL)
     return NULL;

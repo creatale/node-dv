@@ -631,9 +631,9 @@ void FPRow::EstimatePitch(bool pass1) {
         // character may have a good pitch only between its successor.
         // So we collect only pitch values between two good
         // characters. and within tolerance in pass2.
-        if (pass1 ||
-            (prev_was_good &&
-             fabs(estimated_pitch_ - pitch) < kFPTolerance * estimated_pitch_)) {
+        if (pass1 || (prev_was_good &&
+                      fabs(estimated_pitch_ - pitch) <
+                          kFPTolerance * estimated_pitch_)) {
           good_pitches_.Add(pitch);
           if (!is_box_modified(i - 1) && !is_box_modified(i)) {
             good_gaps_.Add(gap);
