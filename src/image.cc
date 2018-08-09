@@ -1013,25 +1013,24 @@ NAN_METHOD(Image::OtsuAdaptiveThreshold)
 NAN_METHOD(Image::LineSegments)
 {
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(info.Holder());
-    if (info[0]->IsInt32() && info[1]->IsInt32() && info[2]->IsBoolean()) {
+    if (info[0]->IsInt32() && info[1]->IsInt32()) {
         if (obj->pix_->d != 8) {
             return Nan::ThrowTypeError("Not a 8bpp Image");
         }
         int accuracy = info[0]->Int32Value();
         int maxLineSegments = info[1]->Int32Value();
-        bool useWMS = info[2]->BooleanValue();
         
         if ((accuracy >= obj->pix_->w) || (accuracy >= obj->pix_->h)) {
             return Nan::ThrowError("LineSegments: Accuracy must be smaller than image");
        	}
 
         cv::Mat img(pix8ToMat(obj->pix_));
-        std::vector<LSWMS::LSEG> lSegs;
+        std::vector<LSEG> lSegs;
         std::vector<double> errors;
         
         try {
         	LSWMS lswms(cv::Size(obj->pix_->w, obj->pix_->h), accuracy,
-                    maxLineSegments, useWMS, false);
+                    maxLineSegments, false);
 			lswms.run(img, lSegs, errors);
         } catch (const cv::Exception& e) {
             return Nan::ThrowError(e.what());
