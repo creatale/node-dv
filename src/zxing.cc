@@ -44,7 +44,7 @@ private:
 };
 
 PixSource::PixSource(Pix* pix, bool take)
-    : LuminanceSource(pix ? pix->w : 0, pix ? pix->h : 0)
+    : LuminanceSource(pix != NULL ? pix->w : 0, pix != NULL ? pix->h : 0)
 {
     if (take) {
         assert(pix->d == 8);
@@ -187,11 +187,10 @@ NAN_SETTER(ZXing::SetImage)
 {
     ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
     if (Image::HasInstance(value) || value->IsNull()) {
-        if (!obj->image_.IsEmpty()) {
-            obj->image_.Reset();
-        }
         if (!value->IsNull()) {
             obj->image_.Reset(value->ToObject());
+        } else if (!obj->image_.IsEmpty()) {
+            obj->image_.Reset();
         }
     } else {
         Nan::ThrowTypeError("value must be of type Image");
@@ -261,15 +260,7 @@ NAN_METHOD(ZXing::FindCode)
         object->Set(Nan::New("type").ToLocalChecked(),
                 Nan::New<String>(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]).ToLocalChecked());
         object->Set(Nan::New("data").ToLocalChecked(),
-                Nan::New<String>(resultStr.c_str()).ToLocalChecked());
-        if (result->getRawBytes() != NULL) {
-            std::vector<char> resultRawBytes = (*(result->getRawBytes())).values();
-            object->Set(Nan::New("buffer").ToLocalChecked(),
-                    Nan::NewBuffer((char*)resultRawBytes.data(), resultRawBytes.size()).ToLocalChecked());
-        } else {
-            object->Set(Nan::New("buffer").ToLocalChecked(),
-                    Nan::NewBuffer(0).ToLocalChecked());
-        }
+                Nan::New<String>(resultStr).ToLocalChecked());
         Local<Array> points = Nan::New<Array>();
         auto strX = Nan::New("x").ToLocalChecked();
         auto strY = Nan::New("y").ToLocalChecked();

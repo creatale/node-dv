@@ -197,6 +197,7 @@ NAN_MODULE_INIT(Image::Init)
     Nan::SetAccessor(ctorInst, Nan::New("width").ToLocalChecked(), GetWidth);
     Nan::SetAccessor(ctorInst, Nan::New("height").ToLocalChecked(), GetHeight);
     Nan::SetAccessor(ctorInst, Nan::New("depth").ToLocalChecked(), GetDepth);
+    Nan::SetAccessor(ctorInst, Nan::New("resolution").ToLocalChecked(), GetResolution, SetResolution);
     
     Nan::SetPrototypeMethod(ctor, "invert", Invert);
     Nan::SetPrototypeMethod(ctor, "or", Or);
