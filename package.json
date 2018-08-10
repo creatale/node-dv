@@ -1,6 +1,6 @@
 {
   "name": "dv",
-  "version": "1.10.1",
+  "version": "2.0.0",
   "description": "DocumentVision is a node.js library for processing and understanding scanned documents",
   "keywords": [
     "graphics",
