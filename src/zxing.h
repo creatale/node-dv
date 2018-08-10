@@ -9,11 +9,15 @@
 #ifndef ZXING_H
 #define ZXING_H
 
+#include <memory>
 #include <node.h>
 #include <v8.h>
 #include <nan.h>
-#include <zxing/DecodeHints.h>
-#include <zxing/MultiFormatReader.h>
+#include <DecodeHints.h>
+#include <BarcodeFormat.h>
+#include <MultiFormatReader.h>
+
+namespace ZXingOrignal = ZXing;
 
 namespace binding {
 
@@ -39,12 +43,12 @@ private:
     ZXing();
     ~ZXing();
 
-    static const zxing::BarcodeFormat::Value BARCODEFORMATS[];
+    static const ZXingOrignal::BarcodeFormat BARCODEFORMATS[];
     static const size_t BARCODEFORMATS_LENGTH;
 
     Nan::Persistent<v8::Object> image_;
-    zxing::DecodeHints hints_;
-    zxing::Ref<zxing::MultiFormatReader> reader_;
+    ZXingOrignal::DecodeHints hints_;
+    std::shared_ptr<ZXingOrignal::MultiFormatReader> reader_;
 };
 
 }
