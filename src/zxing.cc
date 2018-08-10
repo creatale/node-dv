@@ -262,8 +262,14 @@ NAN_METHOD(ZXing::FindCode)
                 Nan::New<String>(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]).ToLocalChecked());
         object->Set(Nan::New("data").ToLocalChecked(),
                 Nan::New<String>(resultStr.c_str()).ToLocalChecked());
-        object->Set(Nan::New("buffer").ToLocalChecked(),
-                Nan::NewBuffer((char*)resultStr.data(), resultStr.length()).ToLocalChecked());
+        if (result->getRawBytes() != NULL) {
+            std::vector<char> resultRawBytes = (*(result->getRawBytes())).values();
+            object->Set(Nan::New("buffer").ToLocalChecked(),
+                    Nan::NewBuffer((char*)resultRawBytes.data(), resultRawBytes.size()).ToLocalChecked());
+        } else {
+            object->Set(Nan::New("buffer").ToLocalChecked(),
+                    Nan::NewBuffer(0).ToLocalChecked());
+        }
         Local<Array> points = Nan::New<Array>();
         auto strX = Nan::New("x").ToLocalChecked();
         auto strY = Nan::New("y").ToLocalChecked();
