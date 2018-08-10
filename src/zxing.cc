@@ -137,7 +137,7 @@ const size_t ZXing::BARCODEFORMATS_LENGTH = 11;
 
 NAN_MODULE_INIT(ZXing::Init)
 {
-	auto ctor = Nan::New<v8::FunctionTemplate>(New);
+    auto ctor = Nan::New<v8::FunctionTemplate>(New);
     auto ctorInst = ctor->InstanceTemplate();
     auto name = Nan::New("ZXing").ToLocalChecked();
     ctor->SetClassName(name);
@@ -154,13 +154,13 @@ NAN_MODULE_INIT(ZXing::Init)
 
 NAN_METHOD(ZXing::New)
 {
-	if (!info.IsConstructCall()) {
-		std::vector<v8::Local<v8::Value>> args(info.Length());
-		for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];	    
-	    auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
-	    if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
-	    return;
-	}
+    // if (!info.IsConstructCall()) {
+        // std::vector<v8::Local<v8::Value>> args(info.Length());
+        // for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];
+        // auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
+        // if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
+        // return;
+    // }
 
     Local<Object> image;
     if (info.Length() == 1 && Image::HasInstance(info[0])) {
@@ -203,7 +203,7 @@ NAN_GETTER(ZXing::GetFormats)
     ZXing* obj = Nan::ObjectWrap::Unwrap<ZXing>(info.This());
     Local<Object> format = Nan::New<Object>();
     for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-    	auto name = Nan::New(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]).ToLocalChecked();
+        auto name = Nan::New(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]).ToLocalChecked();
         format->Set(name, Nan::New<Boolean>(obj->hints_.containsFormat(BARCODEFORMATS[i])));
     }
     info.GetReturnValue().Set(format);
@@ -218,7 +218,7 @@ NAN_SETTER(ZXing::SetFormats)
         obj->hints_.clear();
         obj->hints_.setTryHarder(tryHarder);
         for (size_t i = 0; i < BARCODEFORMATS_LENGTH; ++i) {
-        	auto name = Nan::New(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]).ToLocalChecked();
+            auto name = Nan::New(zxing::BarcodeFormat::barcodeFormatNames[BARCODEFORMATS[i]]).ToLocalChecked();
             if (format->Get(name)->BooleanValue()) {
                 obj->hints_.addFormat(BARCODEFORMATS[i]);
             }
@@ -259,11 +259,11 @@ NAN_METHOD(ZXing::FindCode)
         Local<Object> object = Nan::New<Object>();
         std::string resultStr = result->getText()->getText();
         object->Set(Nan::New("type").ToLocalChecked(),
-        		Nan::New<String>(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]).ToLocalChecked());
+                Nan::New<String>(zxing::BarcodeFormat::barcodeFormatNames[result->getBarcodeFormat()]).ToLocalChecked());
         object->Set(Nan::New("data").ToLocalChecked(),
-        		Nan::New<String>(resultStr.c_str()).ToLocalChecked());
+                Nan::New<String>(resultStr.c_str()).ToLocalChecked());
         object->Set(Nan::New("buffer").ToLocalChecked(),
-        		Nan::NewBuffer((char*)resultStr.data(), resultStr.length()).ToLocalChecked());
+                Nan::NewBuffer((char*)resultStr.data(), resultStr.length()).ToLocalChecked());
         Local<Array> points = Nan::New<Array>();
         auto strX = Nan::New("x").ToLocalChecked();
         auto strY = Nan::New("y").ToLocalChecked();

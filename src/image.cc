@@ -248,7 +248,7 @@ NAN_MODULE_INIT(Image::Init)
 Local<Object> Image::New(Pix *pix, int resolution)
 {
     Nan::EscapableHandleScope scope;
-    Local<Object> instance = Nan::New(constructor_template)->GetFunction()->NewInstance();
+    Local<Object> instance = Nan::NewInstance(Nan::New(constructor_template)->GetFunction()).ToLocalChecked();
     Image *obj = Nan::ObjectWrap::Unwrap<Image>(instance);
     obj->pix_ = pix;
     if (obj->pix_) {
@@ -260,14 +260,14 @@ Local<Object> Image::New(Pix *pix, int resolution)
 
 NAN_METHOD(Image::New)
 {
-    if (!info.IsConstructCall()) {
-        // [NOTE] generic recursive call with `new`
-        std::vector<v8::Local<v8::Value>> args(info.Length());
-        for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];        
-        auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
-        if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
-        return;
-    }
+    // if (!info.IsConstructCall()) {
+        // // [NOTE] generic recursive call with `new`
+        // std::vector<v8::Local<v8::Value>> args(info.Length());
+        // for (std::size_t i = 0; i < args.size(); ++i) args[i] = info[i];
+        // auto inst = Nan::NewInstance(info.Callee(), args.size(), args.data());
+        // if (!inst.IsEmpty()) info.GetReturnValue().Set(inst.ToLocalChecked());
+        // return;
+    // }
 
     Pix *pix;
     if (info.Length() == 0) {
@@ -711,7 +711,7 @@ NAN_METHOD(Image::ApplyCurve)
             info[0]->ToObject()->Get(Nan::New("length").ToLocalChecked())->Uint32Value() == 256) {
         NUMA *numa = numaCreate(256);
         for (int i = 0; i < 256; i++) {
-            numaAddNumber(numa, (l_float32)info[0]->ToObject()->Get(i)->ToInt32()->Value());
+            numaAddNumber(numa, (l_float32)Nan::Get(info[0]->ToObject(), i).ToLocalChecked()->Int32Value());
         }
         PIX *mask = NULL;
         if (info.Length() >= 2 && Image::HasInstance(info[1])) {
@@ -1235,7 +1235,7 @@ NAN_METHOD(Image::DrawBox)
     int boxEnd;
     BOX *box = toBox(info, 0, &boxEnd);
     if (box && info[boxEnd + 1]->IsInt32()) {
-        int borderWidth = info[boxEnd + 1]->ToInt32()->Value();
+        int borderWidth = info[boxEnd + 1]->Int32Value();
         int error = 0;
         if (info[boxEnd + 2]->IsString()) {
             int op  = toOp(info[boxEnd + 2]);
@@ -1286,10 +1286,10 @@ NAN_METHOD(Image::DrawLine)
     if (info[0]->IsObject() && info[1]->IsObject() && info[2]->IsInt32()) {
         Handle<Object> p1 = info[0]->ToObject();
         Handle<Object> p2 = info[1]->ToObject();
-        l_int32 x1 = round(p1->Get(strX)->ToNumber()->Value());
-        l_int32 y1 = round(p1->Get(strY)->ToNumber()->Value());
-        l_int32 x2 = round(p2->Get(strX)->ToNumber()->Value());
-        l_int32 y2 = round(p2->Get(strY)->ToNumber()->Value());
+        l_int32 x1 = round(Nan::Get(p1, strX).ToLocalChecked()->NumberValue());
+        l_int32 y1 = round(Nan::Get(p1, strY).ToLocalChecked()->NumberValue());
+        l_int32 x2 = round(Nan::Get(p2, strX).ToLocalChecked()->NumberValue());
+        l_int32 y2 = round(Nan::Get(p2, strY).ToLocalChecked()->NumberValue());
         l_int32 width = info[2]->Int32Value();
         l_int32 error;
         if (info[3]->IsString()) {

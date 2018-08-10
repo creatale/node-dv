@@ -21,7 +21,7 @@ describe('Image', function(){
         this.gray = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/dave.png'));
         this.rgb = new dv.Image('jpg', fs.readFileSync(__dirname + '/fixtures/rgb.jpg'));
         this.rgba = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/rgba.png'));
-        this.rgbaBuffer = new Buffer(128 * 256 * 4);
+        this.rgbaBuffer = Buffer.alloc(128 * 256 * 4);
         for (var y = 0; y < 256; y++) {
             for (var x = 0; x < 128; x++) {
                 // Fill a buffer with red, green and blue stripes.
@@ -31,7 +31,7 @@ describe('Image', function(){
                 this.rgbaBuffer[y * 128 * 4 + x * 4 + c + 3] = 128;
             }
         }
-        this.rgbBuffer = new Buffer(128 * 256 * 3);
+        this.rgbBuffer = Buffer.alloc(128 * 256 * 3);
         for (var y = 0; y < 256; y++) {
             for (var x = 0; x < 128; x++) {
                 // Fill a buffer with red, green and blue stripes.
@@ -43,7 +43,7 @@ describe('Image', function(){
         this.textpage = new dv.Image('png', fs.readFileSync(__dirname + '/fixtures/textpage300.png'));
     })
     it('should construct from raw data (grayscale)', function() {
-    	data = new Buffer('\x00\x01\x02\x04aaaabbbb')
+    	data = Buffer.from('\x00\x01\x02\x04aaaabbbb')
     	image = new dv.Image('gray', data, 4, 3);
     	image.width.should.equal(4);
     	image.height.should.equal(3);
@@ -51,7 +51,7 @@ describe('Image', function(){
     	image.toBuffer('raw').should.deep.equal(data);
     })
     it('should construct from raw data (rgb)', function() {
-    	data = new Buffer('\x00\x01\x02\x04aaaabbbb')
+    	data = Buffer.from('\x00\x01\x02\x04aaaabbbb')
     	image = new dv.Image('rgb', data, 2, 2);
     	image.width.should.equal(2);
     	image.height.should.equal(2);
@@ -59,12 +59,12 @@ describe('Image', function(){
     	image.toBuffer('raw').should.deep.equal(data);
     })
     it('should construct from raw data (rgba)', function() {
-    	data = new Buffer('\x00\x01\x02\x04aaaabbbb')
+    	data = Buffer.from('\x00\x01\x02\x04aaaabbbb')
     	image = new dv.Image('rgba', data, 3, 1);
     	image.width.should.equal(3);
     	image.height.should.equal(1);
     	image.depth.should.equal(32);
-    	image.toBuffer('raw').should.deep.equal(new Buffer('\x00\x01\x02aaabbb'));
+    	image.toBuffer('raw').should.deep.equal(Buffer.from('\x00\x01\x02aaabbb'));
     })
     it('should save using #toBuffer()', function(){
         writeImage('gray.jpg', this.gray);
@@ -110,12 +110,12 @@ describe('Image', function(){
     it('should #add() and #subtract() arithmetically for rgb', function(){
     	this.rgba.subtract(new dv.Image(this.rgba)).toBuffer()[0].should.equal(0);
     
-    	a = new dv.Image('rgb', new Buffer([200,200,200]), 1, 1);
-    	b = new dv.Image('rgb', new Buffer([50, 60, 70]), 1, 1);
-    	a.add(b).toBuffer().should.deep.equal(new Buffer([250, 255, 255]));
-    	a.subtract(b).toBuffer().should.deep.equal(new Buffer([150, 140, 130]));
+    	a = new dv.Image('rgb', Buffer.from([200,200,200]), 1, 1);
+    	b = new dv.Image('rgb', Buffer.from([50, 60, 70]), 1, 1);
+    	a.add(b).toBuffer().should.deep.equal(Buffer.from([250, 255, 255]));
+    	a.subtract(b).toBuffer().should.deep.equal(Buffer.from([150, 140, 130]));
     	// If you were expecting [0, 0, 0], you are apparantly not an implementor of Leptonica.
-  		b.subtract(a).toBuffer().should.deep.equal(new Buffer([105, 115, 126]));
+  		b.subtract(a).toBuffer().should.deep.equal(Buffer.from([105, 115, 126]));
     })
     it('should #convolve()', function(){
         writeImage('gray-convolve.png', this.gray.convolve(15, 15));
@@ -189,7 +189,7 @@ describe('Image', function(){
         writeImage('gray-line-segments.png', canvas);
     })
     it('should throw error on too large precision', function(){
-    	empty = new dv.Image('gray', new Buffer(1), 1, 1).toGray();
+    	empty = new dv.Image('gray', Buffer.from([1]), 1, 1).toGray();
     	empty.lineSegments.bind(empty, 1, 0, false).should.throw(Error);
     })
     it('should #connectedComponents()', function(){

@@ -79,7 +79,7 @@ NAN_METHOD(Tesseract::New)
     Local<String> datapath;
     Local<String> lang;
     Local<Object> image;
-	if (info.Length() == 1 && info[0]->IsString()) {
+    if (info.Length() == 1 && info[0]->IsString()) {
         datapath = info[0]->ToString();
         lang = Nan::New<String>("eng").ToLocalChecked();
     } else if (info.Length() == 2 && info[0]->IsString() && info[1]->IsString()) {
@@ -150,10 +150,10 @@ NAN_SETTER(Tesseract::SetRectangle)
             obj->rectangle_.Reset();
         }
         obj->rectangle_.Reset(rect);
-        int x = floor(rect->Get(Nan::New("x").ToLocalChecked())->ToNumber()->Value());
-        int y = floor(rect->Get(Nan::New("y").ToLocalChecked())->ToNumber()->Value());
-        int width = ceil(rect->Get(Nan::New("width").ToLocalChecked())->ToNumber()->Value());
-        int height = ceil(rect->Get(Nan::New("height").ToLocalChecked())->ToNumber()->Value());
+        int x = floor(Nan::Get(rect, Nan::New("x").ToLocalChecked()).ToLocalChecked()->NumberValue());
+        int y = floor(Nan::Get(rect, Nan::New("y").ToLocalChecked()).ToLocalChecked()->NumberValue());
+        int width = ceil(Nan::Get(rect, Nan::New("width").ToLocalChecked()).ToLocalChecked()->NumberValue());
+        int height = ceil(Nan::Get(rect, Nan::New("height").ToLocalChecked()).ToLocalChecked()->NumberValue());
         if (!obj->image_.IsEmpty()) {
             // WORKAROUND: clamp rectangle to prevent occasional crashes.
             PIX* pix = Image::Pixels(Nan::New<Object>(obj->image_));
@@ -284,7 +284,7 @@ NAN_GETTER(Tesseract::GetIntVariable)
         info.GetReturnValue().Set(Nan::New(value));
     }
     else {
-    	info.GetReturnValue().SetNull();
+        info.GetReturnValue().SetNull();
     }
 }
 
@@ -331,7 +331,7 @@ NAN_GETTER(Tesseract::GetStringVariable)
 
 NAN_METHOD(Tesseract::Clear)
 {
-	Tesseract* obj = Nan::ObjectWrap::Unwrap<Tesseract>(info.This());
+    Tesseract* obj = Nan::ObjectWrap::Unwrap<Tesseract>(info.This());
     obj->api_.Clear();
     info.GetReturnValue().Set(info.This());
 }

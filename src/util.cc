@@ -14,7 +14,7 @@ using namespace v8;
 
 Local<Object> createBox(Box* box)
 {
-	Nan::EscapableHandleScope scope;
+    Nan::EscapableHandleScope scope;
     Local<Object> result = Nan::New<Object>();
     result->Set(Nan::New("x").ToLocalChecked(), Nan::New(box->x));
     result->Set(Nan::New("y").ToLocalChecked(), Nan::New(box->y));
@@ -27,20 +27,20 @@ Box* toBox(Nan::NAN_METHOD_ARGS_TYPE args, int start, int* end)
 {
     if (args[start]->IsNumber() && args[start + 1]->IsNumber()
             && args[start + 2]->IsNumber() && args[start + 3]->IsNumber()) {
-        int x = floor(args[start + 0]->ToNumber()->Value());
-        int y = floor(args[start + 1]->ToNumber()->Value());
-        int width = ceil(args[start + 2]->ToNumber()->Value());
-        int height = ceil(args[start + 3]->ToNumber()->Value());
+        int x = floor(args[start + 0]->NumberValue());
+        int y = floor(args[start + 1]->NumberValue());
+        int width = ceil(args[start + 2]->NumberValue());
+        int height = ceil(args[start + 3]->NumberValue());
         if (end) {
             *end = start + 3;
         }
         return boxCreate(x, y, width, height);
     } else if (args[start]->IsObject()) {
         Handle<Object> object = args[start]->ToObject();
-        int x = floor(object->Get(Nan::New("x").ToLocalChecked())->ToNumber()->Value());
-        int y = floor(object->Get(Nan::New("y").ToLocalChecked())->ToNumber()->Value());
-        int width = ceil(object->Get(Nan::New("width").ToLocalChecked())->ToNumber()->Value());
-        int height = ceil(object->Get(Nan::New("height").ToLocalChecked())->ToNumber()->Value());
+        int x = floor(Nan::Get(object, Nan::New("x").ToLocalChecked()).ToLocalChecked()->NumberValue());
+        int y = floor(Nan::Get(object, Nan::New("y").ToLocalChecked()).ToLocalChecked()->NumberValue());
+        int width = ceil(Nan::Get(object, Nan::New("width").ToLocalChecked()).ToLocalChecked()->NumberValue());
+        int height = ceil(Nan::Get(object, Nan::New("height").ToLocalChecked()).ToLocalChecked()->NumberValue());
         if (end) {
             *end = start;
         }
